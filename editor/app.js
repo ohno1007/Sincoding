@@ -141,11 +141,12 @@
 
   function renderStmtList(list) {
     const s = el("div", "stack");
-    list.forEach((st) => s.append(renderStmt(st)));
+    s._list = list;                 // 作为拖拽重排的落点（drop zone）
+    list.forEach((st) => s.append(renderStmt(st, list)));
     return s;
   }
 
-  function renderStmt(node) {
+  function renderStmt(node, list) {
     let blk;
     if (node.block === "let" || node.block === "assign") {
       blk = el("div", "block var");
@@ -180,7 +181,77 @@
     } else {
       blk = el("div", "block", JSON.stringify(node));
     }
+    // 拖拽重排：按住语句积木拖动，可在各 stack（函数体 / 控制块嘴巴）间移动
+    blk.addEventListener("pointerdown", (e) => {
+      if (e.target.classList.contains("field")) return;
+      if (list) startStmtDrag(node, list, blk, e);
+    });
     return blk;
+  }
+
+  // ---------------- 语句积木拖拽重排 ----------------
+  let drag = null;
+  function startStmtDrag(node, fromList, blockEl, e) {
+    e.stopPropagation();
+    const r = blockEl.getBoundingClientRect();
+    const ghost = blockEl.cloneNode(true);
+    Object.assign(ghost.style, {
+      position: "fixed", left: r.left + "px", top: r.top + "px", width: r.width + "px",
+      pointerEvents: "none", opacity: ".9", zIndex: 9999, transform: "rotate(2deg)",
+      boxShadow: "0 8px 20px rgba(0,0,0,.3)",
+    });
+    document.body.appendChild(ghost);
+    blockEl.style.opacity = ".25";
+    const indicator = el("div", "drop-indicator");
+    drag = { node, fromList, blockEl, ghost, indicator, target: null,
+      offx: e.clientX - r.left, offy: e.clientY - r.top };
+
+    const move = (ev) => {
+      ghost.style.left = (ev.clientX - drag.offx) + "px";
+      ghost.style.top = (ev.clientY - drag.offy) + "px";
+      updateDropTarget(ev);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      ghost.remove();
+      if (indicator.parentNode) indicator.remove();
+      finishDrop();
+      drag = null;
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
+  function updateDropTarget(ev) {
+    const stacks = [...canvas.querySelectorAll(".stack")];
+    let best = null;
+    for (const st of stacks) {
+      if (drag.blockEl.contains(st)) continue;       // 不能放进自身子树
+      const r = st.getBoundingClientRect();
+      if (ev.clientX >= r.left - 12 && ev.clientX <= r.right + 12 &&
+          ev.clientY >= r.top - 24 && ev.clientY <= r.bottom + 24) { best = st; break; }
+    }
+    if (!best) { drag.target = null; if (drag.indicator.parentNode) drag.indicator.remove(); return; }
+    const kids = [...best.children].filter((c) => c.classList.contains("block"));
+    let idx = kids.length;
+    for (let i = 0; i < kids.length; i++) {
+      const r = kids[i].getBoundingClientRect();
+      if (ev.clientY < r.top + r.height / 2) { idx = i; break; }
+    }
+    best.insertBefore(drag.indicator, kids[idx] || null);
+    drag.target = { list: best._list, index: idx };
+  }
+
+  function finishDrop() {
+    if (!drag.target) { render(); return; }
+    const fromIdx = drag.fromList.indexOf(drag.node);
+    if (fromIdx < 0) { render(); return; }
+    drag.fromList.splice(fromIdx, 1);
+    let idx = drag.target.index;
+    if (drag.target.list === drag.fromList && fromIdx < idx) idx--;
+    drag.target.list.splice(idx, 0, drag.node);
+    render();
   }
 
   function renderFn(fn) {
@@ -230,6 +301,19 @@
   }
 
   // ---------------- 精灵列表（多精灵 / 多页积木） ----------------
+  // 造型是否有绘制内容（非全透明），用于判断是否以造型为纹理
+  function spriteHasArt(sp, isCurrent) {
+    let d = null;
+    if (isCurrent && ce) {
+      const c = ce.canvas; d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+    } else if (sp.costumes && sp.costumes[0] && sp.costumes[0].data) {
+      d = sp.costumes[0].data.data;
+    }
+    if (!d) return false;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 8) return true;
+    return false;
+  }
+
   function costumeThumb(sp, isCurrent) {
     let data = null;
     if (isCurrent && ce) return ce.toDataURL();
@@ -345,6 +429,37 @@
     pal.append(tip);
   }
 
+  // ---------------- 舞台：精灵以造型为纹理 ----------------
+  function renderStage() {
+    const stage = document.getElementById("stage");
+    if (!stage) return;
+    stage.innerHTML = "";
+    project.sprites.forEach((sp, i) => {
+      if (sp._stageX === undefined) { sp._stageX = 200 + i * 150; sp._stageY = 240; }
+      const d = el("div", "stage-sprite");
+      const art = spriteHasArt(sp, i === project.cur);
+      d.textContent = art ? "" : (sp.icon || "🎭");    // 有造型则以造型为纹理，否则占位
+      if (art) {
+        const url = costumeThumb(sp, i === project.cur);
+        if (url) d.style.backgroundImage = "url(" + url + ")";
+      }
+      d.style.left = sp._stageX + "px"; d.style.top = sp._stageY + "px";
+      d.title = sp.name;
+      d.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        const start = { mx: e.clientX, my: e.clientY, ox: sp._stageX, oy: sp._stageY };
+        const mv = (ev) => {
+          sp._stageX = start.ox + (ev.clientX - start.mx);
+          sp._stageY = start.oy + (ev.clientY - start.my);
+          d.style.left = sp._stageX + "px"; d.style.top = sp._stageY + "px";
+        };
+        const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
+        window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+      });
+      stage.append(d);
+    });
+  }
+
   // ---------------- 视图切换 ----------------
   function setupTabs() {
     const tabs = document.querySelectorAll("header .tabs button");
@@ -353,6 +468,7 @@
       t.classList.add("active");
       document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
       document.getElementById(t.dataset.view).classList.add("active");
+      if (t.dataset.view === "stage-view") renderStage(); // 进入舞台时按最新造型渲染
     }));
   }
 

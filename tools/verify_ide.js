@@ -31,6 +31,25 @@ const { chromium } = require("playwright");
   });
   const writeback = !!after && after.includes("77321") && after !== before;
 
+  // 积木拖拽重排：把 fib 体内「返回」块拖到「如果」块上方 → 文本顺序改变
+  const boxes = await page.evaluate(() => {
+    const stack = document.querySelector("#canvas .script .mouth > .stack");
+    return [...stack.children].filter((c) => c.classList.contains("block"))
+      .map((bl) => { const r = bl.getBoundingClientRect(); return { x: r.x, y: r.y }; });
+  });
+  let reorder = false;
+  if (boxes.length >= 2) {
+    const beforeR = await page.textContent("#text-out");
+    await page.mouse.move(boxes[1].x + 14, boxes[1].y + 9); await page.mouse.down();
+    await page.mouse.move(boxes[1].x + 14, boxes[1].y - 30, { steps: 5 });
+    await page.mouse.move(boxes[0].x + 14, boxes[0].y - 4, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(60);
+    const afterR = await page.textContent("#text-out");
+    const fibBody = afterR.slice(afterR.indexOf("fn fib"));
+    reorder = afterR !== beforeR && fibBody.indexOf("return") < fibBody.indexOf("if (");
+  }
+
   // 多精灵 / 多页积木：切到第二个精灵 → 文本页应切换
   const sprite1Text = await page.textContent("#text-out");
   await page.click("#sprite-list .sprite-card:nth-child(2)");
@@ -55,9 +74,19 @@ const { chromium } = require("playwright");
   });
   if (shots) await page.screenshot({ path: shots + "/ide_costume.png" });
 
+  // 舞台：精灵以造型为纹理。切到舞台，断言精灵已渲染且画的造型成为纹理
+  await page.click('header .tabs button[data-view="stage-view"]');
+  await page.waitForTimeout(100);
+  const stage = await page.evaluate(() => {
+    const els = [...document.querySelectorAll("#stage .stage-sprite")];
+    return { count: els.length, textured: els.filter((e) => e.style.backgroundImage && e.style.backgroundImage !== "none").length };
+  });
+  const stageOk = stage.count >= 2 && stage.textured >= 1;
+  if (shots) await page.screenshot({ path: shots + "/ide_stage.png" });
+
   await browser.close();
 
-  const ok = writeback && spriteSwitch && painted > 100 && errors.length === 0;
-  console.log(JSON.stringify({ writeback, spriteSwitch, paintedPixels: painted, errors }));
+  const ok = writeback && reorder && spriteSwitch && stageOk && painted > 100 && errors.length === 0;
+  console.log(JSON.stringify({ writeback, reorder, spriteSwitch, stage, paintedPixels: painted, errors }));
   process.exit(ok ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

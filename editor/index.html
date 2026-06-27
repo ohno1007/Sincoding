@@ -16,6 +16,7 @@
   <div class="tabs">
     <button data-view="blocks-view" class="active"><span class="ic" data-icon="code"></span>积木 / 代码</button>
     <button data-view="costume-view"><span class="ic" data-icon="palette"></span>精灵造型</button>
+    <button data-view="stage-view"><span class="ic" data-icon="play"></span>舞台</button>
   </div>
 </header>
 
@@ -59,6 +60,14 @@
           <button id="btn-export" data-icon="download">导出 PNG</button>
         </div>
         <canvas id="paint-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- 视图3：舞台（精灵以其造型为纹理） -->
+    <div id="stage-view" class="view">
+      <div id="stage-wrap">
+        <div id="stage"></div>
+        <div id="stage-hint">精灵以「造型」为外观/纹理 · 拖动可摆位</div>
       </div>
     </div>
   </div>
