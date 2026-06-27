@@ -185,6 +185,30 @@ else
     echo "○ 跳过（未检测到 raylib 或 xvfb）"
 fi
 
+# ---- 阶段 5：JSON 桥接外部 ELF（静态 + 动态） ----
+echo
+echo "=== 阶段 5：JSON 桥接外部 ELF（static + dynamic dlopen） ==="
+if command -v gcc >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    bdir="$WORK/bridge"; mkdir -p "$bdir"
+    if "$ROOT/tools/build_with_bridge.sh" "$ROOT/examples/bridge/use_motor.sin" \
+         "$ROOT/examples/bridge/motor.json" "$bdir/m_static" >/dev/null 2>&1; then
+        got="$("$bdir/m_static" 2>/dev/null)"
+        if [[ "$got" == *"120"* && "$got" == *"15"* ]]; then
+            echo "✓ bridge-static（链接外部库，调用 + 类型转换正确）"; ((PASS++))
+        else echo "✗ bridge-static 输出异常: $(echo "$got" | tr '\n' '|')"; ((FAIL++)); fi
+    else echo "✗ bridge-static 构建失败"; ((FAIL++)); fi
+
+    if "$ROOT/tools/build_with_bridge.sh" "$ROOT/examples/bridge/use_motor.sin" \
+         "$ROOT/examples/bridge/motor_dyn.json" "$bdir/m_dyn" >/dev/null 2>&1; then
+        got="$(LD_LIBRARY_PATH="$bdir" "$bdir/m_dyn" 2>/dev/null)"
+        if [[ "$got" == *"120"* && "$got" == *"15"* ]]; then
+            echo "✓ bridge-dynamic（dlopen/dlsym 经函数指针调用）"; ((PASS++))
+        else echo "✗ bridge-dynamic 输出异常: $(echo "$got" | tr '\n' '|')"; ((FAIL++)); fi
+    else echo "✗ bridge-dynamic 构建失败"; ((FAIL++)); fi
+else
+    echo "○ 跳过（缺 gcc/python3）"
+fi
+
 # ---- 阶段 4：Web(wasm) 成品（需要 emscripten + node/playwright） ----
 echo
 echo "=== 阶段 4：Sincoding → wasm → 浏览器渲染（emscripten） ==="

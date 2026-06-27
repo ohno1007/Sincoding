@@ -5,7 +5,6 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"
-PORT="${SIN_WEB_PORT:-8731}"
 SRV=""
 cleanup() { [[ -n "$SRV" ]] && kill "$SRV" 2>/dev/null; rm -rf "$WORK"; }
 trap cleanup EXIT
@@ -14,7 +13,10 @@ if ! "$ROOT/tools/build_web.sh" "$ROOT/examples/game.sin" "$WORK/web" >"$WORK/bu
     echo "web 构建失败"; tail -5 "$WORK/build.log"; exit 1
 fi
 
-( cd "$WORK/web" && python3 -m http.server "$PORT" --bind 127.0.0.1 >/dev/null 2>&1 ) &
+# 选一个空闲端口，避免跨次运行端口冲突
+PORT="${SIN_WEB_PORT:-$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')}"
+# 直接以 python 为 SRV（--directory 避免子 shell，使 trap 能确实回收）
+python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$WORK/web" >/dev/null 2>&1 &
 SRV=$!
 sleep 1
 

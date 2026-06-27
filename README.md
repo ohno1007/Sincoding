@@ -20,7 +20,7 @@
 | 2 | runtime.c 基于 raylib（舞台/精灵/输入/声音） | ✅ 运行时 + 桥接层落地，方块角色已渲染 |
 | 3 | 积木编辑器接 AST（积木 ⇄ 文本双向同步） | 🚧 序列化引擎 + 单页 IDE（无限画布 / 多精灵·多页积木 / 编辑写回 / 造型画板）|
 | 4 | CMake 多平台（Web → Windows → Android） | 🚧 **Web(wasm) 已打通**（浏览器中运行成品）；Windows/Android 待做 |
-| 5 | JSON 桥接外部 ELF（静态 + 动态） | ⏳ 规划中 |
+| 5 | JSON 桥接外部 ELF（静态 + 动态） | ✅ 静态链接 + 动态 dlopen/dlsym 均打通（含三层类型映射） |
 
 核心设计原则：**AST 是唯一真相源**。积木是 AST 的可视化渲染，文本是 AST 的序列化。
 
@@ -156,3 +156,22 @@ python3 -m http.server 8000 --directory out_web   # 浏览器访问 http://local
 
 由 `templates/web/`（emscripten shell + CMakeLists）经 `emcmake cmake` 构建，
 主循环用 `-sASYNCIFY` 适配浏览器。
+
+## 桥接外部 ELF（JSON 接口定义）
+
+用一份 JSON 描述外部 C 库的接口，自动生成语言侧 `extern fn` 声明与 C 胶水，
+支持**静态链接**与**动态 dlopen/dlsym**两种方式；并维护
+JSON 类型 ↔ 语言类型 ↔ C 类型 的映射（例如语言 `int`=`long long` ABI，
+桥接层会转换为外部库真实的 C `int`）。
+
+```bash
+# 静态链接
+tools/build_with_bridge.sh examples/bridge/use_motor.sin examples/bridge/motor.json out/motor
+out/motor                                  # 调用外部 motor 模块
+
+# 动态加载（dlopen）
+tools/build_with_bridge.sh examples/bridge/use_motor.sin examples/bridge/motor_dyn.json out/motor_dyn
+LD_LIBRARY_PATH=out out/motor_dyn
+```
+
+JSON 定义见 [`examples/bridge/motor.json`](examples/bridge/motor.json)，生成器为 `tools/sin_bridge.py`。
