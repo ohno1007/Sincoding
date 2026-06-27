@@ -109,6 +109,16 @@
     }
 
     // ---- 造型管理 ----
+    // 切换到某个精灵的造型集（每个精灵各自独立的一组造型）
+    setStore(arr) {
+      this._commit();                 // 先把当前画布存回旧造型集
+      this.costumes = arr;
+      if (this.costumes.length === 0)
+        this.costumes.push({ name: "造型1", data: null });
+      this.current = -1;
+      this.select(0);
+    }
+
     addCostume(name) {
       this._commit();
       this.costumes.push({ name: name || ("造型" + (this.costumes.length + 1)), data: null });

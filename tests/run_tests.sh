@@ -185,6 +185,22 @@ else
     echo "○ 跳过（未检测到 raylib 或 xvfb）"
 fi
 
+# ---- 阶段 4：Web(wasm) 成品（需要 emscripten + node/playwright） ----
+echo
+echo "=== 阶段 4：Sincoding → wasm → 浏览器渲染（emscripten） ==="
+if command -v emcmake >/dev/null 2>&1 && [[ -f /usr/local/lib/web/libraylib.a ]] && \
+   command -v node >/dev/null 2>&1 && \
+   NODE_PATH="$(npm root -g 2>/dev/null)" node -e "require('playwright')" >/dev/null 2>&1; then
+    chmod +x "$ROOT/tools/test_web.sh"
+    if out="$("$ROOT/tools/test_web.sh" 2>&1)"; then
+        echo "✓ web: wasm 在浏览器中渲染角色（$out）"; ((PASS++))
+    else
+        echo "✗ web: $out"; ((FAIL++))
+    fi
+else
+    echo "○ 跳过（未检测到 emscripten / raylib-web / playwright）"
+fi
+
 echo
 echo "通过 $PASS，失败 $FAIL"
 [[ $FAIL -eq 0 ]]

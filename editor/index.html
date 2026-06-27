@@ -23,15 +23,23 @@
   <div id="palette"></div>
 
   <div id="work">
-    <!-- 视图1：无限积木画布 + 实时文本 -->
+    <!-- 视图1：无限积木画布 + 实时文本 + 精灵列表 -->
     <div id="blocks-view" class="view active">
-      <div id="canvas-wrap">
-        <div id="canvas"></div>
-        <div id="zoom-hint"><span data-icon="move" data-icon-size="14"></span><span class="zt"></span></div>
+      <div id="blocks-top">
+        <div id="canvas-wrap">
+          <div id="canvas"></div>
+          <div id="zoom-hint"><span data-icon="move" data-icon-size="14"></span><span class="zt"></span></div>
+          <div id="page-tag"></div>
+        </div>
+        <div id="text-pane">
+          <div class="hd"><span data-icon="code" data-icon-size="15"></span>文本视图 · 等价于 <code>sinc --emit src</code></div>
+          <pre id="text-out"></pre>
+        </div>
       </div>
-      <div id="text-pane">
-        <div class="hd"><span data-icon="code" data-icon-size="15"></span>文本视图 · 等价于 <code>sinc --emit src</code></div>
-        <pre id="text-out"></pre>
+      <div id="sprite-bar">
+        <div class="sb-label">精灵</div>
+        <div id="sprite-list"></div>
+        <button id="add-sprite" data-icon="plus" data-icon-size="16" title="新建精灵"></button>
       </div>
     </div>
 

@@ -18,8 +18,8 @@
 | 0 | **最小垂直切片**：语言 → C → raylib → 可运行的"方向键移动精灵"成品 | ✅ 已跑通（无头渲染验证，见下图） |
 | 1 | 语言 → C 转译器（Lexer/Parser/类型检查/代码生成） | ✅ 已完成，斐波那契等用例可编译运行 |
 | 2 | runtime.c 基于 raylib（舞台/精灵/输入/声音） | ✅ 运行时 + 桥接层落地，方块角色已渲染 |
-| 3 | 积木编辑器接 AST（积木 ⇄ 文本双向同步） | 🚧 序列化引擎 + 单页 IDE（无限画布 / 编辑写回 / 造型画板）已完成 |
-| 4 | CMake 多平台（Windows → Web → Android） | ⏳ 规划中 |
+| 3 | 积木编辑器接 AST（积木 ⇄ 文本双向同步） | 🚧 序列化引擎 + 单页 IDE（无限画布 / 多精灵·多页积木 / 编辑写回 / 造型画板）|
+| 4 | CMake 多平台（Web → Windows → Android） | 🚧 **Web(wasm) 已打通**（浏览器中运行成品）；Windows/Android 待做 |
 | 5 | JSON 桥接外部 ELF（静态 + 动态） | ⏳ 规划中 |
 
 核心设计原则：**AST 是唯一真相源**。积木是 AST 的可视化渲染，文本是 AST 的序列化。
@@ -32,9 +32,13 @@
 
 ![阶段3 IDE](docs/images/stage3_ide.png)
 
-精灵造型画板（画笔 / 橡皮 / 调色板 / 多造型）：
+精灵造型画板（画笔 / 橡皮 / 调色板 / 多造型）。底部精灵栏支持**多精灵**，每个精灵是独立的**一页积木**：
 
 ![阶段3 造型画板](docs/images/stage3_costume.png)
+
+阶段 4：同一份 `game.sin` 转 C 后经 emscripten 编成 **WebAssembly**，在浏览器中由 raylib 渲染（最像 Scratch 的发布方式）：
+
+![阶段4 Web成品](docs/images/stage4_web.png)
 
 ---
 
@@ -121,8 +125,9 @@ compiler/        语言 → C 转译器（C++17，手写递归下降）
   src/           对应实现 + sinc 命令行入口
 runtime/         运行时：runtime.c（Scratch 风格，封装 raylib）
                  + prelude.c/.h（语言 ABI 桥接层，extern fn 的实现）
-editor/          积木前端：block_viewer.html（Scratch 风格积木渲染器）
-tools/           build_native.sh / render_blocks.sh / png_nonbg.py / screenshot.js
+editor/          积木前端：单页 IDE（index.html，多精灵/多页/造型画板）
+templates/web/   Web(wasm) 构建模板：emscripten shell.html + CMakeLists
+tools/           build_native.sh / build_web.sh / render_blocks.sh / 各类验证脚本
 examples/        示例 .sin 程序（hello / fib / types / game）
 tests/           端到端测试与用例
 docs/            技术设计、语言参考、截图
@@ -139,3 +144,15 @@ sinc examples/fib.sin --emit c        # AST → C 代码（编译产物）
 ```
 
 `--emit src` 幂等且与原程序语义等价（往返后生成的 C 完全一致），这正是积木 ⇄ 文本双向同步的正确性基础。
+
+## 编成 Web(wasm) 成品
+
+```bash
+# 需要 emscripten（emcmake）+ raylib 的 web 静态库（/usr/local/lib/web/libraylib.a）
+tools/build_web.sh examples/game.sin out_web
+# wasm 不支持 file://，用 HTTP 服务器打开：
+python3 -m http.server 8000 --directory out_web   # 浏览器访问 http://localhost:8000
+```
+
+由 `templates/web/`（emscripten shell + CMakeLists）经 `emcmake cmake` 构建，
+主循环用 `-sASYNCIFY` 适配浏览器。

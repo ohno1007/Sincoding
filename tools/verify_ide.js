@@ -31,6 +31,14 @@ const { chromium } = require("playwright");
   });
   const writeback = !!after && after.includes("77321") && after !== before;
 
+  // 多精灵 / 多页积木：切到第二个精灵 → 文本页应切换
+  const sprite1Text = await page.textContent("#text-out");
+  await page.click("#sprite-list .sprite-card:nth-child(2)");
+  await page.waitForTimeout(50);
+  const sprite2Text = await page.textContent("#text-out");
+  const scriptCount = await page.evaluate(() => document.querySelectorAll("#canvas .script").length);
+  const spriteSwitch = sprite2Text !== sprite1Text && sprite2Text.includes("update") && scriptCount >= 1;
+
   // 造型画板：切 tab，画几笔，断言有像素
   await page.click('header .tabs button[data-view="costume-view"]');
   await page.waitForSelector("#paint-canvas");
@@ -49,7 +57,7 @@ const { chromium } = require("playwright");
 
   await browser.close();
 
-  const ok = writeback && painted > 100 && errors.length === 0;
-  console.log(JSON.stringify({ writeback, paintedPixels: painted, errors }));
+  const ok = writeback && spriteSwitch && painted > 100 && errors.length === 0;
+  console.log(JSON.stringify({ writeback, spriteSwitch, paintedPixels: painted, errors }));
   process.exit(ok ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });
