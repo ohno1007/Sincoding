@@ -115,6 +115,43 @@ else
     echo "○ 跳过（未检测到 node 或 playwright）"
 fi
 
+# ---- 前端序列化器与引擎一致（需要 node） ----
+echo
+echo "=== 前端 JS 序列化器 == C++ 引擎（写回一致性） ==="
+if command -v node >/dev/null 2>&1; then
+    for ex in hello fib types game; do
+        "$SINC" "$ROOT/examples/$ex.sin" --emit blocks > "$WORK/$ex.bj" 2>/dev/null
+        "$SINC" "$ROOT/examples/$ex.sin" --emit src   > "$WORK/$ex.cpp.src" 2>/dev/null
+        node -e "
+          const m=require('$ROOT/editor/blockmodel.js');
+          const d=require('fs').readFileSync('$WORK/$ex.bj','utf8');
+          process.stdout.write(m.modelToSource(JSON.parse(d)));
+        " > "$WORK/$ex.js.src" 2>/dev/null
+        if diff -q "$WORK/$ex.cpp.src" "$WORK/$ex.js.src" >/dev/null 2>&1; then
+            echo "✓ $ex: JS modelToSource == sinc --emit src"; ((PASS++))
+        else
+            echo "✗ $ex: JS 与引擎序列化不一致"; ((FAIL++))
+        fi
+    done
+else
+    echo "○ 跳过（未检测到 node）"
+fi
+
+# ---- 积木 IDE 交互（需要 node + playwright） ----
+echo
+echo "=== 积木 IDE 交互（写回 + 造型画板，Chromium 驱动） ==="
+if command -v node >/dev/null 2>&1 && \
+   NODE_PATH="$(npm root -g 2>/dev/null)" node -e "require('playwright')" >/dev/null 2>&1; then
+    "$ROOT/tools/render_blocks.sh" "$ROOT/examples/fib.sin" >/dev/null 2>&1
+    if out="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_ide.js" "$ROOT/editor/index.html" "$WORK" 2>&1)"; then
+        echo "✓ IDE: 字段编辑写回文本 + 造型画板可绘制（$out）"; ((PASS++))
+    else
+        echo "✗ IDE: 交互验证失败（$out）"; ((FAIL++))
+    fi
+else
+    echo "○ 跳过（未检测到 node 或 playwright）"
+fi
+
 # ---- 阶段 0：图形垂直切片（需要 raylib + xvfb，缺失则跳过） ----
 have_raylib() {
     pkg-config --exists raylib 2>/dev/null && return 0

@@ -18,7 +18,7 @@
 | 0 | **最小垂直切片**：语言 → C → raylib → 可运行的"方向键移动精灵"成品 | ✅ 已跑通（无头渲染验证，见下图） |
 | 1 | 语言 → C 转译器（Lexer/Parser/类型检查/代码生成） | ✅ 已完成，斐波那契等用例可编译运行 |
 | 2 | runtime.c 基于 raylib（舞台/精灵/输入/声音） | ✅ 运行时 + 桥接层落地，方块角色已渲染 |
-| 3 | 积木编辑器接 AST（积木 ⇄ 文本双向同步） | 🚧 AST↔文本↔积木 序列化引擎 + 积木查看器已完成；拖拽编辑待做 |
+| 3 | 积木编辑器接 AST（积木 ⇄ 文本双向同步） | 🚧 序列化引擎 + 单页 IDE（无限画布 / 编辑写回 / 造型画板）已完成 |
 | 4 | CMake 多平台（Windows → Web → Android） | ⏳ 规划中 |
 | 5 | JSON 桥接外部 ELF（静态 + 动态） | ⏳ 规划中 |
 
@@ -28,9 +28,13 @@
 
 ![阶段0 成品](docs/images/stage0_game.png)
 
-积木视图（`examples/fib.sin` 经 `sinc --emit blocks` 渲染，积木即 AST 的可视化）：
+积木 IDE（`editor/index.html`）：无限积木画布 + 实时文本写回（左边改积木，右边文本立即更新）：
 
-![阶段3 积木视图](docs/images/stage3_blocks.png)
+![阶段3 IDE](docs/images/stage3_ide.png)
+
+精灵造型画板（画笔 / 橡皮 / 调色板 / 多造型）：
+
+![阶段3 造型画板](docs/images/stage3_costume.png)
 
 ---
 

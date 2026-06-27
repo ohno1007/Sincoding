@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sincoding 积木编辑器</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header>
+  <span class="logo">
+    <span data-icon="puzzle" data-icon-size="22"></span>
+    <h1>Sincoding</h1>
+  </span>
+  <span class="sub">积木 ⇄ 文本（AST 唯一真相）· 无限画布 · 造型画板</span>
+  <div class="tabs">
+    <button data-view="blocks-view" class="active"><span class="ic" data-icon="code"></span>积木 / 代码</button>
+    <button data-view="costume-view"><span class="ic" data-icon="palette"></span>精灵造型</button>
+  </div>
+</header>
+
+<div id="main">
+  <div id="palette"></div>
+
+  <div id="work">
+    <!-- 视图1：无限积木画布 + 实时文本 -->
+    <div id="blocks-view" class="view active">
+      <div id="canvas-wrap">
+        <div id="canvas"></div>
+        <div id="zoom-hint"><span data-icon="move" data-icon-size="14"></span><span class="zt"></span></div>
+      </div>
+      <div id="text-pane">
+        <div class="hd"><span data-icon="code" data-icon-size="15"></span>文本视图 · 等价于 <code>sinc --emit src</code></div>
+        <pre id="text-out"></pre>
+      </div>
+    </div>
+
+    <!-- 视图2：精灵造型画板 -->
+    <div id="costume-view" class="view">
+      <div id="costume-list"></div>
+      <div id="paint-area">
+        <div id="toolbar">
+          <button id="tool-pencil" class="active" data-icon="pencil">画笔</button>
+          <button id="tool-eraser" data-icon="eraser">橡皮</button>
+          <span class="sep"></span>
+          <label>笔刷 <input id="brush-size" type="range" min="1" max="40" value="8"></label>
+          <span class="sep"></span>
+          <div id="swatches" style="display:flex;gap:6px;align-items:center"></div>
+          <span class="sep"></span>
+          <button id="btn-clear" data-icon="trash">清空</button>
+          <button id="btn-export" data-icon="download">导出 PNG</button>
+        </div>
+        <canvas id="paint-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="./icons.js"></script>
+<script src="./blockmodel.js"></script>
+<script src="./paint.js"></script>
+<script src="./blocks_data.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>
