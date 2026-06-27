@@ -14,6 +14,7 @@ add_executable(sinc
   src/parser.cpp
   src/type_checker.cpp
   src/codegen.cpp
+  src/serializer.cpp
 )
 target_include_directories(sinc PRIVATE include)
 

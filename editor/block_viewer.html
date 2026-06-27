@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Sincoding 积木视图</title>
+<style>
+  :root { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
+  body { margin: 0; background: #f4f6fb; color: #222; }
+  header { padding: 14px 20px; background: #4c2889; color: #fff; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header span { opacity: .8; font-size: 13px; }
+  #canvas { padding: 24px; }
+
+  /* 积木通用 */
+  .block { border-radius: 8px; padding: 6px 12px; margin: 6px 0; color: #fff;
+           box-shadow: 0 1px 2px rgba(0,0,0,.2); display: inline-block; }
+  .row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .mouth { background: rgba(0,0,0,.10); border-radius: 6px;
+           margin: 4px 0 2px 18px; padding: 4px 8px; min-height: 10px; }
+  .label { font-weight: 600; }
+  /* 语句按阅读顺序自上而下堆叠，但每块仍按内容自适应宽度 */
+  .stack { display: flex; flex-direction: column; align-items: flex-start; }
+
+  /* 颜色：按 Scratch 习惯分类 */
+  .fn        { background: #9966ff; }   /* 自定义积木：紫 */
+  .extern_fn { background: #774dcb; }
+  .ctrl      { background: #ffab19; }   /* 控制：金黄 */
+  .var       { background: #ff8c1a; }   /* 变量：橙 */
+  .ret       { background: #cf63cf; }   /* 返回：品红 */
+  .ev        { background: #4c97ff; }   /* 表达式语句/调用：蓝 */
+
+  /* 内联表达式：药丸形 */
+  .pill { border-radius: 999px; padding: 2px 10px; font-size: 13px;
+          display: inline-flex; align-items: center; gap: 5px; color: #fff; }
+  .pill.op   { background: #59c059; }    /* 运算：绿 */
+  .pill.call { background: #4c97ff; }
+  .pill.lit  { background: #ffffff; color: #333; border: 1px solid #c9d3e3; }
+  .pill.varref { background: #ff8c1a; }
+  .kw { opacity: .85; font-weight: 600; }
+  .param { background: rgba(255,255,255,.22); border-radius: 999px;
+           padding: 1px 8px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧩 Sincoding 积木视图</h1>
+  <span>积木是 AST 的可视化渲染（由 <code>sinc --emit blocks</code> 生成）</span>
+</header>
+<div id="canvas"></div>
+
+<script src="./blocks_data.js"></script>
+<script>
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+}
+
+// 表达式 → 内联药丸
+function renderExpr(node) {
+  const b = node.block;
+  if (b === "int" || b === "float" || b === "bool")
+    return el("span", "pill lit", String(node.value));
+  if (b === "var")
+    return el("span", "pill varref", node.name);
+  if (b === "unary") {
+    const p = el("span", "pill op");
+    p.append(el("span", "kw", node.op), renderExpr(node.operand));
+    return p;
+  }
+  if (b === "binary") {
+    const p = el("span", "pill op");
+    p.append(renderExpr(node.lhs), el("span", "kw", node.op), renderExpr(node.rhs));
+    return p;
+  }
+  if (b === "call") {
+    const p = el("span", "pill call");
+    p.append(el("span", "kw", node.callee + " ("));
+    node.args.forEach((a, i) => {
+      if (i) p.append(el("span", "kw", ","));
+      p.append(renderExpr(a));
+    });
+    p.append(el("span", "kw", ")"));
+    return p;
+  }
+  return el("span", "pill lit", JSON.stringify(node));
+}
+
+function renderStmtList(list) {
+  const wrap = el("div", "stack");
+  list.forEach(s => wrap.append(renderStmt(s)));
+  return wrap;
+}
+
+// 语句 → 堆叠积木
+function renderStmt(node) {
+  const b = node.block;
+  if (b === "let" || b === "assign") {
+    const blk = el("div", "block var");
+    const row = el("div", "row");
+    row.append(el("span", "label", b === "let" ? "设 " : "赋 "));
+    row.append(el("span", "param", node.name));
+    if (node.type) row.append(el("span", "kw", ": " + node.type));
+    row.append(el("span", "kw", "="));
+    row.append(renderExpr(node.value));
+    blk.append(row);
+    return blk;
+  }
+  if (b === "if") {
+    const blk = el("div", "block ctrl");
+    const row = el("div", "row");
+    row.append(el("span", "label", "如果"), renderExpr(node.cond), el("span", "kw", "那么"));
+    blk.append(row);
+    const mouth = el("div", "mouth");
+    mouth.append(renderStmtList(node.then));
+    blk.append(mouth);
+    if (node.else) {
+      blk.append(el("div", "row", '<span class="label">否则</span>'));
+      const m2 = el("div", "mouth");
+      m2.append(renderStmtList(node.else));
+      blk.append(m2);
+    }
+    return blk;
+  }
+  if (b === "while") {
+    const blk = el("div", "block ctrl");
+    blk.append((() => { const r = el("div", "row");
+      r.append(el("span", "label", "重复直到非"), renderExpr(node.cond)); return r; })());
+    const mouth = el("div", "mouth");
+    mouth.append(renderStmtList(node.body));
+    blk.append(mouth);
+    return blk;
+  }
+  if (b === "return") {
+    const blk = el("div", "block ret");
+    const row = el("div", "row");
+    row.append(el("span", "label", "返回"));
+    if (node.value) row.append(renderExpr(node.value));
+    blk.append(row);
+    return blk;
+  }
+  if (b === "expr") {
+    const blk = el("div", "block ev");
+    const row = el("div", "row");
+    row.append(renderExpr(node.expr));
+    blk.append(row);
+    return blk;
+  }
+  if (b === "block_group") {
+    const mouth = el("div", "mouth");
+    mouth.append(renderStmtList(node.body));
+    return mouth;
+  }
+  return el("div", "block", JSON.stringify(node));
+}
+
+function renderFn(fn) {
+  const blk = el("div", "block " + (fn.block === "extern_fn" ? "extern_fn" : "fn"));
+  const row = el("div", "row");
+  row.append(el("span", "label", (fn.block === "extern_fn" ? "外部 " : "定义 ") + fn.name));
+  fn.params.forEach(p => row.append(el("span", "param", p.name + ": " + p.type)));
+  if (fn.ret && fn.ret !== "void") row.append(el("span", "kw", "→ " + fn.ret));
+  blk.append(row);
+  if (fn.body) {
+    const mouth = el("div", "mouth");
+    mouth.append(renderStmtList(fn.body));
+    blk.append(mouth);
+  }
+  return blk;
+}
+
+(function main() {
+  const canvas = document.getElementById("canvas");
+  const data = window.SIN_BLOCKS;
+  if (!data) { canvas.textContent = "未加载积木数据（缺少 blocks_data.js）"; return; }
+  data.program.forEach(fn => {
+    const wrap = el("div");
+    wrap.style.marginBottom = "18px";
+    wrap.append(renderFn(fn));
+    canvas.append(wrap);
+  });
+})();
+</script>
+</body>
+</html>

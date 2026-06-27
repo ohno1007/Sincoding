@@ -64,6 +64,57 @@ expect_error bad_cond      "$ROOT/tests/cases/bad_cond.sin"
 expect_error no_main       "$ROOT/tests/cases/no_main.sin"
 expect_error arg_count     "$ROOT/tests/cases/arg_count.sin"
 
+# roundtrip <name> <source.sin> — 验证 AST ⇄ 文本 ⇄ 积木 序列化正确
+roundtrip() {
+    local name="$1" src="$2"
+    local r1="$WORK/$name.r1.sin" r2="$WORK/$name.r2.sin"
+    local c0="$WORK/$name.c0" c1="$WORK/$name.c1"
+    "$SINC" "$src" --emit src -o "$r1" >/dev/null 2>&1
+    "$SINC" "$r1" --emit src -o "$r2" >/dev/null 2>&1
+    # 1) 序列化幂等：源码 → AST → 源码 → AST → 源码，后两次一致
+    if ! diff -q "$r1" "$r2" >/dev/null 2>&1; then
+        echo "✗ $name: 序列化非幂等"; ((FAIL++)); return
+    fi
+    # 2) 语义不变：往返后生成的 C 与原始一致
+    "$SINC" "$src" --emit c -o "$c0" >/dev/null 2>&1
+    "$SINC" "$r1"  --emit c -o "$c1" >/dev/null 2>&1
+    if ! diff -q "$c0" "$c1" >/dev/null 2>&1; then
+        echo "✗ $name: 往返后 C 代码改变"; ((FAIL++)); return
+    fi
+    # 3) 积木模型为合法 JSON
+    if ! "$SINC" "$src" --emit blocks 2>/dev/null | python3 -c "import json,sys; json.load(sys.stdin)" 2>/dev/null; then
+        echo "✗ $name: 积木 JSON 非法"; ((FAIL++)); return
+    fi
+    echo "✓ $name (幂等 + C 等价 + 合法积木 JSON)"; ((PASS++))
+}
+
+echo
+echo "=== 序列化往返：AST ⇄ 文本 / 积木（积木编辑器地基） ==="
+roundtrip hello "$ROOT/examples/hello.sin"
+roundtrip fib   "$ROOT/examples/fib.sin"
+roundtrip types "$ROOT/examples/types.sin"
+roundtrip game  "$ROOT/examples/game.sin"
+
+# ---- 积木视图渲染（需要 node + playwright，缺失则跳过） ----
+echo
+echo "=== 积木视图渲染（Chromium 截图验证） ==="
+if command -v node >/dev/null 2>&1 && \
+   NODE_PATH="$(npm root -g 2>/dev/null)" node -e "require('playwright')" >/dev/null 2>&1; then
+    SHOT="$WORK/blocks.png"
+    if "$ROOT/tools/render_blocks.sh" "$ROOT/examples/fib.sin" "$SHOT" >/dev/null 2>&1; then
+        nonbg="$(python3 "$ROOT/tools/png_nonbg.py" "$SHOT" 2>/dev/null || echo 0)"
+        if [[ "$nonbg" -gt 1000 ]]; then
+            echo "✓ blocks: 积木视图已渲染（非背景像素 $nonbg）"; ((PASS++))
+        else
+            echo "✗ blocks: 渲染疑似空白（非背景像素 $nonbg）"; ((FAIL++))
+        fi
+    else
+        echo "✗ blocks: 渲染失败"; ((FAIL++))
+    fi
+else
+    echo "○ 跳过（未检测到 node 或 playwright）"
+fi
+
 # ---- 阶段 0：图形垂直切片（需要 raylib + xvfb，缺失则跳过） ----
 have_raylib() {
     pkg-config --exists raylib 2>/dev/null && return 0

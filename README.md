@@ -18,7 +18,7 @@
 | 0 | **最小垂直切片**：语言 → C → raylib → 可运行的"方向键移动精灵"成品 | ✅ 已跑通（无头渲染验证，见下图） |
 | 1 | 语言 → C 转译器（Lexer/Parser/类型检查/代码生成） | ✅ 已完成，斐波那契等用例可编译运行 |
 | 2 | runtime.c 基于 raylib（舞台/精灵/输入/声音） | ✅ 运行时 + 桥接层落地，方块角色已渲染 |
-| 3 | 积木编辑器接 AST（积木 ⇄ 文本双向同步） | ⏳ 规划中 |
+| 3 | 积木编辑器接 AST（积木 ⇄ 文本双向同步） | 🚧 AST↔文本↔积木 序列化引擎 + 积木查看器已完成；拖拽编辑待做 |
 | 4 | CMake 多平台（Windows → Web → Android） | ⏳ 规划中 |
 | 5 | JSON 桥接外部 ELF（静态 + 动态） | ⏳ 规划中 |
 
@@ -27,6 +27,10 @@
 阶段 0 成品截图（`examples/game.sin` 无头运行所得，角色为居中方块）：
 
 ![阶段0 成品](docs/images/stage0_game.png)
+
+积木视图（`examples/fib.sin` 经 `sinc --emit blocks` 渲染，积木即 AST 的可视化）：
+
+![阶段3 积木视图](docs/images/stage3_blocks.png)
 
 ---
 
@@ -113,8 +117,21 @@ compiler/        语言 → C 转译器（C++17，手写递归下降）
   src/           对应实现 + sinc 命令行入口
 runtime/         运行时：runtime.c（Scratch 风格，封装 raylib）
                  + prelude.c/.h（语言 ABI 桥接层，extern fn 的实现）
-tools/           build_native.sh（编原生成品）、png_nonbg.py（无头渲染校验）
+editor/          积木前端：block_viewer.html（Scratch 风格积木渲染器）
+tools/           build_native.sh / render_blocks.sh / png_nonbg.py / screenshot.js
 examples/        示例 .sin 程序（hello / fib / types / game）
 tests/           端到端测试与用例
 docs/            技术设计、语言参考、截图
 ```
+
+## 三种视图，一个 AST
+
+文本、积木、C 代码都从同一棵 AST 派生：
+
+```bash
+sinc examples/fib.sin --emit src      # AST → 规范化 Sincoding 源码（文本视图）
+sinc examples/fib.sin --emit blocks   # AST → 积木模型 JSON（积木视图）
+sinc examples/fib.sin --emit c        # AST → C 代码（编译产物）
+```
+
+`--emit src` 幂等且与原程序语义等价（往返后生成的 C 完全一致），这正是积木 ⇄ 文本双向同步的正确性基础。

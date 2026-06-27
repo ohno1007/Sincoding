@@ -6,6 +6,7 @@
 #include "codegen.h"
 #include "lexer.h"
 #include "parser.h"
+#include "serializer.h"
 #include "type_checker.h"
 
 #include <fstream>
@@ -34,17 +35,26 @@ static void printDiags(const std::string& file, const std::vector<Diagnostic>& d
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::cerr << "用法: sinc <input.sin> [-o out.c] [--tokens]\n";
+        std::cerr << "用法: sinc <input.sin> [-o out] [--emit c|src|blocks] [--tokens]\n"
+                     "  --emit c      生成 C 代码（默认）\n"
+                     "  --emit src    AST → 规范化 Sincoding 源码（文本视图）\n"
+                     "  --emit blocks AST → 积木模型 JSON（积木视图）\n";
         return 2;
     }
     std::string input = argv[1];
     std::string output;
+    std::string emit = "c";
     bool dumpTokens = false;
     for (int i = 2; i < argc; i++) {
         std::string a = argv[i];
         if (a == "-o" && i + 1 < argc) output = argv[++i];
+        else if (a == "--emit" && i + 1 < argc) emit = argv[++i];
         else if (a == "--tokens") dumpTokens = true;
         else { std::cerr << "未知参数: " << a << "\n"; return 2; }
+    }
+    if (emit != "c" && emit != "src" && emit != "blocks") {
+        std::cerr << "未知 --emit 取值: " << emit << "（应为 c|src|blocks）\n";
+        return 2;
     }
 
     bool ok = false;
@@ -70,17 +80,28 @@ int main(int argc, char** argv) {
     TypeChecker checker;
     if (!checker.check(prog)) { printDiags(input, checker.errors()); return 1; }
 
-    // 4) 生成 C
-    CodeGen gen;
-    std::string c = gen.generate(prog);
+    // 4) 按 --emit 输出
+    std::string result;
+    const char* label;
+    if (emit == "src") {
+        result = serializeSource(prog);
+        label = "已生成源码";
+    } else if (emit == "blocks") {
+        result = serializeBlocks(prog);
+        label = "已生成积木模型";
+    } else {
+        CodeGen gen;
+        result = gen.generate(prog);
+        label = "已生成 C 代码";
+    }
 
     if (output.empty()) {
-        std::cout << c;
+        std::cout << result;
     } else {
         std::ofstream out(output, std::ios::binary);
         if (!out) { std::cerr << "无法写出文件: " << output << "\n"; return 2; }
-        out << c;
-        std::cerr << "已生成 C 代码: " << output << "\n";
+        out << result;
+        std::cerr << label << ": " << output << "\n";
     }
     return 0;
 }
