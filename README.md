@@ -11,17 +11,22 @@
 
 ## 当前进度
 
-按照路线图，**地基（语言 → C 转译器）已经跑通**：
+**整条技术栈已端到端打通**：一段 Sincoding 代码 → 转 C → 链接运行时 → raylib → 能用方向键移动角色的原生成品。
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
+| 0 | **最小垂直切片**：语言 → C → raylib → 可运行的"方向键移动精灵"成品 | ✅ 已跑通（无头渲染验证，见下图） |
 | 1 | 语言 → C 转译器（Lexer/Parser/类型检查/代码生成） | ✅ 已完成，斐波那契等用例可编译运行 |
-| 2 | runtime.c 基于 raylib（舞台/精灵/输入/声音） | 🚧 API 已设计并落地（`runtime/`），待接入构建 |
+| 2 | runtime.c 基于 raylib（舞台/精灵/输入/声音） | ✅ 运行时 + 桥接层落地，方块角色已渲染 |
 | 3 | 积木编辑器接 AST（积木 ⇄ 文本双向同步） | ⏳ 规划中 |
 | 4 | CMake 多平台（Windows → Web → Android） | ⏳ 规划中 |
 | 5 | JSON 桥接外部 ELF（静态 + 动态） | ⏳ 规划中 |
 
 核心设计原则：**AST 是唯一真相源**。积木是 AST 的可视化渲染，文本是 AST 的序列化。
+
+阶段 0 成品截图（`examples/game.sin` 无头运行所得，角色为居中方块）：
+
+![阶段0 成品](docs/images/stage0_game.png)
 
 ---
 
@@ -49,7 +54,24 @@ gcc fib.c -o fib && ./fib
 
 也可以直接打印生成的 C（不带 `-o` 时输出到 stdout），或用 `--tokens` 查看词法结果。
 
-### 3. 跑测试
+### 3. 编出图形成品（需要 raylib）
+
+通过 `extern fn` 声明的运行时函数（见 `runtime/prelude.h`），程序可以开窗口、画角色、读按键：
+
+```bash
+# 安装 raylib（Ubuntu 举例）后：
+tools/build_native.sh examples/game.sin /tmp/game
+/tmp/game        # 方向键移动方块角色
+```
+
+无显示器环境（CI）可无头运行并截图验证：
+
+```bash
+SIN_MAX_FRAMES=8 SIN_SCREENSHOT=shot.png \
+  xvfb-run -a -s "-screen 0 800x600x24" /tmp/game
+```
+
+### 4. 跑测试
 
 ```bash
 bash tests/run_tests.sh
@@ -89,8 +111,10 @@ fn main() -> int {
 compiler/        语言 → C 转译器（C++17，手写递归下降）
   include/       词法/语法/AST/类型检查/代码生成 头文件
   src/           对应实现 + sinc 命令行入口
-runtime/         Scratch 风格运行时 runtime.c（封装 raylib）
-examples/        示例 .sin 程序
+runtime/         运行时：runtime.c（Scratch 风格，封装 raylib）
+                 + prelude.c/.h（语言 ABI 桥接层，extern fn 的实现）
+tools/           build_native.sh（编原生成品）、png_nonbg.py（无头渲染校验）
+examples/        示例 .sin 程序（hello / fib / types / game）
 tests/           端到端测试与用例
-docs/            技术设计与语言参考
+docs/            技术设计、语言参考、截图
 ```

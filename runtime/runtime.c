@@ -24,9 +24,13 @@
 #define RT_MAX_EVENTS  64
 #define RT_MSG_LEN     64
 
+typedef enum { RT_SPR_TEXTURE, RT_SPR_RECT } RtSpriteKind;
+
 typedef struct {
-    Texture2D tex;
+    RtSpriteKind kind;
+    Texture2D tex;     // RT_SPR_TEXTURE 时有效
     bool loaded;
+    float size;        // RT_SPR_RECT 时的边长
     float x, y;        // 舞台坐标（中心原点，y 向上为正，贴近 Scratch）
     float heading;     // 朝向，度，0 = 向右
     float scale;
@@ -99,10 +103,26 @@ rt_sprite rt_sprite_load(const char* image_path) {
     if (g_sprite_count >= RT_MAX_SPRITES) return -1;
     int id = g_sprite_count++;
     RtSprite* s = &g_sprites[id];
+    s->kind = RT_SPR_TEXTURE;
     s->tex = LoadTexture(image_path);
     s->loaded = (s->tex.id != 0);
     s->x = 0;
     s->y = 0;
+    s->heading = 0;
+    s->scale = 1.0f;
+    s->bubble[0] = '\0';
+    return id;
+}
+
+rt_sprite rt_sprite_rect(float x, float y, float size) {
+    if (g_sprite_count >= RT_MAX_SPRITES) return -1;
+    int id = g_sprite_count++;
+    RtSprite* s = &g_sprites[id];
+    s->kind = RT_SPR_RECT;
+    s->loaded = true;
+    s->size = size;
+    s->x = x;
+    s->y = y;
     s->heading = 0;
     s->scale = 1.0f;
     s->bubble[0] = '\0';
@@ -117,6 +137,18 @@ void rt_sprite_draw(rt_sprite s) {
     if (!sprite_valid(s) || !g_sprites[s].loaded) return;
     RtSprite* sp = &g_sprites[s];
     Vector2 pos = stage_to_screen(sp->x, sp->y);
+
+    if (sp->kind == RT_SPR_RECT) {
+        float sz = sp->size * sp->scale;
+        Rectangle r = {pos.x - sz * 0.5f, pos.y - sz * 0.5f, sz, sz};
+        DrawRectangleRec(r, MAROON);
+        DrawRectangleLinesEx(r, 2, BLACK);
+        if (sp->bubble[0] != '\0')
+            DrawText(sp->bubble, (int)(pos.x + sz * 0.5f),
+                     (int)(pos.y - sz * 0.5f - 20), 20, BLACK);
+        return;
+    }
+
     // 以纹理中心为锚点绘制
     float w = sp->tex.width * sp->scale;
     float h = sp->tex.height * sp->scale;

@@ -1,0 +1,52 @@
+// game.sin — 阶段 0 最小垂直切片
+// 方向键移动一个方块角色。整条技术栈的端到端验证：
+//   Sincoding 源码 → 转 C → 链接 prelude/runtime → raylib → 成品
+
+// 运行时桥接函数（来自 runtime/prelude）
+extern fn stage_init(w: int, h: int)
+extern fn stage_running() -> bool
+extern fn frame_begin()
+extern fn frame_end()
+extern fn stage_close()
+
+extern fn sprite_new(x: float, y: float, size: float) -> int
+extern fn sprite_move_to(s: int, x: float, y: float)
+extern fn sprite_x(s: int) -> float
+extern fn sprite_y(s: int) -> float
+extern fn sprite_draw(s: int)
+
+extern fn key_down(key: int) -> bool
+extern fn key_left() -> int
+extern fn key_right() -> int
+extern fn key_up() -> int
+extern fn key_down_arrow() -> int
+
+fn main() -> int {
+    stage_init(800, 600)
+    let player = sprite_new(0.0, 0.0, 40.0)
+    let speed = 5.0
+
+    while stage_running() {
+        // 读取方向键，移动角色
+        if key_down(key_left()) {
+            sprite_move_to(player, sprite_x(player) - speed, sprite_y(player))
+        }
+        if key_down(key_right()) {
+            sprite_move_to(player, sprite_x(player) + speed, sprite_y(player))
+        }
+        if key_down(key_up()) {
+            sprite_move_to(player, sprite_x(player), sprite_y(player) + speed)
+        }
+        if key_down(key_down_arrow()) {
+            sprite_move_to(player, sprite_x(player), sprite_y(player) - speed)
+        }
+
+        // 渲染一帧
+        frame_begin()
+        sprite_draw(player)
+        frame_end()
+    }
+
+    stage_close()
+    return 0
+}

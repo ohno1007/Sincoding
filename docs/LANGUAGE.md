@@ -55,6 +55,21 @@ fn greet() {          // 省略 -> 表示返回 void
 - 省略 `-> T` 等价于返回 `void`。
 - 支持递归与互递归（函数签名在检查函数体前先全部收集）。
 
+### 外部函数（FFI）
+
+用 `extern fn` 声明没有函数体的外部函数，转译时生成 `extern` 原型，
+链接期绑定到运行时（`runtime/prelude`）或外部库的实现：
+
+```rust
+extern fn stage_init(w: int, h: int)
+extern fn sprite_new(x: float, y: float, size: float) -> int
+extern fn key_down(key: int) -> bool
+```
+
+ABI 约定：语言 `int` → C `long long`，`float` → C `double`，`bool` → C `bool`。
+这是语言访问 raylib 运行时（开窗口、画角色、读输入）以及未来 JSON 桥接外部 ELF 的统一入口。
+完整运行时函数清单见 [`runtime/prelude.h`](../runtime/prelude.h)，示例见 [`examples/game.sin`](../examples/game.sin)。
+
 ## 5. 控制流
 
 ```rust
@@ -91,8 +106,8 @@ while cond {
 |---|---|
 | `print(x)` | 打印 `int` / `float` / `bool`，自动换行 |
 
-> 后续阶段会把 `runtime/` 的 `rt_*` Scratch API（移动精灵、按键、声音等）
-> 作为内建/外部函数接入，并通过 JSON 桥接外部 ELF 扩展更多函数。
+> 图形/输入/声音等 Scratch API 通过 `extern fn` 接入（见上文 FFI 一节），
+> 实现在 `runtime/prelude`。后续会再通过 JSON 桥接外部 ELF 扩展更多函数。
 
 ## 8. 注释
 
@@ -104,7 +119,7 @@ while cond {
 
 ```
 program   ::= fn_decl*
-fn_decl   ::= 'fn' IDENT '(' params? ')' ('->' type)? block
+fn_decl   ::= 'extern'? 'fn' IDENT '(' params? ')' ('->' type)? (block | ';'?)
 params    ::= param (',' param)*
 param     ::= IDENT ':' type
 type      ::= 'int' | 'float' | 'bool' | 'void'

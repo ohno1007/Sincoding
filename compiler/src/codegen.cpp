@@ -15,8 +15,9 @@ std::string CodeGen::generate(const Program& prog) {
     for (auto& fn : prog.fns) emitFnProto(*fn);
     out_ << "\n";
 
-    // 函数体
+    // 函数体（extern 声明无函数体，仅靠上面的原型链接到运行时）
     for (auto& fn : prog.fns) {
+        if (fn->isExtern) continue;
         emitFn(*fn);
         out_ << "\n";
     }
@@ -30,6 +31,7 @@ static const char* fnRetC(const FnDecl& fn) {
 }
 
 void CodeGen::emitFnProto(const FnDecl& fn) {
+    if (fn.isExtern) out_ << "extern ";
     out_ << fnRetC(fn) << " " << fn.name << "(";
     if (fn.params.empty()) {
         out_ << "void";

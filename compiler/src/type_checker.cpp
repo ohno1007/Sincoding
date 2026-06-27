@@ -57,8 +57,9 @@ bool TypeChecker::check(Program& prog) {
     if (!fns_.count("main"))
         error(0, "缺少入口函数 main");
 
-    // 第二遍：检查函数体
-    for (auto& fn : prog.fns) checkFn(*fn);
+    // 第二遍：检查函数体（extern 声明无函数体，跳过）
+    for (auto& fn : prog.fns)
+        if (!fn->isExtern) checkFn(*fn);
     return errors_.empty();
 }
 

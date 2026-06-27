@@ -27,6 +27,8 @@ void rt_stage_close(void);        // 关闭窗口、释放资源
 // 内部为 Texture2D + 位置/旋转/缩放，返回句柄 id
 typedef int rt_sprite;
 rt_sprite rt_sprite_load(const char* image_path);
+// 程序化方块角色：无需图片资源，适合最小垂直切片 / 占位。
+rt_sprite rt_sprite_rect(float x, float y, float size);
 void rt_sprite_draw(rt_sprite s);
 
 // 移动 / 旋转 / 定位（Scratch 积木的直接映射）

@@ -65,12 +65,12 @@ Type Parser::parseType() {
 Program Parser::parseProgram() {
     Program prog;
     while (!check(TokKind::End)) {
-        if (check(TokKind::KwFn)) {
+        if (check(TokKind::KwFn) || check(TokKind::KwExtern)) {
             FnPtr fn = parseFn();
             if (fn) prog.fns.push_back(std::move(fn));
             if (panic_) synchronize();
         } else {
-            error(cur(), "顶层只允许函数声明 (fn ...)");
+            error(cur(), "顶层只允许函数声明 (fn ... 或 extern fn ...)");
             synchronize();
         }
     }
@@ -80,6 +80,7 @@ Program Parser::parseProgram() {
 FnPtr Parser::parseFn() {
     auto fn = std::make_unique<FnDecl>();
     fn->line = cur().line;
+    fn->isExtern = match(TokKind::KwExtern); // 'extern' 前缀可选
     expect(TokKind::KwFn, "'fn'");
     const Token& name = expect(TokKind::Ident, "函数名");
     fn->name = name.text;
@@ -98,7 +99,12 @@ FnPtr Parser::parseFn() {
     expect(TokKind::RParen, "')'");
     if (match(TokKind::Arrow)) fn->ret = parseType();
     else fn->ret = Type::Void;
-    fn->body = parseBlock();
+    if (fn->isExtern) {
+        // extern 声明没有函数体，分号可选
+        match(TokKind::Semicolon);
+    } else {
+        fn->body = parseBlock();
+    }
     return fn;
 }
 

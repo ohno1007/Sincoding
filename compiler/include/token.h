@@ -9,7 +9,7 @@ enum class TokKind {
     Int, Float, Ident,
     // 关键字
     KwLet, KwFn, KwIf, KwElse, KwWhile, KwReturn,
-    KwTrue, KwFalse,
+    KwExtern, KwTrue, KwFalse,
     KwTypeInt, KwTypeFloat, KwTypeBool, KwTypeVoid,
     // 运算符
     Plus, Minus, Star, Slash, Percent,

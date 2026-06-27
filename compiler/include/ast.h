@@ -131,7 +131,8 @@ struct FnDecl {
     std::string name;
     std::vector<Param> params;
     Type ret = Type::Void;
-    BlockPtr body;
+    BlockPtr body;          // extern 函数为空（无函数体）
+    bool isExtern = false;  // 由 'extern fn' 声明，链接到外部/运行时实现
     int line = 0;
 };
 using FnPtr = std::unique_ptr<FnDecl>;

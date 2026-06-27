@@ -15,6 +15,7 @@ const char* tokKindName(TokKind k) {
         case TokKind::KwElse: return "else";
         case TokKind::KwWhile: return "while";
         case TokKind::KwReturn: return "return";
+        case TokKind::KwExtern: return "extern";
         case TokKind::KwTrue: return "true";
         case TokKind::KwFalse: return "false";
         case TokKind::KwTypeInt: return "int";
@@ -54,6 +55,7 @@ static const std::unordered_map<std::string, TokKind>& keywords() {
         {"let", TokKind::KwLet},       {"fn", TokKind::KwFn},
         {"if", TokKind::KwIf},         {"else", TokKind::KwElse},
         {"while", TokKind::KwWhile},   {"return", TokKind::KwReturn},
+        {"extern", TokKind::KwExtern},
         {"true", TokKind::KwTrue},     {"false", TokKind::KwFalse},
         {"int", TokKind::KwTypeInt},   {"float", TokKind::KwTypeFloat},
         {"bool", TokKind::KwTypeBool}, {"void", TokKind::KwTypeVoid},
