@@ -1,0 +1,21 @@
+// types.sin — 演示类型推断、float、bool 与控制流
+fn area(r: float) -> float {
+    let pi: float = 3.14159
+    return pi * r * r
+}
+
+fn is_even(n: int) -> bool {
+    return n % 2 == 0
+}
+
+fn main() -> int {
+    let r = 2.0          // 推断为 float
+    print(area(r))       // 12.5664
+
+    let n = 7            // 推断为 int
+    print(is_even(n))    // false
+
+    let flag = true && !false
+    print(flag)          // true
+    return 0
+}

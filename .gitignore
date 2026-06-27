@@ -1,0 +1,16 @@
+# 构建产物
+build/
+*.o
+*.obj
+*.exe
+*.out
+*.wasm
+
+# 编译器中间产物
+*.gen.c
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+*.log

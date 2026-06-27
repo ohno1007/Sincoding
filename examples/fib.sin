@@ -1,0 +1,27 @@
+// fib.sin — 斐波那契：同时验证递归与迭代两种写法
+fn fib(n: int) -> int {
+    if n < 2 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+fn fib_iter(n: int) -> int {
+    let a = 0
+    let b = 1
+    let i = 0
+    while i < n {
+        let t = a + b
+        a = b
+        b = t
+        i = i + 1
+    }
+    return a
+}
+
+fn main() -> int {
+    let n = 10
+    print(fib(n))        // 递归: 55
+    print(fib_iter(n))   // 迭代: 55
+    return 0
+}
