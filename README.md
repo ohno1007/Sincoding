@@ -281,6 +281,17 @@ ANDROID_NDK=/usr/lib/android-ndk \
 
 ![守护者小游戏](docs/images/game_guardian.png)
 
+## 桌面版 IDE（单文件 Windows .exe）
+
+把网页编辑器打包成**单文件桌面程序**：双击即用、免安装、离线可用——内置静态服务
++ 自动开浏览器显示 IDE，文本→积木反向解析用内置 `sinc.wasm`。用 Go 交叉编译：
+
+```bash
+tools/build_desktop_ide.sh windows   # 产出 dist/Sincoding-IDE-windows.exe（单文件，约 6MB）
+```
+
+详见 [`desktop/README.md`](desktop/README.md)。
+
 ## 桥接外部 ELF（JSON 接口定义）
 
 用一份 JSON 描述外部 C 库的接口，自动生成语言侧 `extern fn` 声明与 C 胶水，

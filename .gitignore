@@ -24,6 +24,9 @@ tools/debug.keystore
 *.apk
 dist/
 
+# 桌面版 IDE 的 editor 暂存拷贝（由 build_desktop_ide.sh 生成）
+desktop/web/
+
 # Web demo 成品（提交，便于直接打开）
 !web-demo/index.wasm
 !editor/sinc.wasm
