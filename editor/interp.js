@@ -23,6 +23,9 @@
       // assetBase: 文件名相对前缀（如 "assets/"），用于按文件名惰性加载 PNG。
       this.assets = new Map();
       this.assetBase = "";
+      // 运行可观测：onStep(node) 用于「执行到哪个积木就高亮」；onPrint(text) 输出到控制台
+      this.onStep = null;
+      this.onPrint = null;
       canvas.tabIndex = 0;
       canvas.addEventListener("keydown", (e) => {
         const c = KEYMAP[e.key]; if (c !== undefined) { this.keys.add(c); e.preventDefault(); }
@@ -169,6 +172,7 @@
 
     execStmt(node, env) {
       const w = this.world;
+      if (this.onStep) this.onStep(node);   // 执行到该积木 → 高亮回调
       switch (node.block) {
         case "let": {
           let v = node.value !== undefined ? this.eval(node.value, env) : this.defaultVal(node);
@@ -342,7 +346,7 @@
     play_tone(a) { this.beep(a[0], a[1]); },
     to_float(a) { return a[0]; },
     to_int(a) { return Math.trunc(a[0]); },
-    print(a) { this.world.console.push(String(a[0])); },
+    print(a) { const t = String(a[0]); this.world.console.push(t); if (this.onPrint) this.onPrint(t); },
   };
 
   root.SinPreview = SinPreview;

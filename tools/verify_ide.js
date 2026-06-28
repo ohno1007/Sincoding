@@ -41,7 +41,7 @@ function freePort() {
     // 写回：改一个数字字面量 → 文本视图应反映
     const before = await val();
     await page.evaluate(() => {
-      const f = [...document.querySelectorAll(".field.lit")].find((x) => /^\d+$/.test(x.textContent.trim()));
+      const f = [...document.querySelectorAll("#canvas .field.lit")].find((x) => /^\d+$/.test(x.textContent.trim()));
       f.focus(); f.textContent = "77321";
       f.dispatchEvent(new Event("input", { bubbles: true }));
     });
@@ -67,12 +67,16 @@ function freePort() {
       reorder = afterR !== beforeR && fibBody.indexOf("return") < fibBody.indexOf("if (");
     }
 
-    // 调色板：加入「数组」与「for」积木 → 文本应出现 int[3] 与 for
-    await page.click('#palette button:has-text("设 数组")');
-    await page.click('#palette button:has-text("for i in")');
+    // 调色板（仿 Scratch：分类导航 + 所见即所得积木）：加入「数组」与「for」积木
+    await page.click('#palette .pal-wys[data-kind="let_arr"]');
+    await page.click('#palette .pal-wys[data-kind="for"]');
     await page.waitForTimeout(40);
     const palText = await val();
     const palette = palText.includes("int[3]") && palText.includes("for ");
+    // 分类导航：点一个分类按钮应高亮
+    await page.click('#palette .cat-rail .cat-btn:nth-child(6)');
+    await page.waitForTimeout(60);
+    const catNav = await page.evaluate(() => document.querySelectorAll('#palette .cat-btn.active').length === 1);
 
     // 反向同步：编辑文本 → wasm 编译器解析 → 积木更新
     await page.waitForFunction(() => window.__sincReady === true, { timeout: 20000 });
@@ -178,6 +182,13 @@ function freePort() {
       return { count: els.length, textured: els.filter((e) => e.style.backgroundImage && e.style.backgroundImage !== "none").length };
     });
     const stageOk = stage.count >= 2 && stage.textured >= 1;
+    // 舞台控制台：点「打印积木信息」→ 控制台应出现输出行
+    await page.click("#con-print-info");
+    await page.waitForTimeout(60);
+    const consolePanel = await page.evaluate(() => {
+      const out = document.getElementById("console-out");
+      return !!out && out.querySelectorAll(".con-line").length > 0;
+    });
     if (shots) await page.screenshot({ path: shots + "/ide_stage.png" });
 
     // 保存/打开项目：序列化项目（含精灵/积木/造型）→ 改个名字 → 重新载入 → 生效
@@ -204,9 +215,9 @@ function freePort() {
     });
     await page.click("#publish-close");
 
-    result = { writeback, reorder, palette, reverse, spriteSwitch, sharedState, preview, costume, parallel, exportOk, highlighted, autocomplete, diagnostics, saveOpen, publishModal, stage, paintedPixels: painted, errors };
-    result.ok = writeback && reorder && palette && reverse && spriteSwitch && sharedState && preview && costume && parallel &&
-      exportOk && highlighted && autocomplete && diagnostics && saveOpen && publishModal && stageOk && painted > 100 && errors.length === 0;
+    result = { writeback, reorder, palette, catNav, reverse, spriteSwitch, sharedState, preview, costume, parallel, exportOk, highlighted, autocomplete, diagnostics, consolePanel, saveOpen, publishModal, stage, paintedPixels: painted, errors };
+    result.ok = writeback && reorder && palette && catNav && reverse && spriteSwitch && sharedState && preview && costume && parallel &&
+      exportOk && highlighted && autocomplete && diagnostics && consolePanel && saveOpen && publishModal && stageOk && painted > 100 && errors.length === 0;
   } finally {
     await browser.close();
     srv.kill();

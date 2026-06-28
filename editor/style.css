@@ -29,19 +29,28 @@ header .tabs button.active { background:#fff; color:#4c2889; box-shadow:0 1px 3p
 #main { flex:1 1 auto; display:flex; min-height:0; }
 
 /* ---------- 调色板 ---------- */
-#palette { width:180px; flex:0 0 auto; background:var(--panel); border-right:1px solid var(--line);
-  padding:12px 12px 20px; overflow-y:auto; }
-#palette h2 { font-size:11px; color:#9aa3b5; margin:14px 4px 6px; letter-spacing:.6px;
-  text-transform:uppercase; font-weight:700; }
-.pal-block { display:flex; align-items:center; gap:9px; width:100%; text-align:left; border:0;
-  color:#fff; border-radius:9px; padding:9px 11px; margin:6px 0; cursor:pointer; font-size:13px;
-  font-weight:600; box-shadow:0 2px 0 rgba(0,0,0,.13), inset 0 1px rgba(255,255,255,.22);
-  transition:transform .08s; }
-.pal-block:hover { transform:translateY(-1px); filter:brightness(1.04); }
-.pal-block:active { transform:translateY(1px); box-shadow:0 0 0 rgba(0,0,0,.13); }
-.pal-block .ic { display:inline-flex; opacity:.9; }
-.pal-dot { width:13px; height:13px; border-radius:50%; flex:0 0 auto;
-  box-shadow:inset 0 0 0 2px rgba(255,255,255,.6); }
+/* 仿 Scratch：左分类导航 + 右「所见即所得」积木区 */
+#palette { width:262px; flex:0 0 auto; background:var(--panel); border-right:1px solid var(--line);
+  display:flex; min-height:0; }
+.cat-rail { width:62px; flex:0 0 auto; background:#f4f6fb; border-right:1px solid var(--line);
+  overflow-y:auto; padding:6px 0; display:flex; flex-direction:column; gap:2px; }
+.cat-btn { display:flex; flex-direction:column; align-items:center; gap:3px; border:0; background:transparent;
+  cursor:pointer; padding:7px 2px; font-size:10px; font-weight:700; color:#6b7790; border-radius:8px; }
+.cat-btn:hover { background:#e9eef8; }
+.cat-btn.active { background:#e3ebfb; color:#2b3a4b; }
+.cat-dot { width:22px; height:22px; border-radius:50%; box-shadow:inset 0 0 0 3px rgba(255,255,255,.65), 0 1px 3px rgba(0,0,0,.18); }
+.cat-nm { line-height:1.1; text-align:center; }
+.block-list { flex:1 1 auto; overflow:auto; padding:6px 10px 24px; }
+.cat-sec { scroll-margin-top:6px; }
+.cat-sec h2 { font-size:11.5px; color:#46546b; margin:14px 2px 8px; font-weight:800;
+  display:flex; align-items:center; gap:7px; }
+.cat-sec h2::before { content:""; width:5px; height:14px; border-radius:3px; background:var(--cc,#c2cbe0); }
+/* 积木预览：与画布同款外观，整块可点击加入（子元素不拦截点击） */
+.pal-wys { display:inline-block; margin:0 0 9px; cursor:pointer; border-radius:8px; transition:transform .08s; }
+.pal-wys * { pointer-events:none; }
+.pal-wys:hover { transform:translateY(-1px) scale(1.01); }
+.pal-wys:active { transform:translateY(1px); }
+.pal-wys .block { cursor:pointer; }
 
 /* ---------- 工作区 ---------- */
 #work { flex:1 1 auto; position:relative; min-width:0; }
@@ -315,3 +324,32 @@ header .tabs button.active { font-weight:700; }
 #text-status { font-weight:700; padding:1px 8px; border-radius:999px; }
 #text-status.ok { background:rgba(127,209,127,.16); }
 #text-status.warn { background:rgba(255,180,84,.18); color:#ffb454; }
+
+/* ============ 执行高亮 / 控制台 / 浮动状态（本次新增） ============ */
+/* 运行到某积木就发光（Scratch 风格 glow） */
+.block.running { box-shadow:0 0 0 3px #ffe45e, 0 0 14px 3px rgba(255,210,30,.75),
+  0 2px 0 rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.28); }
+
+/* 代码编辑器右上角浮动状态徽标（替代被删掉的顶栏） */
+#text-edit { position:relative; }
+#text-status { position:absolute; top:8px; right:14px; z-index:2; font-size:11px; font-weight:700;
+  padding:2px 9px; border-radius:999px; pointer-events:none; }
+#text-status:empty { display:none; }
+#text-status.ok { background:rgba(127,209,127,.18); color:#9fe09f; }
+#text-status.warn { background:rgba(255,180,84,.2); color:#ffb454; }
+
+/* 舞台控制台 */
+#stage-view { flex-direction:column; }
+#console-panel { flex:0 0 auto; height:172px; display:flex; flex-direction:column;
+  background:#171c28; color:#cdd7ee; border-top:1px solid #2c3346; }
+.con-bar { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:7px 12px;
+  font-size:12px; font-weight:700; color:#9fb0d6; border-bottom:1px solid #2c3346; }
+.con-bar svg { color:#7fd1e0; }
+.con-bar button { margin-left:0; border:0; background:#2a3346; color:#c7d2ec; font:inherit; font-size:11px;
+  font-weight:700; padding:4px 10px; border-radius:7px; cursor:pointer; }
+.con-bar button:first-of-type { margin-left:auto; }
+.con-bar button:hover { background:#34405a; }
+#console-out { flex:1 1 auto; overflow:auto; padding:8px 12px; font-family:ui-monospace,Menlo,monospace;
+  font-size:12px; line-height:1.65; }
+.con-line { white-space:pre-wrap; word-break:break-word; border-bottom:1px solid rgba(255,255,255,.04); padding:1px 0; }
+.con-line::before { content:"› "; color:#5f6e8f; }

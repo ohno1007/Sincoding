@@ -200,7 +200,54 @@
     if (run) run.addEventListener("click", runPreview);
     if (stop) stop.addEventListener("click", () => { preview.stop(); setPvStatus("已停止", ""); });
     c.addEventListener("pointerdown", () => c.focus());
+    // 执行高亮：解释器每执行一个积木就回调；按节点高亮其 DOM（节流，避免高频闪烁）
+    preview.onStep = (node) => glowNode(node);
+    // 控制台：print 输出实时打到舞台控制台
+    preview.onPrint = (text) => conLog(text);
   }
+
+  // ---------------- 执行高亮（运行到哪个积木就高亮哪个） ----------------
+  let lastGlow = 0;
+  function glowNode(node) {
+    if (!node || !node._el || !node._el.isConnected) return;
+    const now = performance.now();
+    if (now - lastGlow < 60) return;     // 节流到 ~16fps，肉眼可见的流动高亮
+    lastGlow = now;
+    const elx = node._el;
+    elx.classList.add("running");
+    clearTimeout(elx._glowT);
+    elx._glowT = setTimeout(() => elx.classList.remove("running"), 240);
+  }
+
+  // ---------------- 控制台（舞台区） ----------------
+  const conOut = () => document.getElementById("console-out");
+  let conLines = [];
+  function conLog(text) {
+    conLines.push(String(text));
+    if (conLines.length > 200) conLines = conLines.slice(-200);
+    const out = conOut();
+    if (out) {
+      const row = el("div", "con-line", String(text));
+      out.append(row); out.scrollTop = out.scrollHeight;
+      while (out.childElementCount > 200) out.removeChild(out.firstChild);
+    }
+  }
+  function conClear() { conLines = []; const out = conOut(); if (out) out.innerHTML = ""; }
+  function printBlockInfo() {
+    const sp = sprite();
+    conLog("— 积木信息：" + sp.name + " —");
+    (sp.program || []).forEach((fn) => {
+      const params = (fn.params || []).map((p) => p.name + ": " + p.type).join(", ");
+      conLog("fn " + fn.name + "(" + params + ") -> " + (fn.ret || "int") + "  · " + countStmts(fn.body) + " 条语句");
+    });
+    conLog("共享：结构体 " + (project.structs || []).length + " · 全局 " + (project.globals || []).length);
+  }
+  function countStmts(list) {
+    let n = 0;
+    (list || []).forEach((s) => { n++; if (s.then) n += countStmts(s.then); if (s.else) n += countStmts(s.else); if (s.body) n += countStmts(s.body); });
+    return n;
+  }
+  window._sinConsole = { log: conLog, clear: conClear, lines: () => conLines }; // 测试探针
 
   // ---------------- DOM 工具 ----------------
   function el(tag, cls, txt) {
@@ -370,6 +417,7 @@
     } else {
       blk = el("div", "block", JSON.stringify(node));
     }
+    node._el = blk;   // 供「执行高亮」按节点定位 DOM
     // 拖拽重排：按住语句积木拖动，可在各 stack（函数体 / 控制块嘴巴）间移动
     blk.addEventListener("pointerdown", (e) => {
       if (e.target.classList.contains("field")) return;
@@ -1056,84 +1104,84 @@
     sprite().program.push(fn); selected = fn; render();
   }
 
+  // 调色板分类（仿 Scratch：左侧分类导航 + 右侧「所见即所得」积木预览）
+  const PALETTE = [
+    { id: "custom", name: "自制积木", color: "#FF6680", items: [{ special: "addFn", label: "新建函数" }] },
+    { id: "data", name: "变量 / 数据", color: "#FF8C1A", items: ["let", "let_str", "let_arr", "set_idx"] },
+    { id: "op", name: "运算", color: "#59C059", items: ["incr", "decr", "set_op", "to_int", "to_float"] },
+    { id: "control", name: "控制", color: "#FFAB19", items: ["if", "if_else", "while", "for", "return", "print"] },
+    { id: "stage", name: "舞台", color: "#FFAB19", items: ["stage_init", "game_loop", "frame_begin", "frame_end", "stage_close"] },
+    { id: "motion", name: "运动", color: "#4C97FF", items: ["sprite_new", "sprite_move_to", "sprite_move", "sprite_turn", "sprite_point", "sprite_scale", "sprite_x", "sprite_y"] },
+    { id: "looks", name: "外观", color: "#9966FF", items: ["sprite_load", "sprite_draw", "say", "draw_text", "draw_number"] },
+    { id: "pen", name: "画笔", color: "#0FBD8C", items: ["pen_clear", "pen_color", "pen_size", "pen_line", "pen_dot"] },
+    { id: "platform", name: "平台", color: "#5CB1D6", items: ["if_mouse", "let_mouse_x", "let_mouse_y", "let_random", "let_screen_w"] },
+    { id: "events", name: "事件 / 声音", color: "#FFBF00", items: ["if_key", "if_key_right", "if_key_up", "if_key_down", "broadcast", "if_received", "play_tone", "play_sound"] },
+  ];
+  // 自制积木的预览（函数定义帽子块外观）
+  function specialPreview(sp) {
+    if (sp.special === "addFn") {
+      const blk = el("div", "block fn hat");
+      const row = el("div", "hdr");
+      row.append(el("span", "label", "定义"), el("span", "param", "新函数"), el("span", "kw", "→ int"));
+      blk.append(row);
+      return blk;
+    }
+    return el("div", "block", sp.label || "");
+  }
+
   function buildPalette() {
     const pal = document.getElementById("palette");
     pal.innerHTML = "";
-    const item = (label, color, onClick, iconName) => {
-      const b = el("button", "pal-block");
-      b.style.background = color;
-      if (iconName) { const ic = el("span", "ic"); ic.innerHTML = window.SinIcons.svg(iconName, 16); b.append(ic); }
-      else { const dot = el("span", "pal-dot"); dot.style.background = "rgba(255,255,255,.55)"; b.append(dot); }
-      b.append(el("span", null, label));
-      b.addEventListener("click", onClick);
-      pal.append(b);
-    };
-    pal.append(el("h2", null, "自定义"));
-    item("新建函数", "#FF6680", addFn, "plus");
-    pal.append(el("h2", null, "变量 / 数据"));
-    item("设 变量", "#FF8C1A", () => addStmt("let"));
-    item("设 字符串", "#FF8C1A", () => addStmt("let_str"));
-    item("设 数组", "#FF8C1A", () => addStmt("let_arr"));
-    item("数组赋值 a[i]=v", "#FF8C1A", () => addStmt("set_idx"));
-    pal.append(el("h2", null, "运算"));
-    item("变量 +1", "#59C059", () => addStmt("incr"));
-    item("变量 −1", "#59C059", () => addStmt("decr"));
-    item("变量 ← 表达式", "#59C059", () => addStmt("set_op"));
-    item("取整 to_int", "#59C059", () => addStmt("to_int"));
-    item("转浮点 to_float", "#59C059", () => addStmt("to_float"));
-    pal.append(el("h2", null, "控制"));
-    item("如果 …", "#FFAB19", () => addStmt("if"));
-    item("如果 … 否则 …", "#FFAB19", () => addStmt("if_else"));
-    item("重复直到 …", "#FFAB19", () => addStmt("while"));
-    item("for i in a..b", "#FFAB19", () => addStmt("for"));
-    item("返回 …", "#9966FF", () => addStmt("return"));
-    item("print( … )", "#4C97FF", () => addStmt("print"));
-    pal.append(el("h2", null, "舞台"));
-    item("初始化舞台", "#FFAB19", () => addStmt("stage_init"), "play");
-    item("游戏主循环", "#FFAB19", () => addStmt("game_loop"), "play");
-    item("开始绘制 frame", "#FFAB19", () => addStmt("frame_begin"));
-    item("结束绘制 frame", "#FFAB19", () => addStmt("frame_end"));
-    item("关闭舞台", "#FFAB19", () => addStmt("stage_close"), "stop");
-    pal.append(el("h2", null, "运动（精灵）"));
-    item("新建精灵", "#4C97FF", () => addStmt("sprite_new"));
-    item("移动精灵到 x y", "#4C97FF", () => addStmt("sprite_move_to"), "move");
-    item("前进 步", "#4C97FF", () => addStmt("sprite_move"), "move");
-    item("右转 度", "#4C97FF", () => addStmt("sprite_turn"));
-    item("面向 度", "#4C97FF", () => addStmt("sprite_point"));
-    item("设大小 ×", "#4C97FF", () => addStmt("sprite_scale"));
-    item("取精灵 x", "#4C97FF", () => addStmt("sprite_x"));
-    item("取精灵 y", "#4C97FF", () => addStmt("sprite_y"));
-    pal.append(el("h2", null, "外观"));
-    item("载入造型", "#9966FF", () => addStmt("sprite_load"), "palette");
-    item("画出精灵", "#9966FF", () => addStmt("sprite_draw"));
-    item("说 …", "#9966FF", () => addStmt("say"));
-    item("画文字", "#9966FF", () => addStmt("draw_text"));
-    item("画数字", "#9966FF", () => addStmt("draw_number"));
-    pal.append(el("h2", null, "画笔"));
-    item("清空画笔", "#0FBD8C", () => addStmt("pen_clear"), "trash");
-    item("设笔颜色 r g b", "#0FBD8C", () => addStmt("pen_color"), "palette");
-    item("设笔粗细", "#0FBD8C", () => addStmt("pen_size"), "pencil");
-    item("画线 x1y1→x2y2", "#0FBD8C", () => addStmt("pen_line"), "pencil");
-    item("画点 x y", "#0FBD8C", () => addStmt("pen_dot"), "pencil");
-    pal.append(el("h2", null, "平台 API"));
-    item("如果按下鼠标", "#5CB1D6", () => addStmt("if_mouse"));
-    item("取鼠标 x", "#5CB1D6", () => addStmt("let_mouse_x"));
-    item("取鼠标 y", "#5CB1D6", () => addStmt("let_mouse_y"));
-    item("随机数 1..10", "#5CB1D6", () => addStmt("let_random"));
-    item("取屏幕宽", "#5CB1D6", () => addStmt("let_screen_w"));
-    pal.append(el("h2", null, "事件 / 声音"));
-    item("当按← 如果", "#FFBF00", () => addStmt("if_key"));
-    item("当按→ 如果", "#FFBF00", () => addStmt("if_key_right"));
-    item("当按↑ 如果", "#FFBF00", () => addStmt("if_key_up"));
-    item("当按↓ 如果", "#FFBF00", () => addStmt("if_key_down"));
-    item("广播 “go”", "#FFBF00", () => addStmt("broadcast"));
-    item("如果收到 “go”", "#FFBF00", () => addStmt("if_received"));
-    item("播放音调", "#CF63CF", () => addStmt("play_tone"), "bell");
-    item("播放声音", "#CF63CF", () => addStmt("play_sound"), "bell");
-    pal.append(el("h2", null, "提示"));
-    const tip = el("div", null, "下方切换精灵=切换积木页。点脚本选中再加积木；数字/变量可点改，文本实时更新。");
-    tip.style.cssText = "font-size:12px;color:#9aa3b5;padding:2px 4px;line-height:1.6";
-    pal.append(tip);
+    const rail = el("div", "cat-rail");
+    const list = el("div", "block-list");
+    pal.append(rail, list);
+
+    const railBtns = {};
+    function setActiveCat(id) {
+      Object.entries(railBtns).forEach(([k, b]) => b.classList.toggle("active", k === id));
+    }
+
+    PALETTE.forEach((cat) => {
+      // 左侧分类导航按钮（彩色圆点 + 名称）
+      const rb = el("button", "cat-btn");
+      const dot = el("span", "cat-dot"); dot.style.background = cat.color;
+      rb.append(dot, el("span", "cat-nm", cat.name));
+      rb.addEventListener("click", () => {
+        const sec = document.getElementById("cat-" + cat.id);
+        if (sec) list.scrollTo({ top: sec.offsetTop - 6, behavior: "smooth" });
+        setActiveCat(cat.id);
+      });
+      railBtns[cat.id] = rb; rail.append(rb);
+
+      // 右侧分类区：所见即所得的积木预览（与画布上完全一致）
+      const sec = el("div", "cat-sec"); sec.id = "cat-" + cat.id;
+      const h = el("h2", null, cat.name); h.style.setProperty("--cc", cat.color); sec.append(h);
+      cat.items.forEach((it) => {
+        const wys = el("div", "pal-wys");
+        if (typeof it === "object" && it.special) {
+          wys.dataset.kind = it.special;
+          wys.append(specialPreview(it));
+          wys.addEventListener("click", () => { if (it.special === "addFn") addFn(); });
+        } else {
+          wys.dataset.kind = it;
+          wys.append(renderStmt(NEW[it](), null));   // 复用积木渲染器 → 与画布同款外观
+          wys.addEventListener("click", () => addStmt(it));
+          wys.title = "点击加入选中脚本";
+        }
+        sec.append(wys);
+      });
+      list.append(sec);
+    });
+    setActiveCat(PALETTE[0].id);
+    // 滚动联动：滚到哪个分类，导航就高亮哪个
+    list.addEventListener("scroll", () => {
+      let cur = PALETTE[0].id;
+      for (const cat of PALETTE) {
+        const sec = document.getElementById("cat-" + cat.id);
+        if (sec && sec.offsetTop - 12 <= list.scrollTop) cur = cat.id;
+      }
+      setActiveCat(cur);
+    });
   }
 
   // ---------------- 舞台：精灵以造型为纹理 ----------------
@@ -1220,6 +1268,10 @@
     openInput.addEventListener("change", () => { if (openInput.files[0]) openProjectFile(openInput.files[0]); openInput.value = ""; });
   }
   document.getElementById("add-sprite").addEventListener("click", addSprite);
+  const conInfo = document.getElementById("con-print-info");
+  if (conInfo) conInfo.addEventListener("click", printBlockInfo);
+  const conClr = document.getElementById("con-clear");
+  if (conClr) conClr.addEventListener("click", conClear);
   applyView();
   renderSpriteBar();
   render();

@@ -12,7 +12,6 @@
     <span data-icon="puzzle" data-icon-size="22"></span>
     <h1>Sincoding</h1>
   </span>
-  <span class="sub">积木 ⇄ 文本（AST 唯一真相）· 无限画布 · 造型画板</span>
   <div class="tabs">
     <button data-view="blocks-view" class="active"><span class="ic" data-icon="code"></span>积木 / 代码</button>
     <button data-view="costume-view"><span class="ic" data-icon="palette"></span>精灵造型</button>
@@ -80,10 +79,10 @@
           <div id="page-tag"></div>
         </div>
         <div id="text-pane">
-          <div class="hd"><span data-icon="code" data-icon-size="15"></span>文本 ⇄ 积木（可编辑，由 wasm 编译器反向解析）<span id="text-status"></span></div>
           <div id="text-edit">
             <pre id="text-hl" aria-hidden="true"><code></code></pre>
             <textarea id="text-out" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+            <span id="text-status"></span>
           </div>
           <div id="diag-list" hidden></div>
           <div id="preview-dock">
@@ -128,6 +127,14 @@
       <div id="stage-wrap">
         <div id="stage"></div>
         <div id="stage-hint">精灵以「造型」为外观/纹理 · 拖动可摆位</div>
+      </div>
+      <div id="console-panel">
+        <div class="con-bar">
+          <span data-icon="code" data-icon-size="14"></span>控制台
+          <button id="con-print-info" title="打印当前精灵的积木信息到控制台">打印积木信息</button>
+          <button id="con-clear" title="清空控制台">清空</button>
+        </div>
+        <div id="console-out"></div>
       </div>
     </div>
   </div>
