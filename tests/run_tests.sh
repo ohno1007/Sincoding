@@ -353,6 +353,19 @@ else
     echo "○ 跳过（未检测到 NDK / raylib-android / SDK build-tools）"
 fi
 
+# ---- 发布流水线：发布模态框 → 本地构建服务 → 产物（Chromium 驱动，linux 最快） ----
+echo
+echo "=== 发布：编辑器「发布」模态框 → ide_server → 编译产物 ==="
+if command -v node >/dev/null 2>&1 && [[ -f /usr/local/lib/libraylib.a ]]; then
+    if out="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_publish.js" linux 2>&1)"; then
+        echo "✓ publish: 模态框一键编译出 Linux 产物（$out）"; ((PASS++))
+    else
+        echo "✗ publish: 发布流水线失败（$out）"; ((FAIL++))
+    fi
+else
+    echo "○ 跳过（缺 node / raylib 桌面库）"
+fi
+
 echo
 echo "通过 $PASS，失败 $FAIL"
 [[ $FAIL -eq 0 ]]

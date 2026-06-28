@@ -22,6 +22,7 @@ ABIS="${ANDROID_ABIS:-arm64-v8a}"
 MIN_SDK="${ANDROID_MIN_SDK:-24}"
 TARGET_SDK="${ANDROID_TARGET_SDK:-29}"
 PKG="${ANDROID_PKG:-org.sincoding.game}"
+ICON="${ANDROID_ICON:-}"          # 可选：启动图标 PNG（发布模态框里选的 logo）
 
 # 造型 / 资源目录：其内容会放进 APK 的 assets/ 根，游戏用 sprite_load("coin.png")
 # 即可经 Android 资源管理器加载（与桌面端从 cwd 加载同名文件保持一致）。
@@ -54,7 +55,22 @@ for ABI in $ABIS; do
         "$TMP/lib/$ABI/libsincoding.so" 2>/dev/null || true
 done
 
-# —— 2) 生成 Manifest（注入 package / label / SDK 版本） ——
+# —— 2a) 可选启动图标：编译为 mipmap 资源，Manifest 引用 @mipmap/ic_launcher ——
+ICON_ATTR=""
+RES_ARG=()
+if [[ -n "$ICON" && -f "$ICON" ]]; then
+    echo "[2/5] 编译启动图标资源（$ICON）"
+    RES="$TMP/res/mipmap"
+    mkdir -p "$RES"
+    cp "$ICON" "$RES/ic_launcher.png"
+    COMPILED="$TMP/res-compiled"
+    mkdir -p "$COMPILED"
+    "$AAPT2" compile --dir "$TMP/res" -o "$COMPILED/res.zip" >/dev/null
+    RES_ARG=("$COMPILED/res.zip")
+    ICON_ATTR=$'\n                 android:icon="@mipmap/ic_launcher"'
+fi
+
+# —— 2b) 生成 Manifest（注入 package / label / SDK 版本 / 图标） ——
 echo "[2/5] 生成 AndroidManifest.xml"
 MANIFEST="$TMP/AndroidManifest.xml"
 cat > "$MANIFEST" <<EOF
@@ -63,7 +79,7 @@ cat > "$MANIFEST" <<EOF
     package="$PKG" android:versionCode="1" android:versionName="1.0">
     <uses-sdk android:minSdkVersion="$MIN_SDK" android:targetSdkVersion="$TARGET_SDK" />
     <uses-feature android:glEsVersion="0x00020000" android:required="true" />
-    <application android:label="$LABEL" android:hasCode="false"
+    <application android:label="$LABEL" android:hasCode="false"${ICON_ATTR:-}
                  android:allowBackup="false" android:extractNativeLibs="true">
         <activity android:name="android.app.NativeActivity"
                   android:configChanges="orientation|keyboardHidden|screenSize"
@@ -91,7 +107,7 @@ BASE="$TMP/base.apk"
 "$AAPT2" link -o "$BASE" \
     --manifest "$MANIFEST" \
     -I "$ANDROID_JAR" \
-    "${ASSET_ARG[@]}" \
+    "${ASSET_ARG[@]}" "${RES_ARG[@]}" \
     --min-sdk-version "$MIN_SDK" --target-sdk-version "$TARGET_SDK"
 
 # —— 4) 塞入原生库，zipalign ——

@@ -149,6 +149,9 @@
 
     toDataURL() { return this.canvas.toDataURL("image/png"); }
 
+    // 把当前画布写回当前造型（保存项目前调用，确保未提交的笔画也存下）
+    flush() { this._commit(); }
+
     _renderList() {
       if (!this.listEl) return;
       this.listEl.innerHTML = "<h2>造型</h2>";

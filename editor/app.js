@@ -557,6 +557,182 @@
   }
   window._sinExport = exportSource; // 供测试读取
 
+  // ---------------- 保存 / 打开项目（.sinproj） ----------------
+  // 项目文件 = 全部精灵（积木页 + 造型）+ 项目级共享状态 + 上次发布配置。
+  // 造型 ImageData 以 PNG dataURL 存储，重新打开即可继续编辑。
+  function imageDataToPNG(d) {
+    const off = document.createElement("canvas");
+    off.width = d.width; off.height = d.height;
+    off.getContext("2d").putImageData(d, 0, 0);
+    return off.toDataURL("image/png");
+  }
+  function pngToImageData(url) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const off = document.createElement("canvas");
+        off.width = img.naturalWidth || 64; off.height = img.naturalHeight || 64;
+        const cx = off.getContext("2d"); cx.drawImage(img, 0, 0);
+        resolve(cx.getImageData(0, 0, off.width, off.height));
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  }
+  function serializeProject() {
+    if (ce) ce.flush(); // 把当前画布未提交的笔画写回造型
+    return {
+      format: "sincoding-project", version: 1,
+      cur: project.cur,
+      structs: project.structs || [], globals: project.globals || [],
+      publish: project.publish || null,
+      sprites: project.sprites.map((sp) => ({
+        name: sp.name, icon: sp.icon || "🎭",
+        program: (sp.program || []).map((fn) => stripPos(fn)),
+        costumes: (sp.costumes || []).map((c) => ({
+          name: c.name, png: c.data ? imageDataToPNG(c.data) : null,
+        })),
+      })),
+    };
+  }
+  // 去掉画布坐标等运行期字段，保留纯 AST（位置在加载时重排）
+  function stripPos(fn) { const { _x, _y, ...rest } = fn; return rest; }
+
+  function saveProject() {
+    const data = JSON.stringify(serializeProject(), null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (project.sprites[0] && project.sprites[0].name ? "project" : "project") + ".sinproj";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  async function loadProject(obj) {
+    if (!obj || obj.format !== "sincoding-project" || !Array.isArray(obj.sprites)) {
+      alert("不是有效的 .sinproj 项目文件"); return false;
+    }
+    const sprites = [];
+    for (const sp of obj.sprites) {
+      const costumes = [];
+      for (const c of (sp.costumes || [])) {
+        costumes.push({ name: c.name || "造型1", data: c.png ? await pngToImageData(c.png) : null });
+      }
+      const program = (sp.program || []).map((f) => ({ ...f }));
+      placeFns(program);
+      sprites.push({ name: sp.name || "精灵", icon: sp.icon || "🎭", program, costumes });
+    }
+    if (sprites.length === 0) { alert("项目里没有精灵"); return false; }
+    // 原地替换 project（保持闭包引用）
+    project.sprites.length = 0; project.sprites.push(...sprites);
+    project.cur = Math.min(obj.cur || 0, sprites.length - 1);
+    project.structs = obj.structs || []; project.globals = obj.globals || [];
+    project.publish = obj.publish || null;
+    selected = sprite().program[0] || null;
+    if (ce) ce.setStore(sprite().costumes);
+    renderSpriteBar(); render(); schedulePreview();
+    return true;
+  }
+  window._sinLoadProject = loadProject;   // 供测试调用
+  window._sinSerializeProject = serializeProject;
+
+  function openProjectFile(file) {
+    const r = new FileReader();
+    r.onload = () => { try { loadProject(JSON.parse(r.result)); } catch (e) { alert("解析项目失败: " + e.message); } };
+    r.readAsText(file);
+  }
+
+  // ---------------- 发布（多平台一键编译） ----------------
+  // 浏览器不能交叉编译，发布经本地构建服务（tools/ide_server.py 的 /api/publish）
+  // 调用既有 build_*.sh。无服务（file:// 或纯静态托管）时，降级为下载 .sin 源码 + 提示。
+  function setupPublish() {
+    const modal = document.getElementById("publish-modal");
+    if (!modal) return;
+    const openBtn = document.getElementById("btn-publish");
+    const closeBtns = [document.getElementById("publish-close"), document.getElementById("publish-cancel")];
+    const goBtn = document.getElementById("publish-go");
+    const statusEl = document.getElementById("pub-status");
+    const resultsEl = document.getElementById("pub-results");
+    const logoInput = document.getElementById("pub-logo-input");
+    const logoBtn = document.getElementById("pub-logo-btn");
+    const logoPrev = document.getElementById("pub-logo-preview");
+    const logoName = document.getElementById("pub-logo-name");
+    let logoDataURL = null;
+
+    const show = (v) => { modal.hidden = !v; };
+    if (openBtn) openBtn.addEventListener("click", () => {
+      const p = project.publish || {};
+      if (p.name) document.getElementById("pub-name").value = p.name;
+      if (p.pkg) document.getElementById("pub-pkg").value = p.pkg;
+      statusEl.textContent = ""; resultsEl.hidden = true; resultsEl.innerHTML = "";
+      show(true);
+    });
+    closeBtns.forEach((b) => b && b.addEventListener("click", () => show(false)));
+    modal.addEventListener("click", (e) => { if (e.target === modal) show(false); });
+    if (logoBtn) logoBtn.addEventListener("click", () => logoInput.click());
+    if (logoInput) logoInput.addEventListener("change", () => {
+      const f = logoInput.files[0]; if (!f) return;
+      const r = new FileReader();
+      r.onload = () => { logoDataURL = r.result; logoPrev.src = logoDataURL; logoPrev.hidden = false; logoName.textContent = f.name; };
+      r.readAsDataURL(f);
+    });
+
+    function setRows(rows) {
+      resultsEl.hidden = false;
+      resultsEl.innerHTML = "";
+      rows.forEach((r) => {
+        const div = el("div", "row " + (r.ok ? "ok" : (r.pending ? "" : "err")));
+        const badge = el("span", "badge", r.pending ? "…" : (r.ok ? "✓" : "✗"));
+        div.append(badge, el("span", "lbl", r.label));
+        if (r.href) { const a = document.createElement("a"); a.href = r.href; a.textContent = r.linkText || "下载"; a.target = "_blank"; if (r.download) a.download = r.download; div.append(a); }
+        resultsEl.append(div);
+      });
+    }
+
+    if (goBtn) goBtn.addEventListener("click", async () => {
+      const name = document.getElementById("pub-name").value.trim() || "Game";
+      const pkg = document.getElementById("pub-pkg").value.trim() || "org.sincoding.game";
+      const platforms = [...document.querySelectorAll(".pub-plat:checked")].map((c) => c.value);
+      if (platforms.length === 0) { statusEl.textContent = "请至少选择一个平台"; return; }
+      project.publish = { name, pkg, platforms }; // 记住配置，随项目保存
+      const source = exportSource();
+      goBtn.disabled = true; statusEl.textContent = "编译中…";
+      setRows(platforms.map((p) => ({ label: platLabel(p), pending: true })));
+      try {
+        const resp = await fetch("api/publish", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, pkg, platforms, source, logo: logoDataURL,
+            assets: collectAssets() }),
+        });
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        const out = await resp.json();
+        const rows = (out.results || []).map((r) => ({
+          label: platLabel(r.platform) + (r.ok ? "" : "：" + (r.error || "失败")),
+          ok: r.ok, href: r.artifact || null,   // 服务端已返回相对 editor 的路径
+          linkText: r.platform === "web" ? "打开/下载" : "下载", download: r.platform === "web" ? null : (r.artifact ? r.artifact.split("/").pop() : null),
+        }));
+        setRows(rows);
+        statusEl.textContent = out.results && out.results.every((r) => r.ok) ? "发布完成 ✓" : "部分平台失败";
+      } catch (e) {
+        // 降级：没有本地构建服务——下载 .sin 源码并提示用构建脚本
+        const blob = new Blob([source], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        setRows([{ label: "未连接本地构建服务，已改为下载源码", ok: false,
+          href: url, linkText: name + ".sin", download: name + ".sin" }]);
+        statusEl.textContent = "提示：用 tools/ide_server.py 启动可一键编译；或用 tools/build_*.sh 手动编译";
+      } finally { goBtn.disabled = false; }
+    });
+  }
+  function platLabel(p) { return ({ web: "Web (wasm)", linux: "Linux", windows: "Windows (.exe)", android: "Android (.apk)" })[p] || p; }
+  // 收集预览/成品需要的造型资源（文件名 → PNG dataURL），随发布请求一起送给构建服务
+  function collectAssets() {
+    const out = {};
+    project.sprites.forEach((sp) => (sp.costumes || []).forEach((c) => {
+      if (c && c.data) { const nm = /\.png$/i.test(c.name) ? c.name : c.name + ".png"; out[nm] = imageDataToPNG(c.data); }
+    }));
+    return out;
+  }
+
   // ---------------- 精灵列表（多精灵 / 多页积木） ----------------
   // 造型是否有绘制内容（非全透明），用于判断是否以造型为纹理
   function spriteHasArt(sp, isCurrent) {
@@ -777,8 +953,17 @@
   setupTabs();
   setupCostume();
   setupPreview();
+  setupPublish();
   const expBtn = document.getElementById("btn-export-sin");
   if (expBtn) expBtn.addEventListener("click", exportSin);
+  const saveBtn = document.getElementById("btn-save-proj");
+  if (saveBtn) saveBtn.addEventListener("click", saveProject);
+  const openBtn = document.getElementById("btn-open-proj");
+  const openInput = document.getElementById("open-proj-input");
+  if (openBtn && openInput) {
+    openBtn.addEventListener("click", () => openInput.click());
+    openInput.addEventListener("change", () => { if (openInput.files[0]) openProjectFile(openInput.files[0]); openInput.value = ""; });
+  }
   document.getElementById("add-sprite").addEventListener("click", addSprite);
   applyView();
   renderSpriteBar();

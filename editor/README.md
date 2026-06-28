@@ -26,14 +26,21 @@
 - **项目级共享状态**：结构体 / 全局变量 / 数组属于整个项目，所有精灵共享同一组；任一精灵里
   增删全局，其它精灵立即可见，预览里各 actor 的环境栈底指向同一个共享作用域（一改全见）。
 - **语法高亮**：文本框为透明 textarea 覆盖在高亮层之上，关键字/类型/字符串/数字/注释着色。
-- **一键导出**：「导出 .sin」自动补全运行时 `extern` 声明，产出可被 `build_native.sh` / `build_web.sh` 直接编译的源码。
+- **保存 / 打开项目**：「保存项目」把整个项目（全部精灵的积木页 + 造型 + 项目级共享状态 +
+  上次发布配置）存成 `.sinproj`；「打开项目」载入后即可继续编辑（造型以 PNG dataURL 内嵌）。
+- **一键发布到多平台**：「发布」弹模态框填项目名 / 包名 / 图标(Logo) / 勾选平台，经本地构建
+  服务 `tools/ide_server.py` 的 `/api/publish` 调既有 `build_*.sh`，把项目一键交叉编译到
+  **Linux / Windows / Android / Web**，产物落在 `editor/dist/<名>/<平台>/` 并给出下载/打开链接。
+  无构建服务（纯静态托管）时降级为下载 `.sin` 源码。导出的 `.sin` 仍会自动补全运行时
+  `extern` 声明，可被 `build_native.sh` / `build_web.sh` 直接编译。
 - **可编辑积木**：数字 / 变量 / 函数名直接点改，布尔积木点击切换；从调色板加入 `let / if / while / return / print` 积木。
 - **实时文本写回**：任何积木编辑都即时更新右侧文本视图，结果与 `sinc --emit src` **逐字节一致**（由 `blockmodel.js` 保证，并有测试交叉验证）。
 - **精灵造型画板**：画笔 / 橡皮 / 调色板 / 笔刷大小 / 清空 / 导出 PNG，支持多造型与缩略图。
 
 ```bash
 tools/render_blocks.sh examples/fib.sin   # 生成 editor/blocks_data.js
-# 浏览器打开 editor/index.html
+# 纯静态：浏览器打开 editor/index.html（保存/打开项目、预览可用；发布降级为下载 .sin）
+# 带构建：python3 tools/ide_server.py 8000 → http://127.0.0.1:8000/index.html（发布可一键编译多平台）
 ```
 
 底层引擎：

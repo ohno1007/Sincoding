@@ -32,3 +32,9 @@ target_link_options(index PRIVATE
   "-sFORCE_FILESYSTEM=1"
   "--shell-file" "${CMAKE_CURRENT_SOURCE_DIR}/shell.html"
 )
+
+# 造型资源：把 SIN_ASSETS_DIR 里的 PNG 预载进虚拟文件系统根，
+# 这样 sprite_load("coin.png") 在浏览器里也能加载——与桌面/安卓同源。
+if(DEFINED SIN_ASSETS_DIR AND EXISTS "${SIN_ASSETS_DIR}")
+  target_link_options(index PRIVATE "--preload-file" "${SIN_ASSETS_DIR}@/")
+endif()

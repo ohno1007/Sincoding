@@ -153,9 +153,33 @@ function freePort() {
     const stageOk = stage.count >= 2 && stage.textured >= 1;
     if (shots) await page.screenshot({ path: shots + "/ide_stage.png" });
 
-    result = { writeback, reorder, palette, reverse, spriteSwitch, sharedState, preview, costume, parallel, exportOk, highlighted, stage, paintedPixels: painted, errors };
+    // 保存/打开项目：序列化项目（含精灵/积木/造型）→ 改个名字 → 重新载入 → 生效
+    const saveOpen = await page.evaluate(async () => {
+      const data = window._sinSerializeProject ? window._sinSerializeProject() : null;
+      if (!data || data.format !== "sincoding-project" || !data.sprites.length) return false;
+      if (!("program" in data.sprites[0]) || !("costumes" in data.sprites[0])) return false;
+      data.sprites[0].name = "回环精灵";
+      const ok = await window._sinLoadProject(data);
+      const has = [...document.querySelectorAll("#sprite-list .nm")].some((n) => n.textContent === "回环精灵");
+      return ok && has;
+    });
+
+    // 发布模态框：点「发布」应弹出，含平台勾选与「开始编译」按钮
+    await page.click("#btn-publish");
+    await page.waitForTimeout(120);
+    const publishModal = await page.evaluate(() => {
+      const m = document.getElementById("publish-modal");
+      const open = m && !m.hidden;
+      const plats = document.querySelectorAll(".pub-plat").length;
+      const go = !!document.getElementById("publish-go");
+      const nameFld = !!document.getElementById("pub-name");
+      return open && plats >= 4 && go && nameFld;
+    });
+    await page.click("#publish-close");
+
+    result = { writeback, reorder, palette, reverse, spriteSwitch, sharedState, preview, costume, parallel, exportOk, highlighted, saveOpen, publishModal, stage, paintedPixels: painted, errors };
     result.ok = writeback && reorder && palette && reverse && spriteSwitch && sharedState && preview && costume && parallel &&
-      exportOk && highlighted && stageOk && painted > 100 && errors.length === 0;
+      exportOk && highlighted && saveOpen && publishModal && stageOk && painted > 100 && errors.length === 0;
   } finally {
     await browser.close();
     srv.kill();

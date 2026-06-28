@@ -18,8 +18,54 @@
     <button data-view="costume-view"><span class="ic" data-icon="palette"></span>精灵造型</button>
     <button data-view="stage-view"><span class="ic" data-icon="play"></span>舞台</button>
   </div>
-  <button id="btn-export-sin" title="导出可独立编译的 .sin"><span data-icon="download" data-icon-size="15"></span>导出 .sin</button>
+  <div class="hdr-actions">
+    <button id="btn-open-proj" title="打开 .sinproj 项目，继续编辑"><span data-icon="folder" data-icon-size="15"></span>打开项目</button>
+    <button id="btn-save-proj" title="保存为 .sinproj 项目文件（含全部精灵/造型/积木）"><span data-icon="save" data-icon-size="15"></span>保存项目</button>
+    <button id="btn-publish" class="primary" title="一键编译发布到 Linux / Windows / Android / Web"><span data-icon="rocket" data-icon-size="15"></span>发布</button>
+  </div>
+  <input id="open-proj-input" type="file" accept=".sinproj,application/json" hidden>
 </header>
+
+<!-- 发布模态框：填项目信息 + 选平台，一键编译发布 -->
+<div id="publish-modal" class="modal-overlay" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <span data-icon="rocket" data-icon-size="18"></span>
+      <h2>发布项目</h2>
+      <button id="publish-close" class="modal-x" title="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="fld"><span>项目名称</span>
+        <input id="pub-name" type="text" placeholder="My Game" value="Guardian"></label>
+      <label class="fld"><span>包名 / 标识</span>
+        <input id="pub-pkg" type="text" placeholder="org.sincoding.game" value="org.sincoding.game"></label>
+      <div class="fld">
+        <span>图标 / Logo（可选，PNG）</span>
+        <div class="logo-row">
+          <button id="pub-logo-btn" type="button"><span data-icon="image" data-icon-size="14"></span>选择图片</button>
+          <img id="pub-logo-preview" alt="" hidden>
+          <span id="pub-logo-name" class="hint">未选择（用默认图标）</span>
+          <input id="pub-logo-input" type="file" accept="image/png,image/*" hidden>
+        </div>
+      </div>
+      <div class="fld">
+        <span>目标平台</span>
+        <div class="platforms">
+          <label><input type="checkbox" class="pub-plat" value="web" checked> Web (wasm)</label>
+          <label><input type="checkbox" class="pub-plat" value="linux" checked> Linux</label>
+          <label><input type="checkbox" class="pub-plat" value="windows"> Windows (.exe)</label>
+          <label><input type="checkbox" class="pub-plat" value="android"> Android (.apk)</label>
+        </div>
+      </div>
+      <div id="pub-results" class="pub-results" hidden></div>
+    </div>
+    <div class="modal-foot">
+      <span id="pub-status" class="hint"></span>
+      <button id="publish-cancel" class="ghost">取消</button>
+      <button id="publish-go" class="primary"><span data-icon="rocket" data-icon-size="14"></span>开始编译</button>
+    </div>
+  </div>
+</div>
 
 <div id="main">
   <div id="palette"></div>
