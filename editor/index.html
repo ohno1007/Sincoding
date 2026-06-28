@@ -18,6 +18,7 @@
     <button data-view="costume-view"><span class="ic" data-icon="palette"></span>精灵造型</button>
     <button data-view="stage-view"><span class="ic" data-icon="play"></span>舞台</button>
   </div>
+  <button id="btn-export-sin" title="导出可独立编译的 .sin"><span data-icon="download" data-icon-size="15"></span>导出 .sin</button>
 </header>
 
 <div id="main">
@@ -34,7 +35,10 @@
         </div>
         <div id="text-pane">
           <div class="hd"><span data-icon="code" data-icon-size="15"></span>文本 ⇄ 积木（可编辑，由 wasm 编译器反向解析）<span id="text-status"></span></div>
-          <textarea id="text-out" spellcheck="false"></textarea>
+          <div id="text-edit">
+            <pre id="text-hl" aria-hidden="true"><code></code></pre>
+            <textarea id="text-out" spellcheck="false"></textarea>
+          </div>
           <div id="preview-dock">
             <div class="pv-bar">
               <span data-icon="play" data-icon-size="14"></span>实时预览

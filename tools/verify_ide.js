@@ -97,6 +97,15 @@ function freePort() {
       return n;
     });
     const preview = previewPx > 200;
+    // 多精灵并行：状态栏应显示「并行」
+    const pvStatus = await page.evaluate(() => document.getElementById("pv-status").textContent);
+    const parallel = /并行/.test(pvStatus);
+    // 一键导出：补全 extern 声明，可独立编译
+    const exp = await page.evaluate(() => (window._sinExport ? window._sinExport() : ""));
+    const exportOk = exp.includes("extern fn stage_init") && exp.includes("fn main");
+    // 语法高亮：高亮层应有关键字 span
+    const highlighted = await page.evaluate(() =>
+      document.querySelectorAll("#text-hl code .hl-kw").length > 0);
 
     // 造型画板：切 tab，画几笔，断言有像素
     await page.click('header .tabs button[data-view="costume-view"]');
@@ -124,8 +133,9 @@ function freePort() {
     const stageOk = stage.count >= 2 && stage.textured >= 1;
     if (shots) await page.screenshot({ path: shots + "/ide_stage.png" });
 
-    result = { writeback, reorder, palette, reverse, spriteSwitch, preview, previewPx, stage, paintedPixels: painted, errors };
-    result.ok = writeback && reorder && palette && reverse && spriteSwitch && preview && stageOk && painted > 100 && errors.length === 0;
+    result = { writeback, reorder, palette, reverse, spriteSwitch, preview, parallel, exportOk, highlighted, stage, paintedPixels: painted, errors };
+    result.ok = writeback && reorder && palette && reverse && spriteSwitch && preview && parallel &&
+      exportOk && highlighted && stageOk && painted > 100 && errors.length === 0;
   } finally {
     await browser.close();
     srv.kill();

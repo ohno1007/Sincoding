@@ -41,6 +41,26 @@
       { block: "return", value: I(0) },
     ] };
   }
+  // 自动来回弹的精灵（无需输入），用于展示多精灵并行
+  function sampleBounce() {
+    return { block: "fn", name: "main", params: [], ret: "int", body: [
+      Ex(C("stage_init", I(480), I(360))),
+      { block: "let", name: "b", type: "int", len: 0, value: C("sprite_new", F(150), F(-100), F(28)) },
+      { block: "let", name: "bx", type: "float", len: 0, value: F(150) },
+      { block: "let", name: "vx", type: "float", len: 0, value: F(4) },
+      { block: "while", cond: C("stage_running"), body: [
+        { block: "assign", name: "bx", value: Bn("+", Vr("bx"), Vr("vx")) },
+        { block: "if", cond: Bn(">", Vr("bx"), F(200)), then: [ { block: "assign", name: "vx", value: Bn("-", F(0), Vr("vx")) } ] },
+        { block: "if", cond: Bn("<", Vr("bx"), F(-200)), then: [ { block: "assign", name: "vx", value: Bn("-", F(0), Vr("vx")) } ] },
+        Ex(C("sprite_move_to", Vr("b"), Vr("bx"), F(-100))),
+        Ex(C("frame_begin")),
+        Ex(C("sprite_draw", Vr("b"))),
+        Ex(C("frame_end")),
+      ] },
+      Ex(C("stage_close")),
+      { block: "return", value: I(0) },
+    ] };
+  }
   function placeFns(program) {
     program.forEach((fn, i) => {
       if (fn._x === undefined) { fn._x = 40 + (i % 2) * 360; fn._y = 36 + i * 300; }
@@ -50,8 +70,9 @@
     const p1 = (window.SIN_BLOCKS && window.SIN_BLOCKS.program)
       ? window.SIN_BLOCKS.program : [sampleMain()];
     const sprites = [
-      { name: "精灵1", icon: "🐱", program: p1, costumes: [] },
-      { name: "精灵2", icon: "🎮", program: [sampleGame()], costumes: [] },
+      { name: "精灵1", icon: "🐱", program: p1, costumes: [], structs: [], globals: [] },
+      { name: "精灵2", icon: "🎮", program: [sampleGame()], costumes: [], structs: [], globals: [] },
+      { name: "弹球", icon: "⚽", program: [sampleBounce()], costumes: [], structs: [], globals: [] },
     ];
     sprites.forEach((s) => placeFns(s.program));
     return { sprites, cur: 0 };
@@ -101,11 +122,41 @@
 
   // ---------------- 文本写回 ----------------
   const textOut = document.getElementById("text-out");
+  const textHl = document.querySelector("#text-hl code");
+  function fullModel() {
+    const s = sprite();
+    return { structs: s.structs || [], globals: s.globals || [], program: s.program };
+  }
+  function setTextValue(v) { textOut.value = v; syncHighlight(); }
   function refreshText() {
     if (document.activeElement === textOut) return; // 用户正在编辑文本，别打断
-    try { textOut.value = window.BlockModel.modelToSource(sprite().program); }
-    catch (err) { textOut.value = "// 序列化错误: " + err.message; }
+    try { setTextValue(window.BlockModel.modelToSource(fullModel())); }
+    catch (err) { setTextValue("// 序列化错误: " + err.message); }
     schedulePreview();
+  }
+
+  // ---------------- 语法高亮（透明 textarea 覆盖在高亮层上） ----------------
+  const HL_KW = new Set(["let", "fn", "if", "else", "while", "for", "return", "extern", "struct", "true", "false", "in"]);
+  const HL_TY = new Set(["int", "float", "bool", "string", "void"]);
+  function hlEsc(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function hlSpan(cls, t) { return '<span class="hl-' + cls + '">' + hlEsc(t) + "</span>"; }
+  function highlight(src) {
+    let out = "", i = 0; const n = src.length;
+    const isW = (c) => /[A-Za-z0-9_]/.test(c);
+    while (i < n) {
+      const c = src[i];
+      if (c === "/" && src[i + 1] === "/") { let j = i; while (j < n && src[j] !== "\n") j++; out += hlSpan("cm", src.slice(i, j)); i = j; }
+      else if (c === '"') { let j = i + 1; while (j < n && src[j] !== '"') { if (src[j] === "\\") j++; j++; } j = Math.min(j + 1, n); out += hlSpan("st", src.slice(i, j)); i = j; }
+      else if (/[0-9]/.test(c)) { let j = i; while (j < n && /[0-9.]/.test(src[j])) j++; out += hlSpan("nu", src.slice(i, j)); i = j; }
+      else if (/[A-Za-z_]/.test(c)) { let j = i; while (j < n && isW(src[j])) j++; const w = src.slice(i, j); const cls = HL_KW.has(w) ? "kw" : HL_TY.has(w) ? "ty" : null; out += cls ? hlSpan(cls, w) : hlEsc(w); i = j; }
+      else { out += hlEsc(c); i++; }
+    }
+    return out;
+  }
+  function syncHighlight() {
+    if (textHl) textHl.innerHTML = highlight(textOut.value) + "\n";
+    const wrap = document.getElementById("text-hl");
+    if (wrap) { wrap.scrollTop = textOut.scrollTop; wrap.scrollLeft = textOut.scrollLeft; }
   }
 
   // ---------------- 实时预览（解释器跑积木） ----------------
@@ -115,7 +166,7 @@
   }
   function runPreview() {
     if (!preview) return;
-    try { preview.run(sprite().program, setPvStatus); }
+    try { preview.runProject(project.sprites.map((s) => s.program), setPvStatus); } // 多精灵并行
     catch (e) { setPvStatus("预览错误", "warn"); }
   }
   function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(runPreview, 450); }
@@ -413,12 +464,15 @@
       const out = sincMod.ccall("sin_to_blocks", "string", ["string"], [textOut.value]);
       res = JSON.parse(out);
     } catch (e) { setTextStatus("解析失败", "warn"); return; }
-    const prog = (res.blocks && res.blocks.program) || [];
+    const blk = res.blocks || {};
+    const prog = blk.program || [];
     // 尽量保留同名函数的画布位置
     const oldPos = {};
     sprite().program.forEach((f) => { oldPos[f.name] = { x: f._x, y: f._y }; });
     prog.forEach((f) => { if (oldPos[f.name]) { f._x = oldPos[f.name].x; f._y = oldPos[f.name].y; } });
     placeFns(prog);
+    sprite().structs = blk.structs || [];
+    sprite().globals = blk.globals || [];
     sprite().program = prog;
     selected = prog[0] || null;
     renderCanvas(); // 不回写文本，避免打断输入
@@ -427,9 +481,56 @@
     schedulePreview(); // 文本编辑也实时刷新预览
   }
   textOut.addEventListener("input", () => {
+    syncHighlight();                 // 即时高亮
     clearTimeout(textTimer);
     textTimer = setTimeout(onTextEdited, 250);
   });
+  textOut.addEventListener("scroll", syncHighlight);
+
+  // ---------------- 一键导出 .sin（自动补运行时声明，使其可独立编译） ----------------
+  const RUNTIME_EXTERN_DECLS = [
+    ["stage_init", "extern fn stage_init(w: int, h: int)"],
+    ["stage_running", "extern fn stage_running() -> bool"],
+    ["frame_begin", "extern fn frame_begin()"],
+    ["frame_end", "extern fn frame_end()"],
+    ["stage_close", "extern fn stage_close()"],
+    ["sprite_new", "extern fn sprite_new(x: float, y: float, size: float) -> int"],
+    ["sprite_load", "extern fn sprite_load(path: string) -> int"],
+    ["sprite_move_to", "extern fn sprite_move_to(s: int, x: float, y: float)"],
+    ["sprite_x", "extern fn sprite_x(s: int) -> float"],
+    ["sprite_y", "extern fn sprite_y(s: int) -> float"],
+    ["sprite_draw", "extern fn sprite_draw(s: int)"],
+    ["key_down", "extern fn key_down(key: int) -> bool"],
+    ["key_left", "extern fn key_left() -> int"],
+    ["key_right", "extern fn key_right() -> int"],
+    ["key_up", "extern fn key_up() -> int"],
+    ["key_down_arrow", "extern fn key_down_arrow() -> int"],
+    ["say", "extern fn say(s: int, text: string)"],
+    ["draw_text", "extern fn draw_text(text: string, x: float, y: float, size: int)"],
+    ["draw_number", "extern fn draw_number(n: int, x: float, y: float, size: int)"],
+    ["sound_load", "extern fn sound_load(path: string) -> int"],
+    ["play_sound", "extern fn play_sound(snd: int)"],
+    ["play_tone", "extern fn play_tone(freq: int, ms: int)"],
+    ["broadcast", "extern fn broadcast(message: string)"],
+    ["received", "extern fn received(message: string) -> bool"],
+  ];
+  function exportSource() {
+    const model = fullModel();
+    const have = new Set((model.program || []).map((f) => f.name));
+    const externs = RUNTIME_EXTERN_DECLS.filter(([name]) => !have.has(name)).map(([, t]) => t);
+    const head = externs.length ? "// 运行时声明（导出自动补全，使程序可独立编译）\n" + externs.join("\n") + "\n\n" : "";
+    return head + window.BlockModel.modelToSource(model);
+  }
+  function exportSin() {
+    const src = exportSource();
+    const blob = new Blob([src], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (sprite().name || "program") + ".sin";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  window._sinExport = exportSource; // 供测试读取
 
   // ---------------- 精灵列表（多精灵 / 多页积木） ----------------
   // 造型是否有绘制内容（非全透明），用于判断是否以造型为纹理
@@ -651,6 +752,8 @@
   setupTabs();
   setupCostume();
   setupPreview();
+  const expBtn = document.getElementById("btn-export-sin");
+  if (expBtn) expBtn.addEventListener("click", exportSin);
   document.getElementById("add-sprite").addEventListener("click", addSprite);
   applyView();
   renderSpriteBar();

@@ -40,56 +40,70 @@
     }
 
     // ---- 运行 ----
-    run(program, onStatus) {
+    run(program, onStatus) { this.runProject([program], onStatus); }
+
+    // 多精灵并行：每个精灵程序是一个 actor，共享同一个舞台/世界；
+    // 各自的 while stage_running() 主循环每帧执行一次，协调清屏（每帧只清一次）。
+    runProject(programs, onStatus) {
       this.stop();
       this.onStatus = onStatus || (() => {});
-      this.fns = {};
-      (program || []).forEach((f) => { if (f.block === "fn") this.fns[f.name] = f; });
-      const main = this.fns["main"];
       const w = this.canvas.width, h = this.canvas.height;
       this.ctx.fillStyle = "#f5f5f7"; this.ctx.fillRect(0, 0, w, h);
-      if (!main) { this.onStatus("没有 main()，无法预览", "warn"); return; }
-
       this.world = {
-        W: w, H: h, running: true, frame: 0, sprites: [],
+        W: w, H: h, running: true, frame: 0, frameCleared: false, sprites: [],
         keys: this.keys, broadcasts: new Set(), nextBroadcasts: new Set(),
         soundCount: 0, console: [],
       };
-      const env = [new Map()];
-      const body = main.body || [];
-      const loopIdx = body.findIndex((s) => s.block === "while" && s.cond &&
-        s.cond.block === "call" && s.cond.callee === "stage_running");
-      try {
-        if (loopIdx < 0) {                       // 非游戏：跑到结束，展示输出
-          this.execList(body, env);
-          this.drawConsole();
-          this.onStatus("运行完成 ✓", "ok");
-          return;
+      this.actors = [];
+      let hasMain = false;
+      for (const program of (programs || [])) {
+        const fns = {};
+        (program || []).forEach((f) => { if (f.block === "fn") fns[f.name] = f; });
+        const main = fns["main"];
+        if (!main) continue;
+        hasMain = true;
+        const env = [new Map()];
+        const body = main.body || [];
+        const loopIdx = body.findIndex((s) => s.block === "while" && s.cond &&
+          s.cond.block === "call" && s.cond.callee === "stage_running");
+        this.fns = fns;
+        try {
+          if (loopIdx < 0) {
+            this.execList(body, env);            // 无主循环：跑到结束
+          } else {
+            for (let i = 0; i < loopIdx; i++) this.execStmt(body[i], env);  // 初始化
+            this.actors.push({ fns, env, loop: body[loopIdx], post: body.slice(loopIdx + 1) });
+          }
+        } catch (e) {
+          if (!(e instanceof ReturnSignal)) this.onStatus("运行出错: " + e.message, "warn");
         }
-        for (let i = 0; i < loopIdx; i++) this.execStmt(body[i], env);  // 初始化
-        this.env = env;
-        this.loop = body[loopIdx];
-        this.post = body.slice(loopIdx + 1);
-        this.onStatus("运行中 ▶（点画面后用方向键/空格）", "ok");
-        this.frameLoop();
-      } catch (e) {
-        if (!(e instanceof ReturnSignal)) this.onStatus("运行出错: " + e.message, "warn");
       }
+      if (!hasMain) { this.onStatus("没有 main()，无法预览", "warn"); return; }
+      if (this.actors.length === 0) { this.drawConsole(); this.onStatus("运行完成 ✓", "ok"); return; }
+      this.onStatus(this.actors.length > 1 ?
+        (this.actors.length + " 个精灵并行运行 ▶") : "运行中 ▶（点画面用方向键/空格）", "ok");
+      this.frameLoop();
     }
 
     frameLoop() {
       const wd = this.world;
       if (!wd || !wd.running) {
-        try { for (const s of this.post || []) this.execStmt(s, this.env); } catch (e) {}
+        (this.actors || []).forEach((a) => { this.fns = a.fns; try { for (const s of a.post) this.execStmt(s, a.env); } catch (e) {} });
         if (wd) this.onStatus("已结束", "ok");
         return;
       }
-      try {
-        this.execList(this.loop.body, this.env);
-      } catch (e) {
-        if (e instanceof ReturnSignal) { wd.running = false; }
-        else { this.onStatus("运行出错: " + e.message, "warn"); return; }
+      wd.frameCleared = false;
+      wd.broadcasts = wd.nextBroadcasts; wd.nextBroadcasts = new Set();
+      for (const a of this.actors) {
+        this.fns = a.fns;
+        try { this.execList(a.loop.body, a.env); }
+        catch (e) {
+          if (e instanceof ReturnSignal) a.done = true;
+          else { this.onStatus("运行出错: " + e.message, "warn"); return; }
+        }
       }
+      this.actors = this.actors.filter((a) => !a.done);
+      if (this.actors.length === 0) wd.running = false;
       wd.frame++;
       this.raf = requestAnimationFrame(() => this.frameLoop());
     }
@@ -209,8 +223,11 @@
       this.canvas.width = a[0]; this.canvas.height = a[1]; },
     stage_running() { return this.world.running; },
     frame_begin() {
-      this.world.broadcasts = this.world.nextBroadcasts; this.world.nextBroadcasts = new Set();
-      this.ctx.fillStyle = "#f5f5f7"; this.ctx.fillRect(0, 0, this.world.W, this.world.H);
+      // 每帧只清一次（多精灵共享同一帧）；广播交换由 frameLoop 统一处理
+      if (!this.world.frameCleared) {
+        this.ctx.fillStyle = "#f5f5f7"; this.ctx.fillRect(0, 0, this.world.W, this.world.H);
+        this.world.frameCleared = true;
+      }
     },
     frame_end() {},
     stage_close() { this.world.running = false; },

@@ -96,10 +96,20 @@ header .tabs button.active { background:#fff; color:#4c2889; box-shadow:0 1px 3p
 #text-pane .hd { padding:10px 14px; font-size:11.5px; color:#8aa0cc;
   border-bottom:1px solid #2c3346; display:flex; align-items:center; gap:7px; }
 #text-pane .hd code { color:#ffd9a0; }
-#text-out { flex:1; margin:0; padding:14px; font-family:ui-monospace,"SFMono-Regular",Menlo,monospace;
-  font-size:12.5px; line-height:1.6; white-space:pre; overflow:auto; resize:none; border:0;
-  background:#1b2030; color:#d7e0f5; outline:none; }
-#text-out:focus { box-shadow:inset 3px 0 0 var(--c-motion); }
+/* 文本编辑器：透明 textarea 覆盖在高亮层之上（同步对齐） */
+#text-edit { position:relative; flex:1 1 auto; min-height:0; background:#1b2030; }
+#text-hl, #text-out { position:absolute; inset:0; margin:0; padding:14px; border:0;
+  font-family:ui-monospace,"SFMono-Regular",Menlo,monospace; font-size:12.5px; line-height:1.6;
+  white-space:pre; tab-size:4; overflow:auto; }
+#text-hl { color:#d7e0f5; pointer-events:none; background:transparent; }
+#text-hl code { font:inherit; }
+#text-out { background:transparent; color:transparent; caret-color:#fff; resize:none; outline:none; z-index:1; }
+.hl-kw { color:#c792ea; } .hl-ty { color:#7fd1e0; } .hl-st { color:#9fd17f; }
+.hl-nu { color:#ffcb6b; } .hl-cm { color:#6b7a99; font-style:italic; }
+#btn-export-sin { margin-left:10px; display:inline-flex; align-items:center; gap:6px;
+  background:#ffab19; color:#20160a; border:0; padding:7px 13px; border-radius:8px;
+  cursor:pointer; font-size:13px; font-weight:700; }
+#btn-export-sin:hover { filter:brightness(1.05); }
 #text-status { margin-left:auto; font-size:11px; }
 #text-pane .hd { display:flex; }
 #text-status.ok { color:#7fd17f; } #text-status.warn { color:#ffd21a; }
