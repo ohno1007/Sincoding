@@ -17,3 +17,6 @@ build/
 
 # Android 生成的原生库
 templates/android/jniLibs/
+
+# Web demo 成品（提交，便于直接打开）
+!web-demo/index.wasm

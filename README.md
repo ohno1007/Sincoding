@@ -50,6 +50,15 @@
 
 ![接球小游戏](docs/images/game_catch.png)
 
+同一个游戏编成 **WebAssembly，在浏览器里直接玩**（`web-demo/`，方向键控制；下图为浏览器中运行 4 秒所得，`Score: 10`）：
+
+![接球游戏 Web 版](docs/images/web_catch.png)
+
+```bash
+tools/build_web.sh examples/catch.sin web-demo          # 生成
+python3 -m http.server 8000 --directory web-demo        # 浏览器开 http://localhost:8000
+```
+
 阶段 4：同一份 `game.sin` 转 C 后经 emscripten 编成 **WebAssembly**，在浏览器中由 raylib 渲染（最像 Scratch 的发布方式）：
 
 ![阶段4 Web成品](docs/images/stage4_web.png)

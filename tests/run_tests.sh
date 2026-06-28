@@ -270,6 +270,12 @@ if command -v emcmake >/dev/null 2>&1 && [[ -f /usr/local/lib/web/libraylib.a ]]
     else
         echo "✗ web: $out"; ((FAIL++))
     fi
+    # 接球小游戏也编成 wasm 在浏览器渲染
+    if out="$("$ROOT/tools/test_web.sh" "$ROOT/examples/catch.sin" 2>&1)"; then
+        echo "✓ web-catch: 接球游戏 wasm 在浏览器运行（$out）"; ((PASS++))
+    else
+        echo "✗ web-catch: $out"; ((FAIL++))
+    fi
 else
     echo "○ 跳过（未检测到 emscripten / raylib-web / playwright）"
 fi
