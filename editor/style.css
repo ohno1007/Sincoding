@@ -40,17 +40,25 @@ header .tabs button.active { background:#fff; color:#4c2889; box-shadow:0 1px 3p
 .cat-btn.active { background:#e3ebfb; color:#2b3a4b; }
 .cat-dot { width:22px; height:22px; border-radius:50%; box-shadow:inset 0 0 0 3px rgba(255,255,255,.65), 0 1px 3px rgba(0,0,0,.18); }
 .cat-nm { line-height:1.1; text-align:center; }
-.block-list { flex:1 1 auto; overflow:auto; padding:6px 10px 24px; }
+.block-list { flex:1 1 auto; overflow-y:auto; overflow-x:hidden; padding:6px 10px 24px; }
 .cat-sec { scroll-margin-top:6px; }
 .cat-sec h2 { font-size:11.5px; color:#46546b; margin:14px 2px 8px; font-weight:800;
   display:flex; align-items:center; gap:7px; }
 .cat-sec h2::before { content:""; width:5px; height:14px; border-radius:3px; background:var(--cc,#c2cbe0); }
 /* 积木预览：与画布同款外观，整块可点击加入（子元素不拦截点击） */
-.pal-wys { display:inline-block; margin:0 0 9px; cursor:pointer; border-radius:8px; transition:transform .08s; }
+.pal-wys { display:block; width:max-content; max-width:100%; margin:0 0 9px; cursor:pointer; }
 .pal-wys * { pointer-events:none; }
-.pal-wys:hover { transform:translateY(-1px) scale(1.01); }
-.pal-wys:active { transform:translateY(1px); }
 .pal-wys .block { cursor:pointer; }
+/* 调色板里积木不换行：超出宽度直接截断，靠 hover 弹出看完整 */
+.pal-wys .hdr { flex-wrap:nowrap; }
+.pal-wys .block, .pal-hover .block { white-space:nowrap; }
+.pal-wys .mouth { display:none; }   /* 预览不展开控制块嘴巴，保持紧凑一行 */
+
+/* 悬停弹出的完整积木（浮在画布之上，不被调色板宽度截断） */
+.pal-hover { position:fixed; z-index:55; pointer-events:none; background:#fff; border:1px solid var(--line);
+  border-radius:11px; padding:6px 7px; box-shadow:0 12px 34px rgba(20,15,50,.32); }
+.pal-hover[hidden] { display:none; }
+.pal-hover .hdr { flex-wrap:nowrap; }
 
 /* ---------- 工作区 ---------- */
 #work { flex:1 1 auto; position:relative; min-width:0; }
@@ -338,11 +346,12 @@ header .tabs button.active { font-weight:700; }
 #text-status.ok { background:rgba(127,209,127,.18); color:#9fe09f; }
 #text-status.warn { background:rgba(255,180,84,.2); color:#ffb454; }
 
-/* 舞台控制台 */
+/* 舞台控制台：宽度与舞台一致（640），居中对齐在舞台正下方 */
 #stage-view { flex-direction:column; }
-#console-panel { flex:0 0 auto; height:172px; display:flex; flex-direction:column;
-  background:#171c28; color:#cdd7ee; border-top:1px solid #2c3346; }
-.con-bar { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:7px 12px;
+#console-panel { flex:0 0 auto; width:640px; height:176px; margin:0 auto 18px; display:flex;
+  flex-direction:column; background:#171c28; color:#cdd7ee; border:1px solid #2c3346;
+  border-radius:14px; overflow:hidden; box-shadow:0 8px 28px rgba(40,40,80,.16); }
+.con-bar { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:8px 13px;
   font-size:12px; font-weight:700; color:#9fb0d6; border-bottom:1px solid #2c3346; }
 .con-bar svg { color:#7fd1e0; }
 .con-bar button { margin-left:0; border:0; background:#2a3346; color:#c7d2ec; font:inherit; font-size:11px;

@@ -1129,6 +1129,22 @@
     return el("div", "block", sp.label || "");
   }
 
+  // hover 预览：鼠标浮到某积木上，在原位弹出**完整**积木（不被调色板宽度截断）
+  function palHoverEl() {
+    let h = document.getElementById("pal-hover");
+    if (!h) { h = el("div", "pal-hover"); h.id = "pal-hover"; h.hidden = true; document.body.appendChild(h); }
+    return h;
+  }
+  function showPalHover(wys) {
+    const blk = wys.firstElementChild; if (!blk) return;
+    const h = palHoverEl();
+    h.innerHTML = ""; h.appendChild(blk.cloneNode(true));
+    const r = wys.getBoundingClientRect();
+    h.style.left = r.left + "px"; h.style.top = r.top + "px";
+    h.hidden = false;
+  }
+  function hidePalHover() { const h = document.getElementById("pal-hover"); if (h) h.hidden = true; }
+
   function buildPalette() {
     const pal = document.getElementById("palette");
     pal.innerHTML = "";
@@ -1166,8 +1182,9 @@
           wys.dataset.kind = it;
           wys.append(renderStmt(NEW[it](), null));   // 复用积木渲染器 → 与画布同款外观
           wys.addEventListener("click", () => addStmt(it));
-          wys.title = "点击加入选中脚本";
         }
+        wys.addEventListener("mouseenter", () => showPalHover(wys));  // 悬停显示完整积木
+        wys.addEventListener("mouseleave", hidePalHover);
         sec.append(wys);
       });
       list.append(sec);
@@ -1175,6 +1192,7 @@
     setActiveCat(PALETTE[0].id);
     // 滚动联动：滚到哪个分类，导航就高亮哪个
     list.addEventListener("scroll", () => {
+      hidePalHover();
       let cur = PALETTE[0].id;
       for (const cat of PALETTE) {
         const sec = document.getElementById("cat-" + cat.id);
