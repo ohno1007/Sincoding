@@ -149,6 +149,17 @@ struct SourceWriter {
                 out << "\n";
                 break;
             }
+            case StmtKind::For: {
+                auto& fs = static_cast<const ForStmt&>(s);
+                out << "for " << fs.var << " in ";
+                writeExpr(*fs.start);
+                out << "..";
+                writeExpr(*fs.end);
+                out << " ";
+                writeBlock(*fs.body);
+                out << "\n";
+                break;
+            }
             case StmtKind::Return: {
                 auto& rs = static_cast<const ReturnStmt&>(s);
                 out << "return";
@@ -192,6 +203,8 @@ struct SourceWriter {
 
 std::string serializeSource(const Program& prog) {
     SourceWriter w;
+    for (auto& g : prog.globals) w.writeStmt(*g);   // 全局变量在最前
+    if (!prog.globals.empty()) w.out << "\n";
     for (size_t i = 0; i < prog.fns.size(); i++) {
         if (i) w.out << "\n";
         w.writeFn(*prog.fns[i]);
@@ -340,6 +353,14 @@ struct JsonWriter {
                 out << ","; nl(); key("body"); stmtList(ws.body->stmts);
                 break;
             }
+            case StmtKind::For: {
+                auto& fs = static_cast<const ForStmt&>(s);
+                str("for"); out << ","; nl(); key("var"); str(fs.var);
+                out << ","; nl(); key("start"); expr(*fs.start);
+                out << ","; nl(); key("end"); expr(*fs.end);
+                out << ","; nl(); key("body"); stmtList(fs.body->stmts);
+                break;
+            }
             case StmtKind::Return: {
                 auto& rs = static_cast<const ReturnStmt&>(s);
                 str("return");
@@ -391,6 +412,19 @@ struct JsonWriter {
 std::string serializeBlocks(const Program& prog) {
     JsonWriter w;
     w.out << "{"; w.depth++;
+    // 全局变量
+    w.nl(); w.key("globals");
+    if (prog.globals.empty()) {
+        w.out << "[]";
+    } else {
+        w.out << "["; w.depth++;
+        for (size_t i = 0; i < prog.globals.size(); i++) {
+            if (i) w.out << ",";
+            w.nl(); w.stmt(*prog.globals[i]);
+        }
+        w.depth--; w.nl(); w.out << "]";
+    }
+    w.out << ",";
     w.nl(); w.key("program"); w.out << "[";
     if (!prog.fns.empty()) {
         w.depth++;

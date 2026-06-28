@@ -193,6 +193,13 @@
       row.append(el("span", "label", "重复直到非"), renderExpr(node.cond));
       blk.append(row);
       const m = el("div", "mouth"); m.append(renderStmtList(node.body)); blk.append(m);
+    } else if (node.block === "for") {
+      blk = el("div", "block ctrl");
+      const row = el("div", "hdr");
+      row.append(el("span", "label", "对"), field(() => node.var, (s) => { node.var = s || "i"; }),
+        el("span", "kw", "从"), renderExpr(node.start), el("span", "kw", ".."), renderExpr(node.end));
+      blk.append(row);
+      const m = el("div", "mouth"); m.append(renderStmtList(node.body)); blk.append(m);
     } else if (node.block === "return") {
       blk = el("div", "block ret");
       const row = el("div", "hdr");

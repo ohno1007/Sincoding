@@ -67,6 +67,9 @@
       }
       case "while":
         return ind + "while " + expr(node.cond) + " " + block(node.body, d) + "\n";
+      case "for":
+        return ind + "for " + node.var + " in " + expr(node.start) + ".." +
+          expr(node.end) + " " + block(node.body, d) + "\n";
       case "return":
         return ind + "return" + (node.value ? " " + expr(node.value) : "") + "\n";
       case "expr":
@@ -101,9 +104,13 @@
   }
 
   // 完整程序模型 → Sincoding 源码
-  function modelToSource(program) {
-    const fns = program.program || program; // 容忍直接传 fns 数组
-    return fns.map(fn).join("\n");
+  function modelToSource(root) {
+    const globals = (root && root.globals) || [];
+    const fns = (root && root.program) || root; // 容忍直接传 fns 数组
+    let out = globals.map((g) => stmt(g, 0)).join("");
+    if (globals.length) out += "\n";
+    out += fns.map(fn).join("\n");
+    return out;
   }
 
   return { modelToSource, expr, fmtFloat };

@@ -17,6 +17,12 @@ std::string CodeGen::generate(const Program& prog) {
     for (auto& fn : prog.fns) emitFnProto(*fn);
     out_ << "\n";
 
+    // 全局变量（文件作用域）
+    if (!prog.globals.empty()) {
+        for (auto& g : prog.globals) emitStmt(*g);
+        out_ << "\n";
+    }
+
     // 函数体（extern 声明无函数体，仅靠上面的原型链接到运行时）
     for (auto& fn : prog.fns) {
         if (fn->isExtern) continue;
@@ -123,6 +129,17 @@ void CodeGen::emitStmt(const Stmt& s) {
             emitExpr(*ws.cond);
             out_ << ") ";
             emitBlock(*ws.body);
+            break;
+        }
+        case StmtKind::For: {
+            auto& fs = static_cast<const ForStmt&>(s);
+            indent();
+            out_ << "for (long long " << fs.var << " = ";
+            emitExpr(*fs.start);
+            out_ << "; " << fs.var << " < ";
+            emitExpr(*fs.end);
+            out_ << "; " << fs.var << "++) ";
+            emitBlock(*fs.body);
             break;
         }
         case StmtKind::Return: {

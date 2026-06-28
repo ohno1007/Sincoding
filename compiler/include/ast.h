@@ -84,7 +84,7 @@ struct ArrayLit : Expr {      // [e1, e2, ...]，仅用于 let 初始化
 };
 
 // ---------- 语句 ----------
-enum class StmtKind { Let, Assign, If, While, Return, ExprStmt, Block };
+enum class StmtKind { Let, Assign, If, While, For, Return, ExprStmt, Block };
 
 struct Stmt {
     StmtKind kind;
@@ -129,6 +129,14 @@ struct WhileStmt : Stmt {
     WhileStmt() : Stmt(StmtKind::While) {}
 };
 
+struct ForStmt : Stmt {       // for v in start..end { body }
+    std::string var;
+    ExprPtr start;
+    ExprPtr end;
+    BlockPtr body;
+    ForStmt() : Stmt(StmtKind::For) {}
+};
+
 struct ReturnStmt : Stmt {
     ExprPtr value; // 可为空（void 返回）
     ReturnStmt() : Stmt(StmtKind::Return) {}
@@ -157,6 +165,7 @@ struct FnDecl {
 using FnPtr = std::unique_ptr<FnDecl>;
 
 struct Program {
+    std::vector<StmtPtr> globals; // 顶层全局变量（LetStmt）
     std::vector<FnPtr> fns;
 };
 

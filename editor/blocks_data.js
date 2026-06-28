@@ -1,4 +1,5 @@
 window.SIN_BLOCKS = {
+  "globals": [],
   "program": [
     {
       "block": "fn",

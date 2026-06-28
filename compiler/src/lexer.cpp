@@ -15,6 +15,7 @@ const char* tokKindName(TokKind k) {
         case TokKind::KwIf: return "if";
         case TokKind::KwElse: return "else";
         case TokKind::KwWhile: return "while";
+        case TokKind::KwFor: return "for";
         case TokKind::KwReturn: return "return";
         case TokKind::KwExtern: return "extern";
         case TokKind::KwTrue: return "true";
@@ -40,6 +41,7 @@ const char* tokKindName(TokKind k) {
         case TokKind::OrOr: return "||";
         case TokKind::Not: return "!";
         case TokKind::Arrow: return "->";
+        case TokKind::DotDot: return "..";
         case TokKind::LParen: return "(";
         case TokKind::RParen: return ")";
         case TokKind::LBrace: return "{";
@@ -58,8 +60,8 @@ static const std::unordered_map<std::string, TokKind>& keywords() {
     static const std::unordered_map<std::string, TokKind> kw = {
         {"let", TokKind::KwLet},       {"fn", TokKind::KwFn},
         {"if", TokKind::KwIf},         {"else", TokKind::KwElse},
-        {"while", TokKind::KwWhile},   {"return", TokKind::KwReturn},
-        {"extern", TokKind::KwExtern},
+        {"while", TokKind::KwWhile},   {"for", TokKind::KwFor},
+        {"return", TokKind::KwReturn}, {"extern", TokKind::KwExtern},
         {"true", TokKind::KwTrue},     {"false", TokKind::KwFalse},
         {"int", TokKind::KwTypeInt},   {"float", TokKind::KwTypeFloat},
         {"bool", TokKind::KwTypeBool}, {"void", TokKind::KwTypeVoid},
@@ -180,6 +182,10 @@ std::vector<Token> Lexer::tokenize() {
             case '[': addToken(TokKind::LBracket, "["); break;
             case ']': addToken(TokKind::RBracket, "]"); break;
             case ',': addToken(TokKind::Comma, ","); break;
+            case '.':
+                if (match('.')) addToken(TokKind::DotDot, "..");
+                else error("意外的字符 '.'（区间用 '..'）");
+                break;
             case ':': addToken(TokKind::Colon, ":"); break;
             case ';': addToken(TokKind::Semicolon, ";"); break;
             case '-':

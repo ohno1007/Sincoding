@@ -66,9 +66,14 @@ bool TypeChecker::check(Program& prog) {
     if (!fns_.count("main"))
         error(0, "缺少入口函数 main");
 
+    // 全局变量在最外层作用域，函数体内可见
+    pushScope();
+    for (auto& g : prog.globals) checkStmt(*g);
+
     // 第二遍：检查函数体（extern 声明无函数体，跳过）
     for (auto& fn : prog.fns)
         if (!fn->isExtern) checkFn(*fn);
+    popScope();
     return errors_.empty();
 }
 
@@ -165,6 +170,20 @@ void TypeChecker::checkStmt(Stmt& s) {
             if (c != Type::Bool && c != Type::Unknown)
                 error(ws.line, "while 条件必须是 bool，而非 " + std::string(typeName(c)));
             checkBlock(*ws.body);
+            break;
+        }
+        case StmtKind::For: {
+            auto& fs = static_cast<ForStmt&>(s);
+            Type st = checkExpr(*fs.start);
+            if ((st != Type::Int && st != Type::Unknown) || fs.start->arrayLen != 0)
+                error(fs.line, "for 起始值必须是 int");
+            Type et = checkExpr(*fs.end);
+            if ((et != Type::Int && et != Type::Unknown) || fs.end->arrayLen != 0)
+                error(fs.line, "for 结束值必须是 int");
+            pushScope();
+            declare(fs.var, {Type::Int, 0});  // 循环变量
+            checkBlock(*fs.body);
+            popScope();
             break;
         }
         case StmtKind::Return: {

@@ -70,8 +70,12 @@ Program Parser::parseProgram() {
             FnPtr fn = parseFn();
             if (fn) prog.fns.push_back(std::move(fn));
             if (panic_) synchronize();
+        } else if (check(TokKind::KwLet)) {
+            StmtPtr g = parseLet();   // 顶层全局变量
+            if (g) prog.globals.push_back(std::move(g));
+            if (panic_) synchronize();
         } else {
-            error(cur(), "顶层只允许函数声明 (fn ... 或 extern fn ...)");
+            error(cur(), "顶层只允许全局变量 (let ...) 或函数 (fn ... / extern fn ...)");
             synchronize();
         }
     }
@@ -127,6 +131,7 @@ StmtPtr Parser::parseStmt() {
         case TokKind::KwLet: return parseLet();
         case TokKind::KwIf: return parseIf();
         case TokKind::KwWhile: return parseWhile();
+        case TokKind::KwFor: return parseFor();
         case TokKind::KwReturn: return parseReturn();
         default: return parseExprOrAssign();
     }
@@ -176,6 +181,21 @@ StmtPtr Parser::parseWhile() {
     s->line = cur().line;
     expect(TokKind::KwWhile, "'while'");
     s->cond = parseExpr();
+    s->body = parseBlock();
+    return s;
+}
+
+StmtPtr Parser::parseFor() {
+    auto s = std::make_unique<ForStmt>();
+    s->line = cur().line;
+    expect(TokKind::KwFor, "'for'");
+    s->var = expect(TokKind::Ident, "循环变量名").text;
+    // 'in' 不是关键字，用标识符 "in" 表示
+    if (check(TokKind::Ident) && cur().text == "in") advance();
+    else error(cur(), "for 循环需要 'in'（形如 for i in 0..n）");
+    s->start = parseExpr();
+    expect(TokKind::DotDot, "'..'");
+    s->end = parseExpr();
     s->body = parseBlock();
     return s;
 }

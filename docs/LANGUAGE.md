@@ -105,9 +105,26 @@ if cond {
 while cond {
     // ...
 }
+
+for i in 0..n {     // 区间 for，i 从 0 到 n-1（右开）
+    // ...
+}
 ```
 
-`if` / `while` 的条件**必须是 `bool`**。
+`if` / `while` 的条件**必须是 `bool`**；`for` 的区间两端必须是 `int`。
+
+### 全局变量
+
+在顶层（函数外）用 `let` 声明的变量是全局的，所有函数可读写（初始化需为常量表达式）：
+
+```rust
+let high_score = 0
+
+fn add_score(n: int) -> int {
+    high_score = high_score + n
+    return high_score
+}
+```
 
 ## 6. 运算符（按优先级从低到高）
 
@@ -143,13 +160,14 @@ while cond {
 ## 9. 文法（EBNF 概要）
 
 ```
-program   ::= fn_decl*
+program   ::= (fn_decl | let)*
 fn_decl   ::= 'extern'? 'fn' IDENT '(' params? ')' ('->' type)? (block | ';'?)
 params    ::= param (',' param)*
 param     ::= IDENT ':' type
 type      ::= ('int' | 'float' | 'bool' | 'string' | 'void') ('[' INT ']')?
 block     ::= '{' stmt* '}'
-stmt      ::= let | assign | if | while | return | expr_stmt
+stmt      ::= let | assign | if | while | for | return | expr_stmt
+for       ::= 'for' IDENT 'in' expr '..' expr block
 let       ::= 'let' IDENT (':' type)? ('=' expr)? ';'?
 assign    ::= IDENT ('[' expr ']')? '=' expr ';'?
 if        ::= 'if' expr block ('else' (if | block))?
