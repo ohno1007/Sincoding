@@ -41,11 +41,12 @@
       { block: "return", value: I(0) },
     ] };
   }
-  // 自动来回弹的精灵（无需输入），用于展示多精灵并行
+  // 自动来回弹的精灵（无需输入），用于展示多精灵并行 + 造型纹理
+  // 用 sprite_load 载入造型 PNG（coin.png）：预览画的就是这张造型，导出成品亦然。
   function sampleBounce() {
     return { block: "fn", name: "main", params: [], ret: "int", body: [
       Ex(C("stage_init", I(480), I(360))),
-      { block: "let", name: "b", type: "int", len: 0, value: C("sprite_new", F(150), F(-100), F(28)) },
+      { block: "let", name: "b", type: "int", len: 0, value: C("sprite_load", S("coin.png")) },
       { block: "let", name: "bx", type: "float", len: 0, value: F(150) },
       { block: "let", name: "vx", type: "float", len: 0, value: F(4) },
       { block: "while", cond: C("stage_running"), body: [
@@ -165,8 +166,26 @@
   function setPvStatus(t, cls) {
     const e = document.getElementById("pv-status"); if (e) { e.textContent = t; e.className = cls || ""; }
   }
+  // 造型资源：把所有精灵画板里的造型注册为「按名可取的真实图像」，
+  // 这样预览里 sprite_load(name) 画的就是画板造型本身；同时设 assetBase="assets/"，
+  // 让按文件名加载的造型 PNG（与导出成品同名）也能解析——预览所见即成品所见。
+  function buildAssets() {
+    const map = new Map();
+    project.sprites.forEach((sp) => {
+      (sp.costumes || []).forEach((c) => {
+        if (!c || !c.data) return;
+        const off = document.createElement("canvas");
+        off.width = c.data.width; off.height = c.data.height;
+        off.getContext("2d").putImageData(c.data, 0, 0);
+        map.set(c.name, off);
+        if (!/\.png$/i.test(c.name)) map.set(c.name + ".png", off);
+      });
+    });
+    return map;
+  }
   function runPreview() {
     if (!preview) return;
+    preview.setAssets("assets/", buildAssets()); // 造型同源：画板造型 + 文件造型
     // 多精灵并行 + 项目级共享状态（结构体/全局变量/数组）
     try { preview.runProject(project.sprites.map((s) => s.program), setPvStatus,
       { globals: project.globals || [], structs: project.structs || [] }); }

@@ -18,6 +18,11 @@
       this.keys = new Set();
       this.raf = 0;
       this.audio = null;
+      // 造型资源：sprite_load(name) 渲染的就是这里的真实图像（与导出成品同源）。
+      // assets: name → 可绘制对象（painted 造型用离屏 canvas，文件用 Image）；
+      // assetBase: 文件名相对前缀（如 "assets/"），用于按文件名惰性加载 PNG。
+      this.assets = new Map();
+      this.assetBase = "";
       canvas.tabIndex = 0;
       canvas.addEventListener("keydown", (e) => {
         const c = KEYMAP[e.key]; if (c !== undefined) { this.keys.add(c); e.preventDefault(); }
@@ -43,6 +48,23 @@
     run(program, onStatus) { this.runProject([program], onStatus); }
     runFull(model, onStatus) {
       this.runProject([model.program], onStatus, { globals: model.globals, structs: model.structs });
+    }
+
+    // 注入造型资源：base = 文件名前缀；map = name→可绘制对象（painted 造型）。
+    // 这样 sprite_load("x.png") 优先用同名 painted 造型，否则按 base+name 取文件——
+    // 与导出成品 sprite_load 同一来源，保证「预览所见 = 成品所见」。
+    setAssets(base, map) {
+      this.assetBase = base || "";
+      this.assets = map instanceof Map ? map : new Map(Object.entries(map || {}));
+    }
+
+    // 把一个造型名解析为可绘制对象（canvas 同步可画；Image 加载完成后可画）
+    resolveTex(name) {
+      if (this.assets.has(name)) return this.assets.get(name);
+      const img = new Image();
+      img.src = this.assetBase + name;
+      this.assets.set(name, img);   // 缓存，避免重复请求
+      return img;
     }
 
     // 多精灵并行：每个精灵程序是一个 actor，共享同一个舞台/世界；
@@ -246,18 +268,31 @@
     frame_end() {},
     stage_close() { this.world.running = false; },
     sprite_new(a) { const s = { kind: "rect", x: a[0], y: a[1], size: a[2], bubble: "" }; this.world.sprites.push(s); return this.world.sprites.length - 1; },
-    sprite_load() { const s = { kind: "ball", x: 0, y: 0, size: 48, bubble: "" }; this.world.sprites.push(s); return this.world.sprites.length - 1; },
+    sprite_load(a) { const s = { kind: "image", x: 0, y: 0, size: 0, bubble: "", tex: this.resolveTex(a[0]), path: a[0] }; this.world.sprites.push(s); return this.world.sprites.length - 1; },
     sprite_move_to(a) { const s = this.world.sprites[a[0]]; if (s) { s.x = a[1]; s.y = a[2]; } },
     sprite_x(a) { const s = this.world.sprites[a[0]]; return s ? s.x : 0; },
     sprite_y(a) { const s = this.world.sprites[a[0]]; return s ? s.y : 0; },
     sprite_draw(a) {
       const s = this.world.sprites[a[0]]; if (!s) return;
-      const ctx = this.ctx, [cx, cy] = this.s2c(s.x, s.y), z = s.size;
-      if (s.kind === "ball") {
+      const ctx = this.ctx, [cx, cy] = this.s2c(s.x, s.y);
+      let z = s.size;
+      if (s.kind === "image") {
+        // 造型纹理：画的就是 sprite_load 的真实图像（与成品同源）
+        const t = s.tex;
+        const ready = t && (t.tagName === "CANVAS" ? (t.width > 0) : (t.complete && t.naturalWidth > 0));
+        if (ready) {
+          const tw = t.naturalWidth || t.width, th = t.naturalHeight || t.height;
+          ctx.drawImage(t, cx - tw / 2, cy - th / 2, tw, th);
+          if (s.bubble) { ctx.fillStyle = "#000"; ctx.font = "16px sans-serif"; ctx.fillText(s.bubble, cx + tw / 2, cy - th / 2 - 6); }
+          return;
+        }
+        // 造型尚未加载完：临时用占位球，避免空白
+        z = z || 48;
         ctx.fillStyle = "#ffd21a"; ctx.beginPath(); ctx.arc(cx, cy, z / 2, 0, 2 * Math.PI); ctx.fill();
         ctx.lineWidth = 2; ctx.strokeStyle = "#e64646"; ctx.stroke();
       } else {
-        ctx.fillStyle = "#be2d3c"; ctx.fillRect(cx - z / 2, cy - z / 2, z, z);
+        // 程序化方块：与运行时 RT_SPR_RECT（MAROON 暗红 + 黑边）一致
+        ctx.fillStyle = "#be2233"; ctx.fillRect(cx - z / 2, cy - z / 2, z, z);
         ctx.lineWidth = 2; ctx.strokeStyle = "#000"; ctx.strokeRect(cx - z / 2, cy - z / 2, z, z);
       }
       if (s.bubble) { ctx.fillStyle = "#000"; ctx.font = "16px sans-serif"; ctx.fillText(s.bubble, cx + z / 2, cy - z / 2 - 6); }

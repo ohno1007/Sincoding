@@ -104,6 +104,19 @@ function freePort() {
       return n;
     });
     const preview = previewPx > 200;
+    // 造型纹理：弹球精灵用 sprite_load("coin.png")，预览应画出金币造型本身
+    // （而非占位球/方块）。检测金币特有的暗金描边/十字（r~190,g~130,b~0）像素。
+    await page.waitForTimeout(400);
+    const costumePx = await page.evaluate(() => {
+      const c = document.getElementById("preview-canvas");
+      const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+      let n = 0; for (let i = 0; i < d.length; i += 4) {
+        const r = d[i], g = d[i + 1], b = d[i + 2];
+        if (r > 150 && r < 225 && g > 95 && g < 175 && b < 45) n++;
+      }
+      return n;
+    });
+    const costume = costumePx > 15;
     // 多精灵并行：状态栏应显示「并行」
     const pvStatus = await page.evaluate(() => document.getElementById("pv-status").textContent);
     const parallel = /并行/.test(pvStatus);
@@ -140,8 +153,8 @@ function freePort() {
     const stageOk = stage.count >= 2 && stage.textured >= 1;
     if (shots) await page.screenshot({ path: shots + "/ide_stage.png" });
 
-    result = { writeback, reorder, palette, reverse, spriteSwitch, sharedState, preview, parallel, exportOk, highlighted, stage, paintedPixels: painted, errors };
-    result.ok = writeback && reorder && palette && reverse && spriteSwitch && sharedState && preview && parallel &&
+    result = { writeback, reorder, palette, reverse, spriteSwitch, sharedState, preview, costume, parallel, exportOk, highlighted, stage, paintedPixels: painted, errors };
+    result.ok = writeback && reorder && palette && reverse && spriteSwitch && sharedState && preview && costume && parallel &&
       exportOk && highlighted && stageOk && painted > 100 && errors.length === 0;
   } finally {
     await browser.close();
