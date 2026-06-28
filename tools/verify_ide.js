@@ -271,9 +271,15 @@ function freePort() {
     });
     await page.click("#publish-close");
 
-    result = { writeback, reorder, palette, catNav, paletteDrag, blockDelete, exprNest, varDropdown, reverse, spriteSwitch, sharedState, preview, costume, costumeNames, parallel, dockConsole, exportOk, highlighted, autocomplete, diagnostics, consolePanel, saveOpen, publishModal, stage, paintedPixels: painted, errors };
+    // 单文件 HTML 发布（免依赖·客户端生成）：内联解释器 + 程序数据，可独立运行
+    const htmlPublish = await page.evaluate(async () => {
+      const h = await window._sinBuildHTML("t");
+      return h.includes("SinPreview") && h.includes('"programs"') && h.length > 5000;
+    });
+
+    result = { writeback, reorder, palette, catNav, paletteDrag, blockDelete, exprNest, varDropdown, reverse, spriteSwitch, sharedState, preview, costume, costumeNames, parallel, dockConsole, exportOk, highlighted, autocomplete, diagnostics, consolePanel, saveOpen, publishModal, htmlPublish, stage, paintedPixels: painted, errors };
     result.ok = writeback && reorder && palette && catNav && paletteDrag && blockDelete && exprNest && varDropdown && reverse && spriteSwitch && sharedState && preview && costume && costumeNames && parallel && dockConsole &&
-      exportOk && highlighted && autocomplete && diagnostics && consolePanel && saveOpen && publishModal && stageOk && painted > 100 && errors.length === 0;
+      exportOk && highlighted && autocomplete && diagnostics && consolePanel && saveOpen && publishModal && htmlPublish && stageOk && painted > 100 && errors.length === 0;
   } finally {
     await browser.close();
     srv.kill();

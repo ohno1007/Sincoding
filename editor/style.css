@@ -414,3 +414,9 @@ body.dragging-block { cursor:grabbing; }
   outline:none; box-shadow:0 1px 1px rgba(0,0,0,.12); }
 .var-select:focus { box-shadow:0 0 0 2px rgba(76,151,255,.45); }
 .pill.varref { padding:2px 6px; gap:3px; }
+
+/* 发布：推荐的「单文件 HTML」选项 */
+.platforms .plat-reco { font-weight:700; }
+.platforms .plat-reco em { font-style:normal; font-size:10.5px; color:#1f9d57; font-weight:700;
+  background:rgba(31,157,87,.12); padding:1px 6px; border-radius:999px; margin-left:2px; }
+.fld code { background:#eef1f7; padding:1px 5px; border-radius:5px; font-size:11px; }

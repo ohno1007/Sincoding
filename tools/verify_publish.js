@@ -38,12 +38,14 @@ function freePort() {
       document.querySelectorAll(".pub-plat").forEach((c) => { c.checked = (c.value === target); });
     }, plat);
     await page.click("#publish-go");
-    // 等待结果行出现成功标记（编译可能耗时，给足时间）
+    // 等待编译真正结束：状态栏出现「完成/部分/失败」，或出现非 pending（✓/✗）结果行
     await page.waitForFunction(() => {
-      const rows = document.querySelectorAll("#pub-results .row");
-      return rows.length > 0 && [...rows].every((r) => !r.classList.contains("") || r.querySelector(".badge").textContent !== "…");
+      const st = document.getElementById("pub-status").textContent || "";
+      if (/完成|部分|失败/.test(st)) return true;
+      const rows = [...document.querySelectorAll("#pub-results .row")];
+      return rows.length > 0 && rows.some((r) => { const b = r.querySelector(".badge"); return b && b.textContent !== "…"; });
     }, { timeout: 240000 }).catch(() => {});
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(400);
     const ui = await page.evaluate(() => {
       const rows = [...document.querySelectorAll("#pub-results .row")];
       const ok = rows.some((r) => r.classList.contains("ok"));

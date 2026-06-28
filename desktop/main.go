@@ -52,11 +52,12 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(sub)))
-	// 桌面版不内置交叉编译工具链：发布请求返回 501，前端会自动降级为下载 .sin 源码
+	// 发布「单文件 HTML」完全在浏览器内生成，免依赖，不经此接口；只有选了 wasm/原生/安卓
+	// 才会请求这里——桌面版没内置交叉编译工具链，返回 501，前端自动降级为下载 .sin 源码。
 	mux.HandleFunc("/api/publish", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotImplemented)
-		_, _ = w.Write([]byte(`{"ok":false,"error":"桌面版未内置交叉编译工具链；已自动改为下载 .sin 源码，可在装有工具链的机器上用 tools/build_*.sh 编译"}`))
+		_, _ = w.Write([]byte(`{"ok":false,"error":"桌面版只内置「单文件 HTML」免依赖发布；wasm/原生/安卓需在装有工具链的机器上用 tools/ide_server.py 或 tools/build_*.sh"}`))
 	})
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0") // 自动选空闲端口

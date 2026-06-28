@@ -911,6 +911,7 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
   window._sinExport = exportSource; // 供测试读取
+  window._sinBuildHTML = (name) => buildStandaloneHTML(name || "game"); // 供测试：生成单文件 HTML
 
   // ---------------- 保存 / 打开项目（.sinproj） ----------------
   // 项目文件 = 全部精灵（积木页 + 造型）+ 项目级共享状态 + 上次发布配置。
@@ -1052,33 +1053,52 @@
       project.publish = { name, pkg, platforms }; // 记住配置，随项目保存
       const source = exportSource();
       goBtn.disabled = true; statusEl.textContent = "编译中…";
+      const htmlSel = platforms.includes("html");
+      const serverPlats = platforms.filter((p) => p !== "html");
       setRows(platforms.map((p) => ({ label: platLabel(p), pending: true })));
+      const rows = [];
       try {
-        const resp = await fetch("api/publish", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, pkg, platforms, source, logo: logoDataURL,
-            assets: collectAssets() }),
-        });
-        if (!resp.ok) throw new Error("HTTP " + resp.status);
-        const out = await resp.json();
-        const rows = (out.results || []).map((r) => ({
-          label: platLabel(r.platform) + (r.ok ? "" : "：" + (r.error || "失败")),
-          ok: r.ok, href: r.artifact || null,   // 服务端已返回相对 editor 的路径
-          linkText: r.platform === "web" ? "打开/下载" : "下载", download: r.platform === "web" ? null : (r.artifact ? r.artifact.split("/").pop() : null),
-        }));
+        // 1) 单文件 HTML —— 完全在浏览器内生成，免任何外部工具链（桌面 exe 里也直接可用）
+        if (htmlSel) {
+          try {
+            const html = await buildStandaloneHTML(name);
+            const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            // 立即下载一份，并给出「打开试玩」链接（点开即在浏览器里跑）
+            const a = document.createElement("a"); a.href = url; a.download = name + ".html"; a.click();
+            rows.push({ label: platLabel("html"), ok: true, href: url, linkText: "▶ 打开试玩" });
+          } catch (err) {
+            rows.push({ label: platLabel("html") + "：失败 " + err.message, ok: false });
+          }
+        }
+        // 2) 其它平台（wasm/原生/安卓）—— 需本地构建服务；无服务则降级
+        if (serverPlats.length) {
+          try {
+            const resp = await fetch("api/publish", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name, pkg, platforms: serverPlats, source, logo: logoDataURL, assets: collectAssets() }),
+            });
+            if (!resp.ok) throw new Error("HTTP " + resp.status);
+            const out = await resp.json();
+            (out.results || []).forEach((r) => rows.push({
+              label: platLabel(r.platform) + (r.ok ? "" : "：" + (r.error || "失败")),
+              ok: r.ok, href: r.artifact || null,
+              linkText: r.platform === "web" ? "打开/下载" : "下载",
+              download: r.platform === "web" ? null : (r.artifact ? r.artifact.split("/").pop() : null),
+            }));
+          } catch (e) {
+            const blob = new Blob([source], { type: "text/plain" });
+            const url = URL.createObjectURL(blob);
+            rows.push({ label: "原生/wasm 需本地构建服务，已改为下载 .sin 源码", ok: false,
+              href: url, linkText: name + ".sin", download: name + ".sin" });
+          }
+        }
         setRows(rows);
-        statusEl.textContent = out.results && out.results.every((r) => r.ok) ? "发布完成 ✓" : "部分平台失败";
-      } catch (e) {
-        // 降级：没有本地构建服务——下载 .sin 源码并提示用构建脚本
-        const blob = new Blob([source], { type: "text/plain" });
-        const url = URL.createObjectURL(blob);
-        setRows([{ label: "未连接本地构建服务，已改为下载源码", ok: false,
-          href: url, linkText: name + ".sin", download: name + ".sin" }]);
-        statusEl.textContent = "提示：用 tools/ide_server.py 启动可一键编译；或用 tools/build_*.sh 手动编译";
+        statusEl.textContent = rows.every((r) => r.ok) ? "发布完成 ✓" : "部分完成（HTML 免依赖始终可用）";
       } finally { goBtn.disabled = false; }
     });
   }
-  function platLabel(p) { return ({ web: "Web (wasm)", linux: "Linux", windows: "Windows (.exe)", android: "Android (.apk)" })[p] || p; }
+  function platLabel(p) { return ({ html: "单文件 HTML（免依赖·推荐）", web: "Web (wasm)", linux: "Linux", windows: "Windows (.exe)", android: "Android (.apk)" })[p] || p; }
   // 收集预览/成品需要的造型资源（文件名 → PNG dataURL），随发布请求一起送给构建服务
   function collectAssets() {
     const out = {};
@@ -1086,6 +1106,56 @@
       if (c && c.data) { const nm = /\.png$/i.test(c.name) ? c.name : c.name + ".png"; out[nm] = imageDataToPNG(c.data); }
     }));
     return out;
+  }
+  function blobToDataURL(blob) {
+    return new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+  }
+  // 收集成品需要的全部造型：画板造型 + 程序里 sprite_load("x.png") 引用的文件
+  async function gatherAssets() {
+    const assets = collectAssets();
+    const refs = new Set();
+    const scan = (n) => {
+      if (!n || typeof n !== "object") return;
+      if (n.block === "call" && n.callee === "sprite_load" && n.args && n.args[0] && n.args[0].block === "string") refs.add(n.args[0].value);
+      for (const k in n) { if (k[0] === "_") continue; const v = n[k]; if (Array.isArray(v)) v.forEach(scan); else if (v && typeof v === "object") scan(v); }
+    };
+    project.sprites.forEach((sp) => (sp.program || []).forEach(scan));
+    for (const r of refs) {
+      if (assets[r]) continue;
+      try { const resp = await fetch("assets/" + r); if (resp.ok) assets[r] = await blobToDataURL(await resp.blob()); } catch (e) { /* 资源缺失则成品里用占位 */ }
+    }
+    return assets;
+  }
+  const escapeHtml = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  // 生成「单文件 HTML 游戏」：内联解释器 + 程序 + 共享状态 + 造型，双击即玩，免任何依赖。
+  async function buildStandaloneHTML(name) {
+    let interpSrc = "";
+    try { interpSrc = await fetch("interp.js").then((r) => r.text()); } catch (e) { interpSrc = ""; }
+    const programs = project.sprites.map((s) => s.program);
+    const shared = { globals: project.globals || [], structs: project.structs || [] };
+    const assets = await gatherAssets();
+    // 序列化时丢弃 _el/_x/_y 等运行期字段（_el 是 DOM 引用，会循环）；< 全部转义防止闭合 </script>
+    const data = JSON.stringify({ programs, shared, assets }, (k, v) => (k[0] === "_" ? undefined : v)).replace(/</g, "\\u003c");
+    const boot =
+      "const D=" + data + ";" +
+      "const cv=document.getElementById('c');cv.focus();" +
+      "const pv=new SinPreview(cv);" +
+      "const am=new Map();for(const k in D.assets){const im=new Image();im.src=D.assets[k];am.set(k,im);}" +
+      "pv.setAssets('',am);" +
+      "cv.addEventListener('pointerdown',()=>cv.focus());" +
+      "setTimeout(()=>pv.runProject(D.programs,()=>{},D.shared),150);";
+    return "<!doctype html><html lang=zh><head><meta charset=utf-8>" +
+      "<meta name=viewport content=\"width=device-width,initial-scale=1\">" +
+      "<title>" + escapeHtml(name) + "</title>" +
+      "<style>html,body{margin:0;height:100%;background:#1b2030}" +
+      "#wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;" +
+      "font-family:-apple-system,'Microsoft YaHei',sans-serif;color:#cdd7ee}" +
+      "canvas{background:#f5f5f7;border-radius:10px;box-shadow:0 12px 44px #0009;outline:none;max-width:96vw}" +
+      ".tip{font-size:13px;opacity:.7}</style></head><body><div id=wrap>" +
+      "<canvas id=c width=800 height=600 tabindex=0></canvas>" +
+      "<div class=tip>点画面后用 ↑↓←→ / 空格 操作 · 由 Sincoding 生成（单文件 · 免依赖）</div></div>" +
+      "<scr" + "ipt>" + interpSrc + "</scr" + "ipt>" +
+      "<scr" + "ipt>" + boot + "</scr" + "ipt></body></html>";
   }
 
   // ---------------- 精灵列表（多精灵 / 多页积木） ----------------

@@ -50,11 +50,13 @@
       <div class="fld">
         <span>目标平台</span>
         <div class="platforms">
-          <label><input type="checkbox" class="pub-plat" value="web" checked> Web (wasm)</label>
-          <label><input type="checkbox" class="pub-plat" value="linux" checked> Linux</label>
+          <label class="plat-reco"><input type="checkbox" class="pub-plat" value="html" checked> 单文件 HTML <em>免依赖·双击即玩</em></label>
+          <label><input type="checkbox" class="pub-plat" value="web"> Web (wasm)</label>
+          <label><input type="checkbox" class="pub-plat" value="linux"> Linux</label>
           <label><input type="checkbox" class="pub-plat" value="windows"> Windows (.exe)</label>
           <label><input type="checkbox" class="pub-plat" value="android"> Android (.apk)</label>
         </div>
+        <span class="hint">「单文件 HTML」完全在本机生成、不需任何编译工具链——桌面版直接可用；其余平台需配合 <code>tools/ide_server.py</code>。</span>
       </div>
       <div id="pub-results" class="pub-results" hidden></div>
     </div>
