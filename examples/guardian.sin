@@ -1,14 +1,16 @@
-// guardian.sin —— 完整小游戏「家园守护者」
+// guardian.sin —— 完整小游戏「家园守护者」（造型版）
 //
-// 这是一个用「项目级共享状态」组织的完整项目：游戏状态、所有下落物、玩家
-// 都是**全局**的——编辑器里多个精灵共享同一组结构体 / 全局变量 / 数组，
-// 这里以单一可编译程序的形式落地（一个 main 驱动整局游戏）。
+// 用「项目级共享状态」组织的完整项目：游戏状态、所有下落物、玩家都是**全局**的——
+// 编辑器里多个精灵共享同一组结构体 / 全局变量 / 数组，这里以单一可编译程序落地。
 //
-// 玩法：方向键左右移动底部挡板。接住金色物体（+1 分），躲开红色炸弹（-1 命）。
+// 角色外观用**造型 PNG**（sprite_load 当纹理）：金币 coin.png、炸弹 bomb.png、
+// 挡板 paddle.png（由 tools/make_costumes.py 生成；APK 打包时随 assets 一并入包）。
+//
+// 玩法：方向键左右移动底部挡板。接住金币（+1 分），躲开炸弹（-1 命）。
 // 每得 5 分升一级，下落变快。命数耗尽则游戏结束。
 //
 // 综合用到：结构体（GameState）、全局结构体变量、全局定长数组（多个下落物的
-// 并行坐标 / 速度 / 种类）、全局标量、for 循环、int↔float 转换、键盘输入、计分。
+// 并行坐标 / 种类 / 句柄）、全局标量、for 循环、int↔float 转换、键盘输入、计分。
 
 extern fn stage_init(w: int, h: int)
 extern fn stage_running() -> bool
@@ -16,7 +18,7 @@ extern fn frame_begin()
 extern fn frame_end()
 extern fn stage_close()
 
-extern fn sprite_new(x: float, y: float, size: float) -> int
+extern fn sprite_load(path: string) -> int
 extern fn sprite_move_to(s: int, x: float, y: float)
 extern fn sprite_draw(s: int)
 
@@ -44,8 +46,8 @@ let game: GameState           // 全局共享的游戏状态（所有逻辑读�
 let N = 6
 let ix: float[6]              // 下落物 x（全局共享数组）
 let iy: float[6]              // 下落物 y
-let ikind: int[6]            // 0 = 金币(+分), 1 = 炸弹(-命)
-let handles: int[6]         // 精灵句柄
+let ikind: int[6]            // 0 = 金币(+分), 1 = 炸弹(-命)；造型在创建时绑定，固定不变
+let handles: int[6]         // 精灵句柄（载入了对应造型纹理）
 
 let px = 0.0                 // 玩家挡板 x（全局共享变量）
 let paddle = 0
@@ -64,17 +66,10 @@ fn spawn_x(seed: int) -> float {
     return to_float(col) * 70.0 - 210.0
 }
 
-// 重置某个下落物到顶部，并按当前进度决定它是金币还是炸弹
+// 重置某个下落物到顶部（造型/种类固定，只重置位置）
 fn respawn(i: int) {
     ix[i] = spawn_x(game.score + i * 3 + game.level)
     iy[i] = 280.0 + to_float(i) * 40.0
-    let r = (game.score + i) - ((game.score + i) / 3) * 3
-    if r == 0 {
-        ikind[i] = 1            // 每三个里有一个炸弹
-    }
-    if r != 0 {
-        ikind[i] = 0
-    }
 }
 
 fn main() -> int {
@@ -85,13 +80,22 @@ fn main() -> int {
     game.lives = 3
     game.level = 1
 
+    // 创建下落物：每第三个是炸弹，其余是金币；按种类载入对应造型纹理
     for i in 0..N {
-        handles[i] = sprite_new(0.0, 0.0, 26.0)
+        let r = i - (i / 3) * 3
+        if r == 2 {
+            ikind[i] = 1
+            handles[i] = sprite_load("bomb.png")    // 炸弹造型
+        }
+        if r != 2 {
+            ikind[i] = 0
+            handles[i] = sprite_load("coin.png")    // 金币造型
+        }
         respawn(i)
-        iy[i] = to_float(i) * 90.0 - 100.0   // 错开初始高度
+        iy[i] = to_float(i) * 90.0 - 100.0          // 错开初始高度
     }
 
-    paddle = sprite_new(0.0, -250.0, 96.0)
+    paddle = sprite_load("paddle.png")              // 挡板造型
     px = 0.0
 
     while stage_running() {
@@ -117,7 +121,7 @@ fn main() -> int {
             iy[i] = iy[i] - fall
             if iy[i] < -240.0 {
                 // 触底：判定是否被挡板接住
-                if abs_f(ix[i] - px) < 58.0 {
+                if abs_f(ix[i] - px) < 60.0 {
                     if ikind[i] == 0 {
                         game.score = game.score + 1     // 接到金币
                         play_tone(880, 40)

@@ -23,6 +23,13 @@ MIN_SDK="${ANDROID_MIN_SDK:-24}"
 TARGET_SDK="${ANDROID_TARGET_SDK:-29}"
 PKG="${ANDROID_PKG:-org.sincoding.game}"
 
+# 造型 / 资源目录：其内容会放进 APK 的 assets/ 根，游戏用 sprite_load("coin.png")
+# 即可经 Android 资源管理器加载（与桌面端从 cwd 加载同名文件保持一致）。
+# 默认按约定探测 <input同目录>/assets/<input名> ，可用 ANDROID_ASSETS 覆盖。
+SRC_DIR="$(cd "$(dirname "$SRC")" && pwd)"
+SRC_STEM="$(basename "$SRC" .sin)"
+ASSETS="${ANDROID_ASSETS:-$SRC_DIR/assets/$SRC_STEM}"
+
 BT="$ANDROID_SDK/build-tools/$BUILD_TOOLS_VER"
 AAPT2="$BT/aapt2"
 ZIPALIGN="$BT/zipalign"
@@ -72,12 +79,19 @@ cat > "$MANIFEST" <<EOF
 </manifest>
 EOF
 
-# —— 3) aapt2 链接出基础 APK（二进制 Manifest + resources.arsc） ——
-echo "[3/5] aapt2 链接基础 APK"
+# —— 3) aapt2 链接出基础 APK（二进制 Manifest + resources.arsc + assets） ——
+ASSET_ARG=()
+if [[ -d "$ASSETS" ]]; then
+    echo "[3/5] aapt2 链接基础 APK（含造型 assets: $ASSETS）"
+    ASSET_ARG=(-A "$ASSETS")
+else
+    echo "[3/5] aapt2 链接基础 APK（无 assets 目录）"
+fi
 BASE="$TMP/base.apk"
 "$AAPT2" link -o "$BASE" \
     --manifest "$MANIFEST" \
     -I "$ANDROID_JAR" \
+    "${ASSET_ARG[@]}" \
     --min-sdk-version "$MIN_SDK" --target-sdk-version "$TARGET_SDK"
 
 # —— 4) 塞入原生库，zipalign ——

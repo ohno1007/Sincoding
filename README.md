@@ -230,9 +230,14 @@ ANDROID_NDK=/usr/lib/android-ndk \
 ## 完整项目示例：共享状态小游戏「家园守护者」
 
 `examples/guardian.sin` 是一个用**项目级共享状态**组织的完整游戏：一个全局结构体
-`GameState{score,lives,level}` + 多条全局并行数组（下落物坐标/速度/种类）+ 全局玩家坐标，
+`GameState{score,lives,level}` + 多条全局并行数组（下落物坐标/种类/句柄）+ 全局玩家坐标，
 被同一份逻辑读写。方向键移动挡板接金币（+分）、躲炸弹（-命），每 5 分升级加速。
-它就是上面打成 APK 的那个游戏（无头跑 90 帧所得，`Score`/`Lives`/`Lv` 实时更新）：
+
+角色外观用**造型 PNG**（`sprite_load` 把造型当纹理）：金币 `coin.png`、炸弹 `bomb.png`、
+挡板 `paddle.png`（`tools/make_costumes.py` 零依赖生成，见 `examples/assets/guardian/`）。
+打 APK 时这些造型随 `assets/` 一并入包，手机上经资源管理器加载——「画板里画的造型，
+舞台上角色就长什么样」这条链路一路贯通到原生成品。下图为无头跑所得（金币/炸弹/挡板造型 +
+`Score`/`Lives`/`Lv` 实时更新）：
 
 ![守护者小游戏](docs/images/game_guardian.png)
 

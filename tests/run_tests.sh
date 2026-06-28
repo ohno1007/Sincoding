@@ -322,7 +322,8 @@ echo
 echo "=== 完整项目：guardian.sin（共享结构体/全局/数组 → 转 C → 跑） ==="
 GUARD="$WORK/guardian"
 if "$ROOT/tools/build_native.sh" "$ROOT/examples/guardian.sin" "$GUARD" >/dev/null 2>&1; then
-    if out="$(SIN_MAX_FRAMES=120 xvfb-run -a -s "-screen 0 800x600x24" "$GUARD" 2>/dev/null | tail -1)"; then
+    # 从造型 assets 目录运行，使 sprite_load("coin.png") 等相对路径可解析
+    if out="$(cd "$ROOT/examples/assets/guardian" && SIN_MAX_FRAMES=120 xvfb-run -a -s "-screen 0 800x600x24" "$GUARD" 2>/dev/null | tail -1)"; then
         if [[ "$out" =~ ^[0-9]+$ ]]; then
             echo "✓ guardian: 完整游戏跑通（退出分数=$out，共享 GameState/全局数组生效）"; ((PASS++))
         else echo "✗ guardian: 输出异常（$out）"; ((FAIL++)); fi
@@ -343,8 +344,9 @@ if [[ -x "$NDK_CLANG" ]] && [[ -f /usr/local/lib/android/arm64-v8a/libraylib.a ]
         # 解析二进制 Manifest + 校验签名 + 确认含原生库
         if "$APK_BT/aapt2" dump badging "$APK" 2>/dev/null | grep -q "native-code: 'arm64-v8a'" && \
            "$APK_BT/apksigner" verify "$APK" >/dev/null 2>&1 && \
-           unzip -l "$APK" 2>/dev/null | grep -q "lib/arm64-v8a/libsincoding.so"; then
-            echo "✓ apk: 打出可安装的签名 APK（NativeActivity + arm64 原生库，签名校验通过）"; ((PASS++))
+           unzip -l "$APK" 2>/dev/null | grep -q "lib/arm64-v8a/libsincoding.so" && \
+           unzip -l "$APK" 2>/dev/null | grep -q "assets/coin.png"; then
+            echo "✓ apk: 打出可安装的签名 APK（NativeActivity + arm64 原生库 + 造型 assets，签名校验通过）"; ((PASS++))
         else echo "✗ apk: 产物校验未通过"; ((FAIL++)); fi
     else echo "✗ apk: 打包失败"; ((FAIL++)); fi
 else
