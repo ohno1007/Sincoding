@@ -19,8 +19,10 @@
 | 1 | 语言 → C 转译器（Lexer/Parser/类型检查/代码生成） | ✅ 已完成，斐波那契等用例可编译运行 |
 | 2 | runtime.c 基于 raylib（舞台/精灵/输入/声音） | ✅ 运行时 + 桥接层落地，方块角色已渲染 |
 | 3 | 积木编辑器接 AST（积木 ⇄ 文本双向同步） | 🚧 单页 IDE：无限画布 / 多精灵·多页积木 / 编辑写回 / **积木拖拽重排** / 造型画板 / **舞台（造型即纹理）**|
-| 4 | CMake 多平台（Web → Windows → Android） | 🚧 **Web(wasm) + Windows(.exe) 已打通**（均实测运行）；Android 待做 |
+| 4 | CMake 多平台（Web → Windows → Android） | ✅ **Web(wasm) / Windows(.exe) / Android(.so) 三平台均打通**（iOS 按设计放弃） |
 | 5 | JSON 桥接外部 ELF（静态 + 动态） | ✅ 静态链接 + 动态 dlopen/dlsym 均打通（含三层类型映射） |
+
+> 设计文档的 6 个阶段（0–5）已全部落地，并各有可复现的验证（`tests/run_tests.sh`，共 24 项）。
 
 核心设计原则：**AST 是唯一真相源**。积木是 AST 的可视化渲染，文本是 AST 的序列化。
 
@@ -134,7 +136,7 @@ compiler/        语言 → C 转译器（C++17，手写递归下降）
 runtime/         运行时：runtime.c（Scratch 风格，封装 raylib）
                  + prelude.c/.h（语言 ABI 桥接层，extern fn 的实现）
 editor/          积木前端：单页 IDE（index.html，多精灵/多页/造型画板）
-templates/       平台构建模板：web/（emscripten）、windows/（MinGW 交叉）
+templates/       平台构建模板：web/（emscripten）、windows/（MinGW）、android/（NDK+Gradle）
 tools/           build_native.sh / build_web.sh / render_blocks.sh / 各类验证脚本
 examples/        示例 .sin 程序（hello / fib / types / game）
 tests/           端到端测试与用例
@@ -173,6 +175,20 @@ tools/build_windows.sh examples/game.sin out/game.exe   # 产出单文件 PE32+ 
 ```
 
 由 `templates/windows/`（MinGW 工具链文件 + CMakeLists）交叉编译，`-static` 链接出免依赖单文件。
+
+## 打包 Android（NDK + Gradle 壳）
+
+```bash
+# 1) NDK 交叉编译原生库（需 Android NDK + raylib 的 Android 静态库）
+ANDROID_NDK=/usr/lib/android-ndk \
+  tools/build_android.sh examples/game.sin templates/android/jniLibs/arm64-v8a/libsincoding.so
+# 产物为 arm64 ELF 共享库，导出 ANativeActivity_onCreate（系统入口）→ 调用程序 main
+
+# 2) 套 APK 壳（需 Android SDK + Gradle，模板见 templates/android/）
+```
+
+native 库直接以 NDK clang 链接 raylib(Android) 产出，可验证为 AArch64 的
+NativeActivity `.so`；外层 APK 由 `templates/android/`（Manifest + Gradle）打包。
 
 ## 桥接外部 ELF（JSON 接口定义）
 

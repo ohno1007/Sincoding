@@ -239,6 +239,24 @@ else
     echo "○ 跳过（未检测到 MinGW / raylib-win）"
 fi
 
+# ---- 阶段 4：Android .so（NDK 交叉编译） ----
+echo
+echo "=== 阶段 4：Sincoding → Android .so（NDK 交叉编译） ==="
+NDK_CLANG="/usr/lib/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang"
+NDK_NM="/usr/lib/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
+if [[ -x "$NDK_CLANG" ]] && [[ -f /usr/local/lib/android/arm64-v8a/libraylib.a ]]; then
+    if ANDROID_NDK=/usr/lib/android-ndk "$ROOT/tools/build_android.sh" \
+         "$ROOT/examples/game.sin" "$WORK/libsincoding.so" >/dev/null 2>&1; then
+        ft="$(file "$WORK/libsincoding.so")"
+        if [[ "$ft" == *"aarch64"* ]] && \
+           "$NDK_NM" -D "$WORK/libsincoding.so" 2>/dev/null | grep -q ANativeActivity_onCreate; then
+            echo "✓ android: 交叉编译出 arm64 NativeActivity .so（导出 ANativeActivity_onCreate）"; ((PASS++))
+        else echo "✗ android: 产物不符（$ft）"; ((FAIL++)); fi
+    else echo "✗ android: 构建失败"; ((FAIL++)); fi
+else
+    echo "○ 跳过（未检测到 NDK / raylib-android）"
+fi
+
 echo
 echo "通过 $PASS，失败 $FAIL"
 [[ $FAIL -eq 0 ]]

@@ -14,3 +14,6 @@ build/
 .idea/
 .DS_Store
 *.log
+
+# Android 生成的原生库
+templates/android/jniLibs/
