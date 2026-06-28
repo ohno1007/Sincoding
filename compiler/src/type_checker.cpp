@@ -1,4 +1,5 @@
 #include "type_checker.h"
+#include <unordered_set>
 
 namespace sincoding {
 
@@ -8,6 +9,7 @@ const char* typeName(Type t) {
         case Type::Float: return "float";
         case Type::Bool: return "bool";
         case Type::String: return "string";
+        case Type::Struct: return "struct";
         case Type::Void: return "void";
         default: return "<unknown>";
     }
@@ -40,7 +42,7 @@ VarType TypeChecker::lookup(const std::string& name) const {
         auto found = it->find(name);
         if (found != it->end()) return found->second;
     }
-    return {Type::Unknown, 0};
+    return {Type::Unknown, 0, ""};
 }
 
 // 把 (base,len) 渲染成可读类型名，如 "int" 或 "int[8]"
@@ -49,17 +51,46 @@ static std::string typeStr(Type base, int len) {
     if (len > 0) s += "[" + std::to_string(len) + "]";
     return s;
 }
+// 含结构体名的类型渲染
+static std::string declTypeStr(Type base, int len, const std::string& sn) {
+    if (base == Type::Struct) return sn.empty() ? "struct" : sn;
+    return typeStr(base, len);
+}
 
 bool TypeChecker::check(Program& prog) {
-    // 第一遍：收集函数签名（允许前向引用 / 互递归）
+    // 0) 结构体声明（字段必须是标量）
+    for (auto& st : prog.structs) {
+        if (structs_.count(st->name)) {
+            error(st->line, "结构体重复定义: " + st->name);
+            continue;
+        }
+        std::unordered_set<std::string> seen;
+        for (auto& f : st->fields) {
+            if (f.type == Type::Struct)
+                error(f.line, "字段 '" + f.name + "' 暂不支持结构体类型（仅标量）");
+            else if (f.type == Type::Void)
+                error(f.line, "字段 '" + f.name + "' 不能是 void");
+            if (!seen.insert(f.name).second)
+                error(f.line, "字段名重复: " + f.name);
+        }
+        structs_[st->name] = st->fields;
+    }
+
+    // 1) 函数签名（允许前向引用 / 互递归；参数/返回可为结构体）
     for (auto& fn : prog.fns) {
         if (fns_.count(fn->name)) {
             error(fn->line, "函数重复定义: " + fn->name);
             continue;
         }
         FnSig sig;
-        sig.ret = fn->ret;
-        for (auto& p : fn->params) sig.params.push_back(p.type);
+        sig.ret = {fn->ret, 0, fn->retStruct};
+        if (fn->ret == Type::Struct && !structs_.count(fn->retStruct))
+            error(fn->line, "未定义的结构体: " + fn->retStruct);
+        for (auto& p : fn->params) {
+            if (p.type == Type::Struct && !structs_.count(p.structName))
+                error(p.line, "未定义的结构体: " + p.structName);
+            sig.params.push_back({p.type, 0, p.structName});
+        }
         fns_[fn->name] = sig;
     }
     // 必须有 main
@@ -79,11 +110,12 @@ bool TypeChecker::check(Program& prog) {
 
 void TypeChecker::checkFn(FnDecl& fn) {
     curRet_ = fn.ret;
+    curRetStruct_ = fn.retStruct;
     pushScope();
     for (auto& p : fn.params) {
         if (p.type == Type::Void)
             error(p.line, "参数 '" + p.name + "' 不能是 void 类型");
-        if (!declare(p.name, {p.type, 0}))
+        if (!declare(p.name, {p.type, 0, p.structName}))
             error(p.line, "参数名重复: " + p.name);
     }
     checkBlock(*fn.body);
@@ -109,20 +141,22 @@ void TypeChecker::checkStmt(Stmt& s) {
                         error(ls.line, "无法从 void 表达式推断 'let " + ls.name + "' 的类型");
                     ls.declared = (initT == Type::Void) ? Type::Int : initT;
                     ls.declaredLen = initLen;
-                } else {
-                    if (initT != Type::Unknown && initT != ls.declared)
+                    ls.structName = ls.init->structName;
+                } else if (initT != Type::Unknown) {
+                    bool ok = (initT == ls.declared) && (ls.declaredLen == initLen) &&
+                              (ls.declared != Type::Struct || ls.init->structName == ls.structName);
+                    if (!ok)
                         error(ls.line, "类型不匹配: 'let " + ls.name + ": " +
-                                           typeStr(ls.declared, ls.declaredLen) +
-                                           "' 不能用 " + typeStr(initT, initLen) + " 初始化");
-                    else if (ls.declaredLen != initLen)
-                        error(ls.line, "数组长度不匹配: 'let " + ls.name + "' 期望 " +
-                                           typeStr(ls.declared, ls.declaredLen) + "，得到长度 " +
-                                           std::to_string(initLen));
+                                           declTypeStr(ls.declared, ls.declaredLen, ls.structName) +
+                                           "' 不能用 " +
+                                           declTypeStr(initT, initLen, ls.init->structName) + " 初始化");
                 }
             } else if (ls.declared == Type::Unknown) {
                 error(ls.line, "无初始化的 'let " + ls.name + "' 必须标注类型");
             }
-            if (!declare(ls.name, {ls.declared, ls.declaredLen}))
+            if (ls.declared == Type::Struct && !structs_.count(ls.structName))
+                error(ls.line, "未定义的结构体: " + ls.structName);
+            if (!declare(ls.name, {ls.declared, ls.declaredLen, ls.structName}))
                 error(ls.line, "变量重复定义: " + ls.name);
             break;
         }
@@ -131,7 +165,26 @@ void TypeChecker::checkStmt(Stmt& s) {
             VarType vt = lookup(as.name);
             if (vt.base == Type::Unknown)
                 error(as.line, "赋值给未声明的变量: " + as.name);
-            if (as.index) {
+            if (!as.field.empty()) {
+                // 字段赋值 name.field = value
+                Type ft = Type::Unknown;
+                if (vt.base != Type::Struct && vt.base != Type::Unknown) {
+                    error(as.line, as.name + " 不是结构体，不能用 '." + as.field + "' 赋值");
+                } else {
+                    bool found = false;
+                    auto sit = structs_.find(vt.structName);
+                    if (sit != structs_.end())
+                        for (auto& d : sit->second) if (d.name == as.field) { ft = d.type; found = true; }
+                    if (!found && vt.base == Type::Struct)
+                        error(as.line, "结构体 " + vt.structName + " 没有字段 '" + as.field + "'");
+                }
+                Type valT = checkExpr(*as.value);
+                if (as.value->arrayLen != 0 || valT == Type::Struct)
+                    error(as.line, "字段只能赋标量值");
+                else if (valT != Type::Unknown && ft != Type::Unknown && valT != ft)
+                    error(as.line, "字段 '" + as.field + "' 类型不匹配: 应为 " +
+                                       typeName(ft) + "，得到 " + typeName(valT));
+            } else if (as.index) {
                 // 元素赋值 name[idx] = value
                 if (vt.len == 0 && vt.base != Type::Unknown)
                     error(as.line, as.name + " 不是数组，不能用下标赋值");
@@ -147,11 +200,12 @@ void TypeChecker::checkStmt(Stmt& s) {
             } else {
                 Type valT = checkExpr(*as.value);
                 int valLen = as.value->arrayLen;
-                if (vt.base != Type::Unknown && valT != Type::Unknown &&
-                    (valT != vt.base || valLen != vt.len))
+                bool ok = (valT == vt.base) && (valLen == vt.len) &&
+                          (vt.base != Type::Struct || as.value->structName == vt.structName);
+                if (vt.base != Type::Unknown && valT != Type::Unknown && !ok)
                     error(as.line, "赋值类型不匹配: " + as.name + " 是 " +
-                                       typeStr(vt.base, vt.len) + "，却赋以 " +
-                                       typeStr(valT, valLen));
+                                       declTypeStr(vt.base, vt.len, vt.structName) + "，却赋以 " +
+                                       declTypeStr(valT, valLen, as.value->structName));
             }
             break;
         }
@@ -181,7 +235,7 @@ void TypeChecker::checkStmt(Stmt& s) {
             if ((et != Type::Int && et != Type::Unknown) || fs.end->arrayLen != 0)
                 error(fs.line, "for 结束值必须是 int");
             pushScope();
-            declare(fs.var, {Type::Int, 0});  // 循环变量
+            declare(fs.var, {Type::Int, 0, ""});  // 循环变量
             checkBlock(*fs.body);
             popScope();
             break;
@@ -194,10 +248,12 @@ void TypeChecker::checkStmt(Stmt& s) {
                     error(rs.line, "不能返回数组");
                 if (curRet_ == Type::Void)
                     error(rs.line, "void 函数不能返回值");
-                else if (vt != Type::Unknown && vt != curRet_)
+                else if (vt != Type::Unknown &&
+                         (vt != curRet_ ||
+                          (curRet_ == Type::Struct && rs.value->structName != curRetStruct_)))
                     error(rs.line, "返回类型不匹配: 期望 " +
-                                       std::string(typeName(curRet_)) + "，得到 " +
-                                       typeName(vt));
+                                       declTypeStr(curRet_, 0, curRetStruct_) + "，得到 " +
+                                       declTypeStr(vt, 0, rs.value->structName));
             } else if (curRet_ != Type::Void) {
                 error(rs.line, "非 void 函数必须返回 " +
                                    std::string(typeName(curRet_)) + " 值");
@@ -228,7 +284,57 @@ Type TypeChecker::checkExpr(Expr& e) {
                 error(v.line, "使用了未声明的变量: " + v.name);
             v.type = t.base;
             v.arrayLen = t.len;
+            v.structName = t.structName;
             return t.base;
+        }
+        case ExprKind::StructLit: {
+            auto& sl = static_cast<StructLit&>(e);
+            sl.type = Type::Struct;
+            sl.structName = sl.typeName;
+            auto it = structs_.find(sl.typeName);
+            if (it == structs_.end()) {
+                error(sl.line, "未定义的结构体: " + sl.typeName);
+                for (auto& fi : sl.fields) checkExpr(*fi.value);
+                return Type::Struct;
+            }
+            const auto& fields = it->second;
+            std::unordered_set<std::string> given;
+            for (auto& fi : sl.fields) {
+                Type vt = checkExpr(*fi.value);
+                const StructField* def = nullptr;
+                for (auto& d : fields) if (d.name == fi.name) { def = &d; break; }
+                if (!def) { error(sl.line, sl.typeName + " 没有字段 '" + fi.name + "'"); continue; }
+                if (!given.insert(fi.name).second)
+                    error(sl.line, "字段 '" + fi.name + "' 重复赋值");
+                if (fi.value->arrayLen != 0 || vt == Type::Struct)
+                    error(sl.line, "字段 '" + fi.name + "' 只能是标量值");
+                else if (vt != Type::Unknown && vt != def->type)
+                    error(sl.line, "字段 '" + fi.name + "' 类型应为 " +
+                                       typeName(def->type) + "，得到 " + typeName(vt));
+            }
+            if (given.size() != fields.size())
+                error(sl.line, "结构体 " + sl.typeName + " 需要初始化全部 " +
+                                   std::to_string(fields.size()) + " 个字段");
+            return Type::Struct;
+        }
+        case ExprKind::Field: {
+            auto& fa = static_cast<FieldAccess&>(e);
+            Type ot = checkExpr(*fa.obj);
+            if (ot != Type::Struct) {
+                if (ot != Type::Unknown)
+                    error(fa.line, "'." + fa.field + "' 只能用于结构体");
+                fa.type = Type::Unknown;
+                return Type::Unknown;
+            }
+            auto it = structs_.find(fa.obj->structName);
+            if (it != structs_.end()) {
+                for (auto& d : it->second) if (d.name == fa.field) {
+                    fa.type = d.type; fa.arrayLen = 0; return d.type;
+                }
+            }
+            error(fa.line, "结构体 " + fa.obj->structName + " 没有字段 '" + fa.field + "'");
+            fa.type = Type::Unknown;
+            return Type::Unknown;
         }
         case ExprKind::Index: {
             auto& ix = static_cast<IndexExpr&>(e);
@@ -264,8 +370,8 @@ Type TypeChecker::checkExpr(Expr& e) {
         case ExprKind::Unary: {
             auto& u = static_cast<Unary&>(e);
             Type ot = checkExpr(*u.operand);
-            if (u.operand->arrayLen != 0)
-                error(u.line, "一元运算 '" + u.op + "' 不能用于数组");
+            if (u.operand->arrayLen != 0 || ot == Type::Struct)
+                error(u.line, "一元运算 '" + u.op + "' 不能用于数组/结构体");
             if (u.op == "-") {
                 if (ot != Type::Int && ot != Type::Float && ot != Type::Unknown)
                     error(u.line, "一元 '-' 需要数值类型，而非 " + std::string(typeName(ot)));
@@ -281,8 +387,9 @@ Type TypeChecker::checkExpr(Expr& e) {
             auto& b = static_cast<Binary&>(e);
             Type lt = checkExpr(*b.lhs);
             Type rt = checkExpr(*b.rhs);
-            if (b.lhs->arrayLen != 0 || b.rhs->arrayLen != 0)
-                error(b.line, "运算 '" + b.op + "' 不能用于数组");
+            if (b.lhs->arrayLen != 0 || b.rhs->arrayLen != 0 ||
+                lt == Type::Struct || rt == Type::Struct)
+                error(b.line, "运算 '" + b.op + "' 不能用于数组/结构体");
             const std::string& op = b.op;
             if (op == "&&" || op == "||") {
                 if (lt != Type::Bool && lt != Type::Unknown)
@@ -326,6 +433,8 @@ Type TypeChecker::checkExpr(Expr& e) {
                         error(c.line, "print 不能打印 void");
                     if (c.args[0]->arrayLen != 0)
                         error(c.line, "print 不能打印数组");
+                    if (at == Type::Struct)
+                        error(c.line, "print 不能打印结构体");
                 }
                 c.type = Type::Void;
                 return Type::Void;
@@ -346,14 +455,20 @@ Type TypeChecker::checkExpr(Expr& e) {
                 Type at = checkExpr(*c.args[i]);
                 if (c.args[i]->arrayLen != 0)
                     error(c.line, "不能把数组作为参数传递");
-                if (i < sig.params.size() && at != Type::Unknown &&
-                    at != sig.params[i])
-                    error(c.line, "函数 " + c.callee + " 第 " + std::to_string(i + 1) +
-                                      " 个参数类型应为 " + typeName(sig.params[i]) +
-                                      "，得到 " + typeName(at));
+                if (i < sig.params.size()) {
+                    const VarType& pt = sig.params[i];
+                    bool ok = (at == pt.base) &&
+                              (pt.base != Type::Struct || c.args[i]->structName == pt.structName);
+                    if (at != Type::Unknown && !ok)
+                        error(c.line, "函数 " + c.callee + " 第 " + std::to_string(i + 1) +
+                                          " 个参数类型应为 " + declTypeStr(pt.base, pt.len, pt.structName) +
+                                          "，得到 " + declTypeStr(at, c.args[i]->arrayLen, c.args[i]->structName));
+                }
             }
-            c.type = sig.ret;
-            return sig.ret;
+            c.type = sig.ret.base;
+            c.structName = sig.ret.structName;
+            c.arrayLen = sig.ret.len;
+            return sig.ret.base;
         }
     }
     return Type::Unknown;

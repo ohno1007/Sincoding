@@ -10,18 +10,20 @@
 namespace sincoding {
 
 // 语言的类型系统（初期：静态类型，显式 + 局部推断）
-enum class Type { Unknown, Int, Float, Bool, String, Void };
+enum class Type { Unknown, Int, Float, Bool, String, Struct, Void };
 
 const char* typeName(Type t);
 const char* typeToC(Type t);
 
 // ---------- 表达式 ----------
-enum class ExprKind { IntLit, FloatLit, BoolLit, StringLit, Var, Unary, Binary, Call, Index, ArrayLit };
+enum class ExprKind { IntLit, FloatLit, BoolLit, StringLit, Var, Unary, Binary,
+                      Call, Index, ArrayLit, Field, StructLit };
 
 struct Expr {
     ExprKind kind;
-    Type type = Type::Unknown; // 元素/标量类型，由类型检查阶段填充
-    int arrayLen = 0;          // >0 表示该表达式是定长数组（type 为元素类型）
+    Type type = Type::Unknown;  // 元素/标量类型，由类型检查阶段填充
+    int arrayLen = 0;           // >0 表示该表达式是定长数组（type 为元素类型）
+    std::string structName;     // type==Struct 时的结构体名
     int line = 0;
     virtual ~Expr() = default;
 protected:
@@ -83,6 +85,20 @@ struct ArrayLit : Expr {      // [e1, e2, ...]，仅用于 let 初始化
     ArrayLit() : Expr(ExprKind::ArrayLit) {}
 };
 
+struct FieldAccess : Expr {   // obj.field
+    ExprPtr obj;
+    std::string field;
+    FieldAccess() : Expr(ExprKind::Field) {}
+};
+
+struct FieldInit { std::string name; ExprPtr value; };
+
+struct StructLit : Expr {     // Name { f1: e1, f2: e2 }
+    std::string typeName;
+    std::vector<FieldInit> fields;
+    StructLit() : Expr(ExprKind::StructLit) {}
+};
+
 // ---------- 语句 ----------
 enum class StmtKind { Let, Assign, If, While, For, Return, ExprStmt, Block };
 
@@ -105,13 +121,15 @@ struct LetStmt : Stmt {
     std::string name;
     Type declared = Type::Unknown; // Unknown 表示需要推断
     int declaredLen = 0;           // >0 表示定长数组
+    std::string structName;        // declared==Struct 时的结构体名
     ExprPtr init;                  // 可为空（有类型标注时零初始化）
     LetStmt() : Stmt(StmtKind::Let) {}
 };
 
 struct AssignStmt : Stmt {
     std::string name;
-    ExprPtr index;   // 非空表示元素赋值 name[index] = value
+    ExprPtr index;          // 非空表示元素赋值 name[index] = value
+    std::string field;      // 非空表示字段赋值 name.field = value
     ExprPtr value;
     AssignStmt() : Stmt(StmtKind::Assign) {}
 };
@@ -151,6 +169,7 @@ struct ExprStmt : Stmt {
 struct Param {
     std::string name;
     Type type;
+    std::string structName; // type==Struct 时
     int line;
 };
 
@@ -158,14 +177,29 @@ struct FnDecl {
     std::string name;
     std::vector<Param> params;
     Type ret = Type::Void;
+    std::string retStruct;  // ret==Struct 时
     BlockPtr body;          // extern 函数为空（无函数体）
     bool isExtern = false;  // 由 'extern fn' 声明，链接到外部/运行时实现
     int line = 0;
 };
 using FnPtr = std::unique_ptr<FnDecl>;
 
+// 结构体声明：struct Name { field: type, ... }（字段为标量）
+struct StructField {
+    std::string name;
+    Type type;
+    int line;
+};
+struct StructDecl {
+    std::string name;
+    std::vector<StructField> fields;
+    int line = 0;
+};
+using StructPtr = std::unique_ptr<StructDecl>;
+
 struct Program {
-    std::vector<StmtPtr> globals; // 顶层全局变量（LetStmt）
+    std::vector<StructPtr> structs; // 结构体声明
+    std::vector<StmtPtr> globals;   // 顶层全局变量（LetStmt）
     std::vector<FnPtr> fns;
 };
 

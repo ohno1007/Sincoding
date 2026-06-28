@@ -40,6 +40,10 @@
         return node.callee + "(" + node.args.map(expr).join(", ") + ")";
       case "index": return expr(node.arr) + "[" + expr(node.idx) + "]";
       case "array": return "[" + node.elems.map(expr).join(", ") + "]";
+      case "field": return expr(node.obj) + "." + node.name;
+      case "structlit":
+        return node.typeName + " { " +
+          node.fields.map((f) => f.name + ": " + expr(f.value)).join(", ") + " }";
       default: throw new Error("未知表达式积木: " + node.block);
     }
   }
@@ -58,6 +62,7 @@
       case "assign": {
         let lhs = node.name;
         if (node.index) lhs += "[" + expr(node.index) + "]";
+        if (node.field) lhs += "." + node.field;
         return ind + lhs + " = " + expr(node.value) + "\n";
       }
       case "if": {
@@ -103,11 +108,21 @@
     return s;
   }
 
+  function structDecl(st) {
+    let s = "struct " + st.name + " {\n";
+    st.fields.forEach((f, i) => {
+      s += "    " + f.name + ": " + f.type + (i + 1 < st.fields.length ? "," : "") + "\n";
+    });
+    return s + "}\n";
+  }
+
   // 完整程序模型 → Sincoding 源码
   function modelToSource(root) {
+    const structs = (root && root.structs) || [];
     const globals = (root && root.globals) || [];
     const fns = (root && root.program) || root; // 容忍直接传 fns 数组
-    let out = globals.map((g) => stmt(g, 0)).join("");
+    let out = structs.map((s) => structDecl(s) + "\n").join("");
+    out += globals.map((g) => stmt(g, 0)).join("");
     if (globals.length) out += "\n";
     out += fns.map(fn).join("\n");
     return out;

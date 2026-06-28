@@ -95,6 +95,23 @@ struct SourceWriter {
                 out << "]";
                 break;
             }
+            case ExprKind::Field: {
+                auto& fa = static_cast<const FieldAccess&>(e);
+                writeExpr(*fa.obj);
+                out << "." << fa.field;
+                break;
+            }
+            case ExprKind::StructLit: {
+                auto& sl = static_cast<const StructLit&>(e);
+                out << sl.typeName << " { ";
+                for (size_t i = 0; i < sl.fields.size(); i++) {
+                    if (i) out << ", ";
+                    out << sl.fields[i].name << ": ";
+                    writeExpr(*sl.fields[i].value);
+                }
+                out << " }";
+                break;
+            }
         }
     }
 
@@ -112,7 +129,8 @@ struct SourceWriter {
         switch (s.kind) {
             case StmtKind::Let: {
                 auto& ls = static_cast<const LetStmt&>(s);
-                out << "let " << ls.name << ": " << typeName(ls.declared);
+                out << "let " << ls.name << ": "
+                    << (ls.declared == Type::Struct ? ls.structName : typeName(ls.declared));
                 if (ls.declaredLen > 0) out << "[" << ls.declaredLen << "]";
                 if (ls.init) { out << " = "; writeExpr(*ls.init); }
                 out << "\n";
@@ -122,6 +140,7 @@ struct SourceWriter {
                 auto& as = static_cast<const AssignStmt&>(s);
                 out << as.name;
                 if (as.index) { out << "["; writeExpr(*as.index); out << "]"; }
+                if (!as.field.empty()) out << "." << as.field;
                 out << " = ";
                 writeExpr(*as.value);
                 out << "\n";
@@ -180,15 +199,29 @@ struct SourceWriter {
         }
     }
 
+    void writeStruct(const StructDecl& st) {
+        out << "struct " << st.name << " {\n";
+        for (size_t i = 0; i < st.fields.size(); i++) {
+            out << "    " << st.fields[i].name << ": " << typeName(st.fields[i].type);
+            if (i + 1 < st.fields.size()) out << ",";
+            out << "\n";
+        }
+        out << "}\n";
+    }
+
+    static std::string ptype(Type t, const std::string& sn) {
+        return t == Type::Struct ? sn : typeName(t);
+    }
+
     void writeFn(const FnDecl& fn) {
         if (fn.isExtern) out << "extern ";
         out << "fn " << fn.name << "(";
         for (size_t i = 0; i < fn.params.size(); i++) {
             if (i) out << ", ";
-            out << fn.params[i].name << ": " << typeName(fn.params[i].type);
+            out << fn.params[i].name << ": " << ptype(fn.params[i].type, fn.params[i].structName);
         }
         out << ")";
-        if (fn.ret != Type::Void) out << " -> " << typeName(fn.ret);
+        if (fn.ret != Type::Void) out << " -> " << ptype(fn.ret, fn.retStruct);
         if (fn.isExtern) {
             out << "\n";
         } else {
@@ -203,7 +236,8 @@ struct SourceWriter {
 
 std::string serializeSource(const Program& prog) {
     SourceWriter w;
-    for (auto& g : prog.globals) w.writeStmt(*g);   // 全局变量在最前
+    for (auto& st : prog.structs) { w.writeStruct(*st); w.out << "\n"; } // 结构体在最前
+    for (auto& g : prog.globals) w.writeStmt(*g);   // 全局变量
     if (!prog.globals.empty()) w.out << "\n";
     for (size_t i = 0; i < prog.fns.size(); i++) {
         if (i) w.out << "\n";
@@ -294,6 +328,30 @@ struct JsonWriter {
                 str("array"); out << ","; nl(); key("elems"); array(al.elems);
                 break;
             }
+            case ExprKind::Field: {
+                auto& fa = static_cast<const FieldAccess&>(e);
+                str("field"); out << ","; nl(); key("obj"); expr(*fa.obj);
+                out << ","; nl(); key("name"); str(fa.field);
+                break;
+            }
+            case ExprKind::StructLit: {
+                auto& sl = static_cast<const StructLit&>(e);
+                str("structlit"); out << ","; nl(); key("typeName"); str(sl.typeName);
+                out << ","; nl(); key("fields");
+                if (sl.fields.empty()) { out << "[]"; }
+                else {
+                    out << "["; depth++;
+                    for (size_t i = 0; i < sl.fields.size(); i++) {
+                        if (i) out << ",";
+                        nl(); out << "{"; depth++;
+                        nl(); key("name"); str(sl.fields[i].name);
+                        out << ","; nl(); key("value"); expr(*sl.fields[i].value);
+                        depth--; nl(); out << "}";
+                    }
+                    depth--; nl(); out << "]";
+                }
+                break;
+            }
         }
         depth--; nl(); out << "}";
     }
@@ -326,7 +384,8 @@ struct JsonWriter {
             case StmtKind::Let: {
                 auto& ls = static_cast<const LetStmt&>(s);
                 str("let"); out << ","; nl(); key("name"); str(ls.name);
-                out << ","; nl(); key("type"); str(typeName(ls.declared));
+                out << ","; nl(); key("type");
+                str(ls.declared == Type::Struct ? ls.structName : typeName(ls.declared));
                 out << ","; nl(); key("len"); out << ls.declaredLen;
                 if (ls.init) { out << ","; nl(); key("value"); expr(*ls.init); }
                 break;
@@ -335,6 +394,7 @@ struct JsonWriter {
                 auto& as = static_cast<const AssignStmt&>(s);
                 str("assign"); out << ","; nl(); key("name"); str(as.name);
                 if (as.index) { out << ","; nl(); key("index"); expr(*as.index); }
+                if (!as.field.empty()) { out << ","; nl(); key("field"); str(as.field); }
                 out << ","; nl(); key("value"); expr(*as.value);
                 break;
             }
@@ -393,13 +453,16 @@ struct JsonWriter {
                 if (i) out << ",";
                 nl(); out << "{"; depth++;
                 nl(); key("name"); str(f.params[i].name);
-                out << ","; nl(); key("type"); str(typeName(f.params[i].type));
+                out << ","; nl(); key("type");
+                str(f.params[i].type == Type::Struct ? f.params[i].structName
+                                                      : typeName(f.params[i].type));
                 depth--; nl(); out << "}";
             }
             depth--; nl();
         }
         out << "]";
-        out << ","; nl(); key("ret"); str(typeName(f.ret));
+        out << ","; nl(); key("ret");
+        str(f.ret == Type::Struct ? f.retStruct : typeName(f.ret));
         if (!f.isExtern) {
             out << ","; nl(); key("body"); stmtList(f.body->stmts);
         }
@@ -412,6 +475,35 @@ struct JsonWriter {
 std::string serializeBlocks(const Program& prog) {
     JsonWriter w;
     w.out << "{"; w.depth++;
+    // 结构体定义
+    w.nl(); w.key("structs");
+    if (prog.structs.empty()) {
+        w.out << "[]";
+    } else {
+        w.out << "["; w.depth++;
+        for (size_t i = 0; i < prog.structs.size(); i++) {
+            if (i) w.out << ",";
+            const auto& st = *prog.structs[i];
+            w.nl(); w.out << "{"; w.depth++;
+            w.nl(); w.key("name"); w.str(st.name);
+            w.out << ","; w.nl(); w.key("fields"); w.out << "[";
+            if (!st.fields.empty()) {
+                w.depth++;
+                for (size_t j = 0; j < st.fields.size(); j++) {
+                    if (j) w.out << ",";
+                    w.nl(); w.out << "{"; w.depth++;
+                    w.nl(); w.key("name"); w.str(st.fields[j].name);
+                    w.out << ","; w.nl(); w.key("type"); w.str(typeName(st.fields[j].type));
+                    w.depth--; w.nl(); w.out << "}";
+                }
+                w.depth--; w.nl();
+            }
+            w.out << "]";
+            w.depth--; w.nl(); w.out << "}";
+        }
+        w.depth--; w.nl(); w.out << "]";
+    }
+    w.out << ",";
     // 全局变量
     w.nl(); w.key("globals");
     if (prog.globals.empty()) {

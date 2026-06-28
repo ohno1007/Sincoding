@@ -50,15 +50,16 @@ void Parser::synchronize() {
     }
 }
 
-Type Parser::parseType() {
+Type Parser::parseType(std::string& structName) {
     switch (cur().kind) {
         case TokKind::KwTypeInt: advance(); return Type::Int;
         case TokKind::KwTypeFloat: advance(); return Type::Float;
         case TokKind::KwTypeBool: advance(); return Type::Bool;
         case TokKind::KwTypeVoid: advance(); return Type::Void;
         case TokKind::KwTypeString: advance(); return Type::String;
+        case TokKind::Ident: structName = advance().text; return Type::Struct; // 结构体名
         default:
-            error(cur(), "期望类型名 (int/float/bool/string/void)");
+            error(cur(), "期望类型名 (int/float/bool/string/void/结构体名)");
             return Type::Unknown;
     }
 }
@@ -70,16 +71,40 @@ Program Parser::parseProgram() {
             FnPtr fn = parseFn();
             if (fn) prog.fns.push_back(std::move(fn));
             if (panic_) synchronize();
+        } else if (check(TokKind::KwStruct)) {
+            StructPtr st = parseStruct();
+            if (st) prog.structs.push_back(std::move(st));
+            if (panic_) synchronize();
         } else if (check(TokKind::KwLet)) {
             StmtPtr g = parseLet();   // 顶层全局变量
             if (g) prog.globals.push_back(std::move(g));
             if (panic_) synchronize();
         } else {
-            error(cur(), "顶层只允许全局变量 (let ...) 或函数 (fn ... / extern fn ...)");
+            error(cur(), "顶层只允许结构体 (struct ...)、全局变量 (let ...) 或函数 (fn ... / extern fn ...)");
             synchronize();
         }
     }
     return prog;
+}
+
+StructPtr Parser::parseStruct() {
+    auto s = std::make_unique<StructDecl>();
+    s->line = cur().line;
+    expect(TokKind::KwStruct, "'struct'");
+    s->name = expect(TokKind::Ident, "结构体名").text;
+    expect(TokKind::LBrace, "'{'");
+    while (!check(TokKind::RBrace) && !check(TokKind::End)) {
+        StructField f;
+        f.line = cur().line;
+        f.name = expect(TokKind::Ident, "字段名").text;
+        expect(TokKind::Colon, "':'");
+        std::string sn;
+        f.type = parseType(sn);   // 字段类型（标量；结构体名由类型检查拒绝）
+        s->fields.push_back(f);
+        match(TokKind::Comma);    // 逗号可选（换行亦可分隔）
+    }
+    expect(TokKind::RBrace, "'}'");
+    return s;
 }
 
 FnPtr Parser::parseFn() {
@@ -97,12 +122,12 @@ FnPtr Parser::parseFn() {
             param.name = p.text;
             param.line = p.line;
             expect(TokKind::Colon, "':'");
-            param.type = parseType();
+            param.type = parseType(param.structName);
             fn->params.push_back(param);
         } while (match(TokKind::Comma));
     }
     expect(TokKind::RParen, "')'");
-    if (match(TokKind::Arrow)) fn->ret = parseType();
+    if (match(TokKind::Arrow)) fn->ret = parseType(fn->retStruct);
     else fn->ret = Type::Void;
     if (fn->isExtern) {
         // extern 声明没有函数体，分号可选
@@ -143,7 +168,7 @@ StmtPtr Parser::parseLet() {
     expect(TokKind::KwLet, "'let'");
     s->name = expect(TokKind::Ident, "变量名").text;
     if (match(TokKind::Colon)) {
-        s->declared = parseType();
+        s->declared = parseType(s->structName);
         if (match(TokKind::LBracket)) { // 数组类型 T[N]
             const Token& n = expect(TokKind::Int, "数组长度");
             s->declaredLen = (int)std::strtoll(n.text.c_str(), nullptr, 10);
@@ -160,7 +185,9 @@ StmtPtr Parser::parseIf() {
     auto s = std::make_unique<IfStmt>();
     s->line = cur().line;
     expect(TokKind::KwIf, "'if'");
+    noStructLit_ = true;
     s->cond = parseExpr();
+    noStructLit_ = false;
     s->thenBlock = parseBlock();
     if (match(TokKind::KwElse)) {
         if (check(TokKind::KwIf)) {
@@ -180,7 +207,9 @@ StmtPtr Parser::parseWhile() {
     auto s = std::make_unique<WhileStmt>();
     s->line = cur().line;
     expect(TokKind::KwWhile, "'while'");
+    noStructLit_ = true;
     s->cond = parseExpr();
+    noStructLit_ = false;
     s->body = parseBlock();
     return s;
 }
@@ -193,9 +222,11 @@ StmtPtr Parser::parseFor() {
     // 'in' 不是关键字，用标识符 "in" 表示
     if (check(TokKind::Ident) && cur().text == "in") advance();
     else error(cur(), "for 循环需要 'in'（形如 for i in 0..n）");
+    noStructLit_ = true;
     s->start = parseExpr();
     expect(TokKind::DotDot, "'..'");
     s->end = parseExpr();
+    noStructLit_ = false;
     s->body = parseBlock();
     return s;
 }
@@ -212,6 +243,19 @@ StmtPtr Parser::parseReturn() {
 
 StmtPtr Parser::parseExprOrAssign() {
     int line = cur().line;
+    // 字段赋值：Ident '.' Ident '=' expr
+    if (check(TokKind::Ident) && peek(1).kind == TokKind::Dot &&
+        peek(2).kind == TokKind::Ident && peek(3).kind == TokKind::Assign) {
+        auto s = std::make_unique<AssignStmt>();
+        s->line = line;
+        s->name = advance().text; // ident
+        advance();                // '.'
+        s->field = advance().text;
+        advance();                // '='
+        s->value = parseExpr();
+        match(TokKind::Semicolon);
+        return s;
+    }
     // 元素赋值或下标表达式：Ident '[' expr ']' ...
     if (check(TokKind::Ident) && peek(1).kind == TokKind::LBracket) {
         std::string name = advance().text; // ident
@@ -371,30 +415,58 @@ ExprPtr Parser::parsePrimary() {
             std::string name = t.text;
             int line = t.line;
             advance();
-            if (check(TokKind::LParen)) {
+            ExprPtr e;
+            if (check(TokKind::LBrace) && !noStructLit_) {
+                // 结构体字面量 Name { f: e, ... }
+                auto sl = std::make_unique<StructLit>();
+                sl->typeName = name; sl->line = line;
+                advance(); // '{'
+                bool save = noStructLit_; noStructLit_ = false;
+                if (!check(TokKind::RBrace)) {
+                    do {
+                        FieldInit fi;
+                        fi.name = expect(TokKind::Ident, "字段名").text;
+                        expect(TokKind::Colon, "':'");
+                        fi.value = parseExpr();
+                        sl->fields.push_back(std::move(fi));
+                    } while (match(TokKind::Comma) && !check(TokKind::RBrace));
+                }
+                noStructLit_ = save;
+                expect(TokKind::RBrace, "'}'");
+                e = std::move(sl);
+            } else if (check(TokKind::LParen)) {
                 auto call = std::make_unique<Call>();
-                call->callee = name;
-                call->line = line;
+                call->callee = name; call->line = line;
                 advance(); // '('
+                bool save = noStructLit_; noStructLit_ = false;
                 if (!check(TokKind::RParen)) {
                     do { call->args.push_back(parseExpr()); } while (match(TokKind::Comma));
                 }
+                noStructLit_ = save;
                 expect(TokKind::RParen, "')'");
-                return call;
+                e = std::move(call);
+            } else {
+                auto v = std::make_unique<Var>();
+                v->name = name; v->line = line;
+                e = std::move(v);
             }
-            auto v = std::make_unique<Var>();
-            v->name = name;
-            v->line = line;
-            // 后缀下标：a[i]（支持多次，但语义上仅一维）
-            ExprPtr e = std::move(v);
-            while (check(TokKind::LBracket)) {
-                advance();
-                auto ix = std::make_unique<IndexExpr>();
-                ix->line = line;
-                ix->arr = std::move(e);
-                ix->idx = parseExpr();
-                expect(TokKind::RBracket, "']'");
-                e = std::move(ix);
+            // 后缀：下标 a[i] 与字段 a.f
+            while (check(TokKind::LBracket) || check(TokKind::Dot)) {
+                if (check(TokKind::LBracket)) {
+                    advance();
+                    bool save = noStructLit_; noStructLit_ = false;
+                    auto ix = std::make_unique<IndexExpr>();
+                    ix->line = line; ix->arr = std::move(e); ix->idx = parseExpr();
+                    noStructLit_ = save;
+                    expect(TokKind::RBracket, "']'");
+                    e = std::move(ix);
+                } else {
+                    advance(); // '.'
+                    auto fa = std::make_unique<FieldAccess>();
+                    fa->line = line; fa->obj = std::move(e);
+                    fa->field = expect(TokKind::Ident, "字段名").text;
+                    e = std::move(fa);
+                }
             }
             return e;
         }
@@ -402,15 +474,19 @@ ExprPtr Parser::parsePrimary() {
             auto arr = std::make_unique<ArrayLit>();
             arr->line = t.line;
             advance();
-            if (!check(TokKind::RBracket)) {
+            bool save = noStructLit_; noStructLit_ = false;
+            if (!check(TokKind::RBrace) && !check(TokKind::RBracket)) {
                 do { arr->elems.push_back(parseExpr()); } while (match(TokKind::Comma));
             }
+            noStructLit_ = save;
             expect(TokKind::RBracket, "']'");
             return arr;
         }
         case TokKind::LParen: {
             advance();
+            bool save = noStructLit_; noStructLit_ = false;
             ExprPtr e = parseExpr();
+            noStructLit_ = save;
             expect(TokKind::RParen, "')'");
             return e;
         }

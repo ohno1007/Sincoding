@@ -18,6 +18,7 @@ const char* tokKindName(TokKind k) {
         case TokKind::KwFor: return "for";
         case TokKind::KwReturn: return "return";
         case TokKind::KwExtern: return "extern";
+        case TokKind::KwStruct: return "struct";
         case TokKind::KwTrue: return "true";
         case TokKind::KwFalse: return "false";
         case TokKind::KwTypeInt: return "int";
@@ -41,6 +42,7 @@ const char* tokKindName(TokKind k) {
         case TokKind::OrOr: return "||";
         case TokKind::Not: return "!";
         case TokKind::Arrow: return "->";
+        case TokKind::Dot: return ".";
         case TokKind::DotDot: return "..";
         case TokKind::LParen: return "(";
         case TokKind::RParen: return ")";
@@ -62,6 +64,7 @@ static const std::unordered_map<std::string, TokKind>& keywords() {
         {"if", TokKind::KwIf},         {"else", TokKind::KwElse},
         {"while", TokKind::KwWhile},   {"for", TokKind::KwFor},
         {"return", TokKind::KwReturn}, {"extern", TokKind::KwExtern},
+        {"struct", TokKind::KwStruct},
         {"true", TokKind::KwTrue},     {"false", TokKind::KwFalse},
         {"int", TokKind::KwTypeInt},   {"float", TokKind::KwTypeFloat},
         {"bool", TokKind::KwTypeBool}, {"void", TokKind::KwTypeVoid},
@@ -184,7 +187,7 @@ std::vector<Token> Lexer::tokenize() {
             case ',': addToken(TokKind::Comma, ","); break;
             case '.':
                 if (match('.')) addToken(TokKind::DotDot, "..");
-                else error("意外的字符 '.'（区间用 '..'）");
+                else addToken(TokKind::Dot, ".");   // 字段访问 p.x
                 break;
             case ':': addToken(TokKind::Colon, ":"); break;
             case ';': addToken(TokKind::Semicolon, ";"); break;

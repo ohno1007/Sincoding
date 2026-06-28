@@ -139,7 +139,7 @@ fn main() -> int {
 }
 ```
 
-支持：`int` / `float` / `bool` / `string`、**定长数组 `T[N]`**、**全局变量**、函数（含递归/互递归）、
+支持：`int` / `float` / `bool` / `string`、**定长数组 `T[N]`**、**结构体**、**全局变量**、函数（含递归/互递归）、
 `if/else`、`while`、**`for i in a..b`**、算术与逻辑运算、内建 `print`。完整文法见 [`docs/LANGUAGE.md`](docs/LANGUAGE.md)。
 
 ---

@@ -60,6 +60,33 @@ let v = xs[2] + g[0]                 // 读元素（下标须为 int）
 - 越界访问不做运行时检查（同 C），由编写者负责。
 - 当前不支持：嵌套数组、把数组作为参数/返回值、对数组整体做运算或 `print`。
 
+## 3.6 结构体（简单 / 标量字段）
+
+把若干标量字段聚合为一个类型，可作变量、参数与返回值（按值传递）：
+
+```rust
+struct Point {
+    x: int,
+    y: int
+}
+
+fn make(a: int, b: int) -> Point {
+    return Point { x: a, y: b }     // 结构体字面量
+}
+
+fn main() -> int {
+    let p = make(3, 4)
+    print(p.x)          // 字段读取
+    p.y = 10            // 字段写入
+    let q: Point        // 零初始化（全字段为 0）
+    return 0
+}
+```
+
+- 字段必须是标量（`int/float/bool/string`），暂不支持嵌套结构体/数组字段。
+- 结构体字面量 `Name { f: v, ... }` 需给全所有字段。
+- 在 `if/while/for` 的条件里直接写 `Name { }` 会与代码块歧义，必要时用括号 `(Name { ... })`。
+
 ## 4. 函数
 
 ```rust
@@ -160,8 +187,9 @@ fn add_score(n: int) -> int {
 ## 9. 文法（EBNF 概要）
 
 ```
-program   ::= (fn_decl | let)*
-fn_decl   ::= 'extern'? 'fn' IDENT '(' params? ')' ('->' type)? (block | ';'?)
+program     ::= (struct_decl | fn_decl | let)*
+struct_decl ::= 'struct' IDENT '{' (IDENT ':' type ','?)* '}'
+fn_decl     ::= 'extern'? 'fn' IDENT '(' params? ')' ('->' type)? (block | ';'?)
 params    ::= param (',' param)*
 param     ::= IDENT ':' type
 type      ::= ('int' | 'float' | 'bool' | 'string' | 'void') ('[' INT ']')?
@@ -183,9 +211,12 @@ comparison::= term (('<' | '<=' | '>' | '>=') term)*
 term      ::= factor (('+' | '-') factor)*
 factor    ::= unary (('*' | '/' | '%') unary)*
 unary     ::= ('-' | '!') unary | primary
+postfix   ::= primary ('[' expr ']' | '.' IDENT)*    // 下标 / 字段访问
 primary   ::= INT | FLOAT | STRING | 'true' | 'false'
-            | IDENT ('[' expr ']')* | IDENT '(' args? ')'
-            | '[' (expr (',' expr)*)? ']'      // 数组字面量
+            | IDENT '(' args? ')'                    // 函数调用
+            | IDENT '{' (IDENT ':' expr ','?)* '}'   // 结构体字面量
+            | IDENT                                  // 变量
+            | '[' (expr (',' expr)*)? ']'            // 数组字面量
             | '(' expr ')'
 args      ::= expr (',' expr)*
 ```

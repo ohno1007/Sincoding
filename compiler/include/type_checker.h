@@ -8,15 +8,16 @@
 
 namespace sincoding {
 
-struct FnSig {
-    std::vector<Type> params;
-    Type ret;
-};
-
-// 变量类型：标量为 {base, 0}，定长数组为 {base, len>0}
+// 变量/类型描述：标量 {base,0}，定长数组 {base,len>0}，结构体 {Struct,0,name}
 struct VarType {
     Type base = Type::Unknown;
     int len = 0;
+    std::string structName;
+};
+
+struct FnSig {
+    std::vector<VarType> params;
+    VarType ret;
 };
 
 class TypeChecker {
@@ -38,8 +39,10 @@ private:
     VarType lookup(const std::string& name) const;
 
     std::unordered_map<std::string, FnSig> fns_;
+    std::unordered_map<std::string, std::vector<StructField>> structs_; // 结构体定义
     std::vector<std::unordered_map<std::string, VarType>> scopes_;
     Type curRet_ = Type::Void;
+    std::string curRetStruct_;
     std::vector<Diagnostic> errors_;
 };
 

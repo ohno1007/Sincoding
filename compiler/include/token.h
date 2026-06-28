@@ -9,7 +9,7 @@ enum class TokKind {
     Int, Float, Str, Ident,
     // 关键字
     KwLet, KwFn, KwIf, KwElse, KwWhile, KwFor, KwReturn,
-    KwExtern, KwTrue, KwFalse,
+    KwExtern, KwStruct, KwTrue, KwFalse,
     KwTypeInt, KwTypeFloat, KwTypeBool, KwTypeVoid, KwTypeString,
     // 运算符
     Plus, Minus, Star, Slash, Percent,
@@ -17,6 +17,7 @@ enum class TokKind {
     Eq, Ne, Lt, Le, Gt, Ge, // == != < <= > >=
     AndAnd, OrOr, Not,      // && || !
     Arrow,                  // ->
+    Dot,                    // .
     DotDot,                 // ..
     // 标点
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,

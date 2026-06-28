@@ -13,6 +13,17 @@ std::string CodeGen::generate(const Program& prog) {
     out_ << "#include <stdbool.h>\n";
     out_ << "#include <string.h>\n\n";
 
+    // 结构体类型定义
+    if (!prog.structs.empty()) {
+        for (auto& st : prog.structs) {
+            out_ << "typedef struct {\n";
+            for (auto& f : st->fields)
+                out_ << "    " << typeToC(f.type) << " " << f.name << ";\n";
+            out_ << "} " << st->name << ";\n";
+        }
+        out_ << "\n";
+    }
+
     // 前向声明
     for (auto& fn : prog.fns) emitFnProto(*fn);
     out_ << "\n";
@@ -32,9 +43,16 @@ std::string CodeGen::generate(const Program& prog) {
     return out_.str();
 }
 
+// 含结构体名的 C 类型
+static std::string cType(Type t, const std::string& structName) {
+    if (t == Type::Struct) return structName;
+    return typeToC(t);
+}
+
 // main 在 C 里必须返回 int，否则触发 -Wmain；其余函数按类型映射。
-static const char* fnRetC(const FnDecl& fn) {
+static std::string fnRetC(const FnDecl& fn) {
     if (fn.name == "main" && fn.ret == Type::Int) return "int";
+    if (fn.ret == Type::Struct) return fn.retStruct;
     return typeToC(fn.ret);
 }
 
@@ -46,7 +64,7 @@ void CodeGen::emitFnProto(const FnDecl& fn) {
     } else {
         for (size_t i = 0; i < fn.params.size(); i++) {
             if (i) out_ << ", ";
-            out_ << typeToC(fn.params[i].type) << " " << fn.params[i].name;
+            out_ << cType(fn.params[i].type, fn.params[i].structName) << " " << fn.params[i].name;
         }
     }
     out_ << ");\n";
@@ -59,7 +77,7 @@ void CodeGen::emitFn(const FnDecl& fn) {
     } else {
         for (size_t i = 0; i < fn.params.size(); i++) {
             if (i) out_ << ", ";
-            out_ << typeToC(fn.params[i].type) << " " << fn.params[i].name;
+            out_ << cType(fn.params[i].type, fn.params[i].structName) << " " << fn.params[i].name;
         }
     }
     out_ << ") ";
@@ -80,13 +98,13 @@ void CodeGen::emitStmt(const Stmt& s) {
         case StmtKind::Let: {
             auto& ls = static_cast<const LetStmt&>(s);
             indent();
-            out_ << typeToC(ls.declared) << " " << ls.name;
+            out_ << cType(ls.declared, ls.structName) << " " << ls.name;
             if (ls.declaredLen > 0) out_ << "[" << ls.declaredLen << "]";
             out_ << " = ";
             if (ls.init) {
                 emitExpr(*ls.init);
-            } else if (ls.declaredLen > 0) {
-                out_ << "{0}";                       // 数组零初始化
+            } else if (ls.declaredLen > 0 || ls.declared == Type::Struct) {
+                out_ << "{0}";                       // 数组 / 结构体零初始化
             } else {                                 // 标量默认值
                 switch (ls.declared) {
                     case Type::Float: out_ << "0.0"; break;
@@ -103,6 +121,7 @@ void CodeGen::emitStmt(const Stmt& s) {
             indent();
             out_ << as.name;
             if (as.index) { out_ << "["; emitExpr(*as.index); out_ << "]"; }
+            if (!as.field.empty()) out_ << "." << as.field;
             out_ << " = ";
             emitExpr(*as.value);
             out_ << ";\n";
@@ -246,6 +265,23 @@ void CodeGen::emitExpr(const Expr& e) {
             for (size_t i = 0; i < al.elems.size(); i++) {
                 if (i) out_ << ", ";
                 emitExpr(*al.elems[i]);
+            }
+            out_ << "}";
+            break;
+        }
+        case ExprKind::Field: {
+            auto& fa = static_cast<const FieldAccess&>(e);
+            emitExpr(*fa.obj);
+            out_ << "." << fa.field;
+            break;
+        }
+        case ExprKind::StructLit: {
+            auto& sl = static_cast<const StructLit&>(e);
+            out_ << "(" << sl.typeName << "){";
+            for (size_t i = 0; i < sl.fields.size(); i++) {
+                if (i) out_ << ", ";
+                out_ << "." << sl.fields[i].name << " = ";
+                emitExpr(*sl.fields[i].value);
             }
             out_ << "}";
             break;

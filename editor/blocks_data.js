@@ -1,4 +1,5 @@
 window.SIN_BLOCKS = {
+  "structs": [],
   "globals": [],
   "program": [
     {

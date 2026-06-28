@@ -1,0 +1,27 @@
+// structs.sin — 简单结构体（标量字段）
+struct Point {
+    x: int,
+    y: int
+}
+
+fn make(a: int, b: int) -> Point {
+    return Point { x: a, y: b }
+}
+
+fn manhattan(p: Point) -> int {
+    return p.x + p.y
+}
+
+fn main() -> int {
+    let p = make(3, 4)
+    print(p.x)              // 3
+    print(manhattan(p))     // 7
+    p.x = 10
+    print(manhattan(p))     // 14
+
+    let q: Point            // 零初始化
+    print(q.x)              // 0
+    q.y = 5
+    print(q.y)              // 5
+    return 0
+}

@@ -31,7 +31,8 @@ private:
 
     // 文法规则
     FnPtr parseFn();
-    Type parseType();
+    StructPtr parseStruct();
+    Type parseType(std::string& structName);
     BlockPtr parseBlock();
     StmtPtr parseStmt();
     StmtPtr parseLet();
@@ -56,6 +57,7 @@ private:
     int pos_ = 0;
     std::vector<Diagnostic> errors_;
     bool panic_ = false;
+    bool noStructLit_ = false; // 在 if/while/for 条件中禁止 `Name { }` 结构体字面量（消歧义）
 };
 
 } // namespace sincoding
