@@ -97,7 +97,12 @@ header .tabs button.active { background:#fff; color:#4c2889; box-shadow:0 1px 3p
   border-bottom:1px solid #2c3346; display:flex; align-items:center; gap:7px; }
 #text-pane .hd code { color:#ffd9a0; }
 #text-out { flex:1; margin:0; padding:14px; font-family:ui-monospace,"SFMono-Regular",Menlo,monospace;
-  font-size:12.5px; line-height:1.6; white-space:pre; overflow:auto; }
+  font-size:12.5px; line-height:1.6; white-space:pre; overflow:auto; resize:none; border:0;
+  background:#1b2030; color:#d7e0f5; outline:none; }
+#text-out:focus { box-shadow:inset 3px 0 0 var(--c-motion); }
+#text-status { margin-left:auto; font-size:11px; }
+#text-pane .hd { display:flex; }
+#text-status.ok { color:#7fd17f; } #text-status.warn { color:#ffd21a; }
 
 /* ---------- 积木 ---------- */
 .script { position:absolute; }

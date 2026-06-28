@@ -77,8 +77,9 @@
   // ---------------- 文本写回 ----------------
   const textOut = document.getElementById("text-out");
   function refreshText() {
-    try { textOut.textContent = window.BlockModel.modelToSource(sprite().program); }
-    catch (err) { textOut.textContent = "// 序列化错误: " + err.message; }
+    if (document.activeElement === textOut) return; // 用户正在编辑文本，别打断
+    try { textOut.value = window.BlockModel.modelToSource(sprite().program); }
+    catch (err) { textOut.value = "// 序列化错误: " + err.message; }
   }
 
   // ---------------- DOM 工具 ----------------
@@ -152,6 +153,21 @@
         p.append(el("span", "kw", "["));
         node.elems.forEach((a, i) => { if (i) p.append(el("span", "kw", ",")); p.append(renderExpr(a)); });
         p.append(el("span", "kw", "]"));
+        return p;
+      }
+      case "field": {
+        const p = el("span", "pill varref");
+        p.append(renderExpr(node.obj), el("span", "kw", "."), el("span", null, node.name));
+        return p;
+      }
+      case "structlit": {
+        const p = el("span", "pill call");
+        p.append(el("span", "kw", node.typeName + " {"));
+        node.fields.forEach((f, i) => {
+          if (i) p.append(el("span", "kw", ","));
+          p.append(el("span", "kw", f.name + ":"), renderExpr(f.value));
+        });
+        p.append(el("span", "kw", "}"));
         return p;
       }
     }
@@ -322,14 +338,50 @@
         s._fn === selected ? "3px solid #ffd21a" : "none"));
   }
 
-  function render() {
+  function renderCanvas() {
     canvas.innerHTML = "";
     sprite().program.forEach((fn) => canvas.append(renderFn(fn)));
     markSelected();
     const tag = document.getElementById("page-tag");
     if (tag) tag.textContent = sprite().name + " 的积木";
-    refreshText();
   }
+  function render() { renderCanvas(); refreshText(); }
+
+  // ---------------- 反向同步：文本 → 积木（wasm 编译器） ----------------
+  let sincMod = null;
+  if (window.SincModule) {
+    window.SincModule().then((m) => { sincMod = m; window.__sincReady = true; })
+      .catch(() => setTextStatus("反向解析不可用（请用 HTTP 打开）", "warn"));
+  }
+
+  function setTextStatus(text, cls) {
+    const el2 = document.getElementById("text-status");
+    if (el2) { el2.textContent = text; el2.className = cls || ""; }
+  }
+  let textTimer = null;
+  function onTextEdited() {
+    if (!sincMod) { setTextStatus("编译器加载中…", "warn"); return; }
+    let res;
+    try {
+      const out = sincMod.ccall("sin_to_blocks", "string", ["string"], [textOut.value]);
+      res = JSON.parse(out);
+    } catch (e) { setTextStatus("解析失败", "warn"); return; }
+    const prog = (res.blocks && res.blocks.program) || [];
+    // 尽量保留同名函数的画布位置
+    const oldPos = {};
+    sprite().program.forEach((f) => { oldPos[f.name] = { x: f._x, y: f._y }; });
+    prog.forEach((f) => { if (oldPos[f.name]) { f._x = oldPos[f.name].x; f._y = oldPos[f.name].y; } });
+    placeFns(prog);
+    sprite().program = prog;
+    selected = prog[0] || null;
+    renderCanvas(); // 不回写文本，避免打断输入
+    const n = (res.diags || []).length;
+    setTextStatus(n ? (n + " 个问题（部分有效）") : "已同步 ✓", n ? "warn" : "ok");
+  }
+  textOut.addEventListener("input", () => {
+    clearTimeout(textTimer);
+    textTimer = setTimeout(onTextEdited, 250);
+  });
 
   // ---------------- 精灵列表（多精灵 / 多页积木） ----------------
   // 造型是否有绘制内容（非全透明），用于判断是否以造型为纹理

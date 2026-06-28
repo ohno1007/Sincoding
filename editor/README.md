@@ -30,6 +30,8 @@ tools/render_blocks.sh examples/fib.sin   # 生成 editor/blocks_data.js
 - **AST → 文本**（`sinc --emit src`）：规范化序列化回源码，幂等且语义不变。
 - **AST → 积木模型**（`sinc --emit blocks`）：导出积木 JSON，前端据此渲染。
 - `blockmodel.js` 的 `modelToSource` 镜像 C++ `serializeSource`，保证积木编辑的写回与规范引擎对齐。
+- **文本 → 积木（反向）**：把编译器编成 WebAssembly（`tools/build_sinc_wasm.sh` → `editor/sinc.{js,wasm}`），
+  浏览器内直接调用规范引擎解析文本框内容，实时重建积木；语法/类型错时容错返回部分积木。
 - `block_viewer.html`：只读积木查看器（轻量，供截图测试）。
 
 `blocks_data.js` 为生成文件（默认内置 `fib` 示例）。

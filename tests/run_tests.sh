@@ -155,6 +155,8 @@ echo "=== 积木 IDE 交互（写回 + 造型画板，Chromium 驱动） ==="
 if command -v node >/dev/null 2>&1 && \
    NODE_PATH="$(npm root -g 2>/dev/null)" node -e "require('playwright')" >/dev/null 2>&1; then
     "$ROOT/tools/render_blocks.sh" "$ROOT/examples/fib.sin" >/dev/null 2>&1
+    # 若有 emcc，刷新浏览器内 wasm 编译器（文本→积木反向同步用）
+    command -v emcc >/dev/null 2>&1 && "$ROOT/tools/build_sinc_wasm.sh" >/dev/null 2>&1
     if out="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_ide.js" "$ROOT/editor/index.html" "$WORK" 2>&1)"; then
         echo "✓ IDE: 字段编辑写回文本 + 造型画板可绘制（$out）"; ((PASS++))
     else
