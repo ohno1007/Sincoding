@@ -32,6 +32,7 @@ private:
     void error(const std::string& msg);
     void lexNumber();
     void lexIdentOrKeyword();
+    void lexString();
 
     std::string src_;
     int pos_ = 0;

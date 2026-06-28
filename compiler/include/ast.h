@@ -10,13 +10,13 @@
 namespace sincoding {
 
 // 语言的类型系统（初期：静态类型，显式 + 局部推断）
-enum class Type { Unknown, Int, Float, Bool, Void };
+enum class Type { Unknown, Int, Float, Bool, String, Void };
 
 const char* typeName(Type t);
 const char* typeToC(Type t);
 
 // ---------- 表达式 ----------
-enum class ExprKind { IntLit, FloatLit, BoolLit, Var, Unary, Binary, Call };
+enum class ExprKind { IntLit, FloatLit, BoolLit, StringLit, Var, Unary, Binary, Call };
 
 struct Expr {
     ExprKind kind;
@@ -41,6 +41,11 @@ struct FloatLit : Expr {
 struct BoolLit : Expr {
     bool value;
     BoolLit() : Expr(ExprKind::BoolLit) {}
+};
+
+struct StringLit : Expr {
+    std::string value; // 已解码（不含外层引号、转义已处理）
+    StringLit() : Expr(ExprKind::StringLit) {}
 };
 
 struct Var : Expr {

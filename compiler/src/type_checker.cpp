@@ -7,6 +7,7 @@ const char* typeName(Type t) {
         case Type::Int: return "int";
         case Type::Float: return "float";
         case Type::Bool: return "bool";
+        case Type::String: return "string";
         case Type::Void: return "void";
         default: return "<unknown>";
     }
@@ -17,6 +18,7 @@ const char* typeToC(Type t) {
         case Type::Int: return "long long";
         case Type::Float: return "double";
         case Type::Bool: return "bool";
+        case Type::String: return "const char*";
         case Type::Void: return "void";
         default: return "void";
     }
@@ -162,6 +164,7 @@ Type TypeChecker::checkExpr(Expr& e) {
         case ExprKind::IntLit: e.type = Type::Int; return Type::Int;
         case ExprKind::FloatLit: e.type = Type::Float; return Type::Float;
         case ExprKind::BoolLit: e.type = Type::Bool; return Type::Bool;
+        case ExprKind::StringLit: e.type = Type::String; return Type::String;
         case ExprKind::Var: {
             auto& v = static_cast<Var&>(e);
             Type t = lookup(v.name);
@@ -200,13 +203,19 @@ Type TypeChecker::checkExpr(Expr& e) {
                 if (lt != Type::Unknown && rt != Type::Unknown && lt != rt)
                     error(b.line, "比较运算 '" + op + "' 两侧类型不一致: " +
                                       typeName(lt) + " 与 " + typeName(rt));
+                // 字符串仅支持相等/不等比较（== / !=），不支持大小比较
+                if ((lt == Type::String || rt == Type::String) &&
+                    op != "==" && op != "!=")
+                    error(b.line, "string 仅支持 == / != 比较，不支持 '" + op + "'");
                 b.type = Type::Bool;
             } else { // + - * / %
                 if (lt != Type::Unknown && rt != Type::Unknown && lt != rt)
                     error(b.line, "算术运算 '" + op + "' 两侧类型不一致: " +
                                       typeName(lt) + " 与 " + typeName(rt));
-                if ((lt == Type::Bool || rt == Type::Bool))
+                if (lt == Type::Bool || rt == Type::Bool)
                     error(b.line, "算术运算 '" + op + "' 不能用于 bool");
+                if (lt == Type::String || rt == Type::String)
+                    error(b.line, "算术运算 '" + op + "' 不能用于 string（暂不支持拼接）");
                 if (op == "%" && (lt == Type::Float || rt == Type::Float))
                     error(b.line, "'%' 不能用于 float");
                 b.type = (lt != Type::Unknown) ? lt : rt;

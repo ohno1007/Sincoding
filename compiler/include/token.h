@@ -6,11 +6,11 @@ namespace sincoding {
 
 enum class TokKind {
     // 字面量 / 标识符
-    Int, Float, Ident,
+    Int, Float, Str, Ident,
     // 关键字
     KwLet, KwFn, KwIf, KwElse, KwWhile, KwReturn,
     KwExtern, KwTrue, KwFalse,
-    KwTypeInt, KwTypeFloat, KwTypeBool, KwTypeVoid,
+    KwTypeInt, KwTypeFloat, KwTypeBool, KwTypeVoid, KwTypeString,
     // 运算符
     Plus, Minus, Star, Slash, Percent,
     Assign,                 // =

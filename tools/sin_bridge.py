@@ -15,9 +15,9 @@ import os
 import sys
 
 # 三层类型映射表
-SIN = {"int": "int", "float": "float", "bool": "bool", "void": "void"}        # 语言类型
-ABI = {"int": "long long", "float": "double", "bool": "bool", "void": "void"} # 我们的 C ABI
-EXT = {"int": "int", "float": "double", "bool": "bool", "void": "void"}        # 外部库真实 C 类型
+SIN = {"int": "int", "float": "float", "bool": "bool", "string": "string", "void": "void"}        # 语言类型
+ABI = {"int": "long long", "float": "double", "bool": "bool", "string": "const char*", "void": "void"}  # 我们的 C ABI
+EXT = {"int": "int", "float": "double", "bool": "bool", "string": "const char*", "void": "void"}        # 外部库真实 C 类型
 
 
 def check_types(fns):

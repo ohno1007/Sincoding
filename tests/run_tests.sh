@@ -52,9 +52,10 @@ expect_error() {
 }
 
 echo "=== 正例：转译 → 编译 → 运行 ==="
-run_ok hello "$ROOT/examples/hello.sin" "42"
-run_ok fib   "$ROOT/examples/fib.sin"   $'55\n55'
-run_ok types "$ROOT/examples/types.sin" $'12.5664\nfalse\ntrue'
+run_ok hello   "$ROOT/examples/hello.sin"   "42"
+run_ok fib     "$ROOT/examples/fib.sin"     $'55\n55'
+run_ok types   "$ROOT/examples/types.sin"   $'12.5664\nfalse\ntrue'
+run_ok strings "$ROOT/examples/strings.sin" $'Hello, Sincoding!\n世界\ntrue\ntrue\nline1\nline2'
 
 echo
 echo "=== 反例：类型/语义错误应被拒绝 ==="
@@ -63,6 +64,7 @@ expect_error undefined_var "$ROOT/tests/cases/undefined_var.sin"
 expect_error bad_cond      "$ROOT/tests/cases/bad_cond.sin"
 expect_error no_main       "$ROOT/tests/cases/no_main.sin"
 expect_error arg_count     "$ROOT/tests/cases/arg_count.sin"
+expect_error string_arith  "$ROOT/tests/cases/string_arith.sin"
 
 # roundtrip <name> <source.sin> — 验证 AST ⇄ 文本 ⇄ 积木 序列化正确
 roundtrip() {
@@ -90,10 +92,11 @@ roundtrip() {
 
 echo
 echo "=== 序列化往返：AST ⇄ 文本 / 积木（积木编辑器地基） ==="
-roundtrip hello "$ROOT/examples/hello.sin"
-roundtrip fib   "$ROOT/examples/fib.sin"
-roundtrip types "$ROOT/examples/types.sin"
-roundtrip game  "$ROOT/examples/game.sin"
+roundtrip hello   "$ROOT/examples/hello.sin"
+roundtrip fib     "$ROOT/examples/fib.sin"
+roundtrip types   "$ROOT/examples/types.sin"
+roundtrip game    "$ROOT/examples/game.sin"
+roundtrip strings "$ROOT/examples/strings.sin"
 
 # ---- 积木视图渲染（需要 node + playwright，缺失则跳过） ----
 echo
@@ -119,7 +122,7 @@ fi
 echo
 echo "=== 前端 JS 序列化器 == C++ 引擎（写回一致性） ==="
 if command -v node >/dev/null 2>&1; then
-    for ex in hello fib types game; do
+    for ex in hello fib types game strings; do
         "$SINC" "$ROOT/examples/$ex.sin" --emit blocks > "$WORK/$ex.bj" 2>/dev/null
         "$SINC" "$ROOT/examples/$ex.sin" --emit src   > "$WORK/$ex.cpp.src" 2>/dev/null
         node -e "

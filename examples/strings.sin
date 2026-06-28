@@ -1,0 +1,15 @@
+// strings.sin — 演示字符串类型
+fn greet(name: string) -> string {
+    return name
+}
+
+fn main() -> int {
+    let msg = "Hello, Sincoding!"
+    print(msg)
+    print(greet("世界"))
+    let a = "abc"
+    print(a == "abc")      // true
+    print(a != "xyz")      // true
+    print("line1\nline2")  // 转义
+    return 0
+}

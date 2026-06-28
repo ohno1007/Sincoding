@@ -27,6 +27,12 @@
       case "int": return String(node.value);
       case "float": return fmtFloat(node.value);
       case "bool": return node.value ? "true" : "false";
+      case "string": {
+        const s = String(node.value)
+          .replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+          .replace(/\n/g, "\\n").replace(/\t/g, "\\t").replace(/\r/g, "\\r");
+        return '"' + s + '"';
+      }
       case "var": return node.name;
       case "unary": return "(" + node.op + expr(node.operand) + ")";
       case "binary": return "(" + expr(node.lhs) + " " + node.op + " " + expr(node.rhs) + ")";

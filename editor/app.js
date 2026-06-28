@@ -113,6 +113,13 @@
         p.addEventListener("click", () => { node.value = !node.value; p.textContent = node.value ? "true" : "false"; refreshText(); });
         return p;
       }
+      case "string": {
+        const p = el("span", "pill lit");
+        p.append(el("span", "kw", '"'));
+        p.append(field(() => node.value, (s) => { node.value = s; }));
+        p.append(el("span", "kw", '"'));
+        return p;
+      }
       case "var": {
         const p = el("span", "pill varref");
         p.append(field(() => node.name, (s) => { node.name = s || "x"; }));

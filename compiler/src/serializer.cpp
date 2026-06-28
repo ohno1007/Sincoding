@@ -33,6 +33,21 @@ struct SourceWriter {
             case ExprKind::BoolLit:
                 out << (static_cast<const BoolLit&>(e).value ? "true" : "false");
                 break;
+            case ExprKind::StringLit: {
+                out << '"';
+                for (char c : static_cast<const StringLit&>(e).value) {
+                    switch (c) {
+                        case '"': out << "\\\""; break;
+                        case '\\': out << "\\\\"; break;
+                        case '\n': out << "\\n"; break;
+                        case '\t': out << "\\t"; break;
+                        case '\r': out << "\\r"; break;
+                        default: out << c;
+                    }
+                }
+                out << '"';
+                break;
+            }
             case ExprKind::Var:
                 out << static_cast<const Var&>(e).name;
                 break;
@@ -206,6 +221,10 @@ struct JsonWriter {
             case ExprKind::BoolLit:
                 str("bool"); out << ","; nl(); key("value");
                 out << (static_cast<const BoolLit&>(e).value ? "true" : "false");
+                break;
+            case ExprKind::StringLit:
+                str("string"); out << ","; nl(); key("value");
+                str(static_cast<const StringLit&>(e).value);
                 break;
             case ExprKind::Var:
                 str("var"); out << ","; nl(); key("name");

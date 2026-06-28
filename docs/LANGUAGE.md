@@ -21,7 +21,11 @@ fn main() -> int {
 | `int` | 64 位有符号整数 | `long long` |
 | `float` | 双精度浮点 | `double` |
 | `bool` | 布尔 | `bool` (`stdbool.h`) |
+| `string` | 字符串（字面量，UTF-8） | `const char*` |
 | `void` | 无返回值（仅用于函数返回类型） | `void` |
+
+字符串支持字面量（`"..."`，转义 `\n \t \r \" \\`）、变量/参数/返回、`print`、
+以及 `==` / `!=` 比较（转 C 走 `strcmp`）。暂不支持拼接与大小比较（避免引入内存管理）。
 
 不同类型之间**不做隐式转换**（例如 `int` 与 `float` 不能直接相加），
 以避免动态类型转 C 的复杂度爆炸。
@@ -122,7 +126,7 @@ program   ::= fn_decl*
 fn_decl   ::= 'extern'? 'fn' IDENT '(' params? ')' ('->' type)? (block | ';'?)
 params    ::= param (',' param)*
 param     ::= IDENT ':' type
-type      ::= 'int' | 'float' | 'bool' | 'void'
+type      ::= 'int' | 'float' | 'bool' | 'string' | 'void'
 block     ::= '{' stmt* '}'
 stmt      ::= let | assign | if | while | return | expr_stmt
 let       ::= 'let' IDENT (':' type)? '=' expr ';'?
@@ -140,7 +144,7 @@ comparison::= term (('<' | '<=' | '>' | '>=') term)*
 term      ::= factor (('+' | '-') factor)*
 factor    ::= unary (('*' | '/' | '%') unary)*
 unary     ::= ('-' | '!') unary | primary
-primary   ::= INT | FLOAT | 'true' | 'false' | IDENT
+primary   ::= INT | FLOAT | STRING | 'true' | 'false' | IDENT
             | IDENT '(' args? ')' | '(' expr ')'
 args      ::= expr (',' expr)*
 ```

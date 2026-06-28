@@ -1,4 +1,5 @@
 #include "codegen.h"
+#include <cstdio>
 
 namespace sincoding {
 
@@ -9,7 +10,8 @@ void CodeGen::indent() {
 std::string CodeGen::generate(const Program& prog) {
     out_ << "// 由 Sincoding 编译器自动生成，请勿手改\n";
     out_ << "#include <stdio.h>\n";
-    out_ << "#include <stdbool.h>\n\n";
+    out_ << "#include <stdbool.h>\n";
+    out_ << "#include <string.h>\n\n";
 
     // 前向声明
     for (auto& fn : prog.fns) emitFnProto(*fn);
@@ -139,10 +141,11 @@ void CodeGen::emitPrint(const Call& c) {
     const Expr& arg = *c.args[0];
     out_ << "printf(";
     switch (arg.type) {
-        case Type::Int:   out_ << "\"%lld\\n\", (long long)("; break;
-        case Type::Float: out_ << "\"%g\\n\", (double)("; break;
-        case Type::Bool:  out_ << "\"%s\\n\", ("; break;
-        default:          out_ << "\"%lld\\n\", (long long)("; break;
+        case Type::Int:    out_ << "\"%lld\\n\", (long long)("; break;
+        case Type::Float:  out_ << "\"%g\\n\", (double)("; break;
+        case Type::Bool:   out_ << "\"%s\\n\", ("; break;
+        case Type::String: out_ << "\"%s\\n\", (const char*)("; break;
+        default:           out_ << "\"%lld\\n\", (long long)("; break;
     }
     if (arg.type == Type::Bool) {
         emitExpr(arg);
@@ -174,6 +177,26 @@ void CodeGen::emitExpr(const Expr& e) {
         case ExprKind::BoolLit:
             out_ << (static_cast<const BoolLit&>(e).value ? "true" : "false");
             break;
+        case ExprKind::StringLit: {
+            // 转义为 C 字符串字面量
+            out_ << '"';
+            for (unsigned char ch : static_cast<const StringLit&>(e).value) {
+                switch (ch) {
+                    case '"': out_ << "\\\""; break;
+                    case '\\': out_ << "\\\\"; break;
+                    case '\n': out_ << "\\n"; break;
+                    case '\t': out_ << "\\t"; break;
+                    case '\r': out_ << "\\r"; break;
+                    default:
+                        if (ch < 0x20) { // 其它控制字符用八进制
+                            char buf[8]; std::snprintf(buf, sizeof(buf), "\\%03o", ch);
+                            out_ << buf;
+                        } else out_ << (char)ch;
+                }
+            }
+            out_ << '"';
+            break;
+        }
         case ExprKind::Var:
             out_ << static_cast<const Var&>(e).name;
             break;
@@ -186,6 +209,15 @@ void CodeGen::emitExpr(const Expr& e) {
         }
         case ExprKind::Binary: {
             auto& b = static_cast<const Binary&>(e);
+            // 字符串相等比较走 strcmp
+            if ((b.op == "==" || b.op == "!=") && b.lhs->type == Type::String) {
+                out_ << "(strcmp(";
+                emitExpr(*b.lhs);
+                out_ << ", ";
+                emitExpr(*b.rhs);
+                out_ << ") " << b.op << " 0)";
+                break;
+            }
             out_ << "(";
             emitExpr(*b.lhs);
             out_ << " " << b.op << " ";

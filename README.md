@@ -122,7 +122,7 @@ fn main() -> int {
 }
 ```
 
-支持：`int` / `float` / `bool`、函数（含递归/互递归）、`if/else`、`while`、
+支持：`int` / `float` / `bool` / `string`、函数（含递归/互递归）、`if/else`、`while`、
 算术与逻辑运算、内建 `print`。完整文法见 [`docs/LANGUAGE.md`](docs/LANGUAGE.md)。
 
 ---

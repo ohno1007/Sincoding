@@ -56,8 +56,9 @@ Type Parser::parseType() {
         case TokKind::KwTypeFloat: advance(); return Type::Float;
         case TokKind::KwTypeBool: advance(); return Type::Bool;
         case TokKind::KwTypeVoid: advance(); return Type::Void;
+        case TokKind::KwTypeString: advance(); return Type::String;
         default:
-            error(cur(), "期望类型名 (int/float/bool/void)");
+            error(cur(), "期望类型名 (int/float/bool/string/void)");
             return Type::Unknown;
     }
 }
@@ -307,6 +308,13 @@ ExprPtr Parser::parsePrimary() {
             auto e = std::make_unique<BoolLit>();
             e->line = t.line;
             e->value = (t.kind == TokKind::KwTrue);
+            advance();
+            return e;
+        }
+        case TokKind::Str: {
+            auto e = std::make_unique<StringLit>();
+            e->line = t.line;
+            e->value = t.text;
             advance();
             return e;
         }

@@ -8,6 +8,7 @@ const char* tokKindName(TokKind k) {
     switch (k) {
         case TokKind::Int: return "int-literal";
         case TokKind::Float: return "float-literal";
+        case TokKind::Str: return "string-literal";
         case TokKind::Ident: return "identifier";
         case TokKind::KwLet: return "let";
         case TokKind::KwFn: return "fn";
@@ -22,6 +23,7 @@ const char* tokKindName(TokKind k) {
         case TokKind::KwTypeFloat: return "float";
         case TokKind::KwTypeBool: return "bool";
         case TokKind::KwTypeVoid: return "void";
+        case TokKind::KwTypeString: return "string";
         case TokKind::Plus: return "+";
         case TokKind::Minus: return "-";
         case TokKind::Star: return "*";
@@ -59,6 +61,7 @@ static const std::unordered_map<std::string, TokKind>& keywords() {
         {"true", TokKind::KwTrue},     {"false", TokKind::KwFalse},
         {"int", TokKind::KwTypeInt},   {"float", TokKind::KwTypeFloat},
         {"bool", TokKind::KwTypeBool}, {"void", TokKind::KwTypeVoid},
+        {"string", TokKind::KwTypeString},
     };
     return kw;
 }
@@ -103,6 +106,34 @@ void Lexer::lexNumber() {
     addToken(isFloat ? TokKind::Float : TokKind::Int, num);
 }
 
+void Lexer::lexString() {
+    advance(); // 消费开引号 "
+    std::string val;
+    while (!atEnd() && peek() != '"') {
+        char c = advance();
+        if (c == '\\' && !atEnd()) {
+            char e = advance();
+            switch (e) {
+                case 'n': val += '\n'; break;
+                case 't': val += '\t'; break;
+                case 'r': val += '\r'; break;
+                case '"': val += '"'; break;
+                case '\\': val += '\\'; break;
+                case '0': val += '\0'; break;
+                default: val += e; break; // 未知转义按原字符
+            }
+        } else if (c == '\n') {
+            error("字符串字面量不能跨行");
+            break;
+        } else {
+            val += c;
+        }
+    }
+    if (atEnd() || peek() != '"') { error("字符串缺少结束引号 '\"'"); }
+    else advance(); // 消费闭引号
+    addToken(TokKind::Str, val);
+}
+
 void Lexer::lexIdentOrKeyword() {
     std::string id;
     while (std::isalnum((unsigned char)peek()) || peek() == '_') id += advance();
@@ -124,6 +155,9 @@ std::vector<Token> Lexer::tokenize() {
             while (!atEnd() && peek() != '\n') advance();
             continue;
         }
+
+        // 字符串字面量
+        if (c == '"') { lexString(); continue; }
 
         // 数字
         if (std::isdigit((unsigned char)c)) { lexNumber(); continue; }
