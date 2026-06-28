@@ -106,6 +106,31 @@ header .tabs button.active { background:#fff; color:#4c2889; box-shadow:0 1px 3p
 #text-out { background:transparent; color:transparent; caret-color:#fff; resize:none; outline:none; z-index:1; }
 .hl-kw { color:#c792ea; } .hl-ty { color:#7fd1e0; } .hl-st { color:#9fd17f; }
 .hl-nu { color:#ffcb6b; } .hl-cm { color:#6b7a99; font-style:italic; }
+
+/* ---------- 代码补全下拉 ---------- */
+#ac-pop { position:fixed; z-index:60; min-width:200px; max-width:340px; max-height:240px;
+  overflow:auto; background:#232a3d; border:1px solid #394260; border-radius:10px;
+  box-shadow:0 14px 40px rgba(0,0,0,.5); padding:4px; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; }
+#ac-pop[hidden] { display:none; }
+.ac-item { display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:7px; cursor:pointer; color:#d7e0f5; }
+.ac-item.sel { background:#34507e; }
+.ac-item:hover { background:#2c3650; }
+.ac-k { flex:0 0 auto; width:16px; height:16px; border-radius:4px; font-size:10px; font-weight:700;
+  display:inline-flex; align-items:center; justify-content:center; color:#fff; }
+.ac-kw { background:#c792ea; } .ac-ty { background:#5fb3c4; } .ac-fn { background:#4C97FF; } .ac-id { background:#FF8C1A; }
+.ac-t { font-weight:600; color:#eaf0ff; }
+.ac-d { margin-left:auto; font-size:11px; color:#8aa0cc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px; }
+
+/* ---------- 语法诊断 ---------- */
+#diag-list { flex:0 0 auto; max-height:148px; overflow:auto; background:#181d2b;
+  border-top:1px solid #2c3346; font-size:11.5px; }
+#diag-list[hidden] { display:none; }
+.diag-head { padding:6px 12px; color:#ffb454; font-weight:700; position:sticky; top:0; background:#181d2b;
+  border-bottom:1px solid #2c3346; }
+.diag-row { display:flex; gap:9px; padding:5px 12px; cursor:pointer; border-bottom:1px solid #20273a; }
+.diag-row:hover { background:#222a40; }
+.diag-loc { flex:0 0 auto; color:#7f93c0; font-family:ui-monospace,Menlo,monospace; }
+.diag-msg { color:#e7b3b3; }
 #btn-export-sin { margin-left:10px; display:inline-flex; align-items:center; gap:6px;
   background:#ffab19; color:#20160a; border:0; padding:7px 13px; border-radius:8px;
   cursor:pointer; font-size:13px; font-weight:700; }
@@ -254,3 +279,39 @@ input[type=range] { accent-color:var(--c-motion); }
   display:flex; align-items:center; justify-content:center; font-size:48px; cursor:grab;
   background:center/contain no-repeat; user-select:none; touch-action:none; }
 .stage-sprite:hover { filter:drop-shadow(0 3px 6px rgba(0,0,0,.25)); }
+
+/* ============ Scratch 风格视觉优化（仿 scratch.mit.edu 界面） ============ */
+/* 顶栏：更柔和的渐变 + 细底光 */
+header { box-shadow:0 2px 8px rgba(60,30,120,.28); }
+header .logo h1 { text-shadow:0 1px 2px rgba(0,0,0,.25); }
+
+/* 调色板：分组标题加彩色小竖条；面板更通透 */
+#palette { width:190px; background:linear-gradient(180deg,#ffffff,#f7f9fd); }
+#palette h2 { display:flex; align-items:center; gap:7px; }
+#palette h2::before { content:""; width:4px; height:13px; border-radius:3px; background:#c2cbe0; }
+
+/* 积木：加立体渐变与更明显的拼插投影（Scratch 那种饱满感） */
+.pal-block { background-image:linear-gradient(180deg, rgba(255,255,255,.18), rgba(0,0,0,.10)); }
+.block { background-image:linear-gradient(180deg, rgba(255,255,255,.16), rgba(0,0,0,.10));
+  box-shadow:0 2px 0 rgba(0,0,0,.22), 0 3px 7px rgba(30,20,60,.16), inset 0 1px rgba(255,255,255,.28); }
+.block.hat { box-shadow:0 2px 0 rgba(0,0,0,.22), 0 4px 10px rgba(30,20,60,.2), inset 0 1px rgba(255,255,255,.3); }
+.pill { box-shadow:inset 0 1px rgba(255,255,255,.3), 0 1px 1px rgba(0,0,0,.12); }
+.pill.call { background-image:linear-gradient(180deg, rgba(255,255,255,.14), rgba(0,0,0,.08)); }
+
+/* 控制块嘴巴：左侧色脊，更像 Scratch 的 C 形包裹 */
+.mouth { border-left:3px solid rgba(255,255,255,.35); }
+
+/* 精灵卡：选中态更突出 */
+.sprite-card { box-shadow:0 1px 3px rgba(40,40,80,.08); }
+.sprite-card.sel { box-shadow:0 0 0 3px rgba(76,151,255,.22), 0 3px 8px rgba(76,151,255,.18); }
+
+/* 画布点阵更柔和 */
+#canvas-wrap { background-image:radial-gradient(#d4dcec 1.4px, transparent 1.4px); }
+
+/* 标签页按钮：选中态加底色条 */
+header .tabs button.active { font-weight:700; }
+
+/* 文本编辑器头部状态徽标 */
+#text-status { font-weight:700; padding:1px 8px; border-radius:999px; }
+#text-status.ok { background:rgba(127,209,127,.16); }
+#text-status.warn { background:rgba(255,180,84,.18); color:#ffb454; }

@@ -127,6 +127,33 @@ function freePort() {
     const highlighted = await page.evaluate(() =>
       document.querySelectorAll("#text-hl code .hl-kw").length > 0);
 
+    // 代码补全：输入前缀 → 下拉出现含匹配项 → Enter 补全
+    await page.fill("#text-out", "fn main() -> int {\n  \n  return 0\n}\n");
+    await page.click("#text-out");
+    await page.evaluate(() => {
+      const ta = document.getElementById("text-out");
+      const p = ta.value.indexOf("\n  \n") + 3; ta.setSelectionRange(p, p); ta.focus();
+    });
+    await page.keyboard.type("spri", { delay: 20 });
+    await page.waitForTimeout(150);
+    const acOpen = await page.evaluate(() => {
+      const pop = document.getElementById("ac-pop");
+      const items = [...document.querySelectorAll("#ac-pop .ac-item .ac-t")].map((e) => e.textContent);
+      return { visible: pop && !pop.hidden, hasSprite: items.some((t) => t.startsWith("sprite")) };
+    });
+    await page.keyboard.press("Enter"); // 接受第一个补全
+    await page.waitForTimeout(60);
+    const acAccepted = await page.evaluate(() => /sprite\w+/.test(document.getElementById("text-out").value));
+    const autocomplete = acOpen.visible && acOpen.hasSprite && acAccepted;
+
+    // 语法诊断：写一段有错误的代码（未定义变量）→ 诊断面板应列出问题
+    await page.fill("#text-out", "fn main() -> int {\n  return zzz_undefined\n}\n");
+    await page.waitForTimeout(700);
+    const diagnostics = await page.evaluate(() => {
+      const list = document.getElementById("diag-list");
+      return list && !list.hidden && list.querySelectorAll(".diag-row").length > 0;
+    });
+
     // 造型画板：切 tab，画几笔，断言有像素
     await page.click('header .tabs button[data-view="costume-view"]');
     await page.waitForSelector("#paint-canvas");
@@ -177,9 +204,9 @@ function freePort() {
     });
     await page.click("#publish-close");
 
-    result = { writeback, reorder, palette, reverse, spriteSwitch, sharedState, preview, costume, parallel, exportOk, highlighted, saveOpen, publishModal, stage, paintedPixels: painted, errors };
+    result = { writeback, reorder, palette, reverse, spriteSwitch, sharedState, preview, costume, parallel, exportOk, highlighted, autocomplete, diagnostics, saveOpen, publishModal, stage, paintedPixels: painted, errors };
     result.ok = writeback && reorder && palette && reverse && spriteSwitch && sharedState && preview && costume && parallel &&
-      exportOk && highlighted && saveOpen && publishModal && stageOk && painted > 100 && errors.length === 0;
+      exportOk && highlighted && autocomplete && diagnostics && saveOpen && publishModal && stageOk && painted > 100 && errors.length === 0;
   } finally {
     await browser.close();
     srv.kill();

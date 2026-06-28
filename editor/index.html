@@ -83,8 +83,9 @@
           <div class="hd"><span data-icon="code" data-icon-size="15"></span>文本 ⇄ 积木（可编辑，由 wasm 编译器反向解析）<span id="text-status"></span></div>
           <div id="text-edit">
             <pre id="text-hl" aria-hidden="true"><code></code></pre>
-            <textarea id="text-out" spellcheck="false"></textarea>
+            <textarea id="text-out" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
           </div>
+          <div id="diag-list" hidden></div>
           <div id="preview-dock">
             <div class="pv-bar">
               <span data-icon="play" data-icon-size="14"></span>实时预览
@@ -131,6 +132,9 @@
     </div>
   </div>
 </div>
+
+<!-- 代码补全下拉（定位到光标处） -->
+<div id="ac-pop" hidden></div>
 
 <script src="./sinc.js"></script>
 <script src="./icons.js"></script>

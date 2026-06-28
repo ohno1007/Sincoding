@@ -521,16 +521,143 @@
     sprite().program = prog;
     selected = prog[0] || null;
     renderCanvas(); // 不回写文本，避免打断输入
-    const n = (res.diags || []).length;
-    setTextStatus(n ? (n + " 个问题（部分有效）") : "已同步 ✓", n ? "warn" : "ok");
+    const diags = res.diags || [];
+    renderDiags(diags);
+    setTextStatus(diags.length ? (diags.length + " 个问题") : "已同步 ✓", diags.length ? "warn" : "ok");
     schedulePreview(); // 文本编辑也实时刷新预览
   }
   textOut.addEventListener("input", () => {
     syncHighlight();                 // 即时高亮
+    showAC();                        // 刷新补全
     clearTimeout(textTimer);
     textTimer = setTimeout(onTextEdited, 250);
   });
-  textOut.addEventListener("scroll", syncHighlight);
+  textOut.addEventListener("scroll", () => { syncHighlight(); if (ac.open) positionAC(); });
+
+  // ---------------- 语法诊断（点行可跳转） ----------------
+  const diagList = document.getElementById("diag-list");
+  function renderDiags(diags) {
+    if (!diagList) return;
+    if (!diags || !diags.length) { diagList.hidden = true; diagList.innerHTML = ""; return; }
+    diagList.hidden = false; diagList.innerHTML = "";
+    const head = el("div", "diag-head");
+    head.append(el("span", null, "⚠ " + diags.length + " 个问题"));
+    diagList.append(head);
+    diags.slice(0, 40).forEach((d) => {
+      const row = el("div", "diag-row");
+      row.append(el("span", "diag-loc", "第" + d.line + "行" + (d.col ? ":" + d.col : "")));
+      row.append(el("span", "diag-msg", d.msg || ""));
+      row.addEventListener("click", () => jumpToLine(d.line, d.col));
+      diagList.append(row);
+    });
+  }
+  function jumpToLine(line, col) {
+    const lines = textOut.value.split("\n");
+    let pos = 0;
+    for (let i = 0; i < line - 1 && i < lines.length; i++) pos += lines[i].length + 1;
+    pos += Math.max(0, (col || 1) - 1);
+    textOut.focus(); textOut.setSelectionRange(pos, pos);
+    const lh = 20; textOut.scrollTop = Math.max(0, (line - 4)) * lh; syncHighlight();
+  }
+
+  // ---------------- 代码补全（单词补全 + 函数签名提示） ----------------
+  const acPop = document.getElementById("ac-pop");
+  const AC_KEYWORDS = ["let", "fn", "if", "else", "while", "for", "in", "return", "extern", "struct", "true", "false"];
+  const AC_TYPES = ["int", "float", "bool", "string", "void"];
+  const ac = { open: false, items: [], sel: 0, word: null };
+
+  function dynamicIdents() {
+    const txt = textOut.value, set = new Set();
+    const res = [
+      /\bfn\s+([A-Za-z_]\w*)/g, /\blet\s+([A-Za-z_]\w*)/g, /\bstruct\s+([A-Za-z_]\w*)/g,
+      /\bfor\s+([A-Za-z_]\w*)\s+in/g, /([A-Za-z_]\w*)\s*:/g,
+    ];
+    res.forEach((re) => { let m; while ((m = re.exec(txt))) set.add(m[1]); });
+    return [...set];
+  }
+  function completionPool() {
+    const out = [];
+    AC_KEYWORDS.forEach((w) => out.push({ text: w, kind: "kw", detail: "关键字" }));
+    AC_TYPES.forEach((w) => out.push({ text: w, kind: "ty", detail: "类型" }));
+    RUNTIME_EXTERN_DECLS.forEach(([name, decl]) => out.push({
+      text: name, kind: "fn",
+      detail: (CALL_LABELS[name] ? CALL_LABELS[name] + " · " : "") + decl.replace(/^extern fn\s+/, ""),
+    }));
+    out.push({ text: "print", kind: "fn", detail: "打印" });
+    dynamicIdents().forEach((id) => out.push({ text: id, kind: "id", detail: "本项目标识符" }));
+    const seen = new Set();
+    return out.filter((e) => (seen.has(e.text) ? false : (seen.add(e.text), true)));
+  }
+  function wordAtCaret() {
+    const pos = textOut.selectionStart;
+    const before = textOut.value.slice(0, pos);
+    const m = before.match(/[A-Za-z_]\w*$/);
+    return m ? { word: m[0], start: pos - m[0].length, end: pos } : null;
+  }
+  function caretXY(ta, pos) {
+    const div = document.createElement("div"), st = getComputedStyle(ta);
+    ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "padding", "border", "boxSizing", "tabSize"]
+      .forEach((p) => { div.style[p] = st[p]; });
+    div.style.position = "absolute"; div.style.visibility = "hidden"; div.style.whiteSpace = "pre";
+    div.textContent = ta.value.slice(0, pos);
+    const span = document.createElement("span"); span.textContent = "​"; div.appendChild(span);
+    document.body.appendChild(div);
+    const x = span.offsetLeft, y = span.offsetTop;
+    document.body.removeChild(div);
+    const r = ta.getBoundingClientRect();
+    return { left: r.left + x - ta.scrollLeft, top: r.top + y - ta.scrollTop };
+  }
+  function positionAC() {
+    if (!ac.word) return;
+    const xy = caretXY(textOut, ac.word.start);
+    acPop.style.left = Math.round(xy.left) + "px";
+    acPop.style.top = Math.round(xy.top + 22) + "px";
+  }
+  function renderAC() {
+    acPop.innerHTML = "";
+    ac.items.forEach((e, i) => {
+      const row = el("div", "ac-item" + (i === ac.sel ? " sel" : ""));
+      row.append(el("span", "ac-k ac-" + e.kind, ({ kw: "关", ty: "型", fn: "f", id: "x" })[e.kind] || "·"));
+      row.append(el("span", "ac-t", e.text));
+      if (e.detail) row.append(el("span", "ac-d", e.detail));
+      row.addEventListener("mousedown", (ev) => { ev.preventDefault(); acceptAC(i); });
+      acPop.append(row);
+    });
+  }
+  function showAC() {
+    if (document.activeElement !== textOut) return hideAC();
+    const w = wordAtCaret();
+    if (!w || w.word.length < 1) return hideAC();
+    const ql = w.word.toLowerCase();
+    const items = completionPool()
+      .filter((e) => e.text !== w.word && e.text.toLowerCase().startsWith(ql))
+      .sort((a, b) => a.text.length - b.text.length).slice(0, 12);
+    if (!items.length) return hideAC();
+    ac.open = true; ac.items = items; ac.sel = 0; ac.word = w;
+    renderAC(); positionAC(); acPop.hidden = false;
+  }
+  function hideAC() { ac.open = false; acPop.hidden = true; }
+  function acceptAC(i) {
+    const e = ac.items[i != null ? i : ac.sel]; if (!e) return;
+    const w = ac.word, v = textOut.value;
+    textOut.value = v.slice(0, w.start) + e.text + v.slice(w.end);
+    const np = w.start + e.text.length;
+    textOut.setSelectionRange(np, np);
+    hideAC(); syncHighlight();
+    clearTimeout(textTimer); textTimer = setTimeout(onTextEdited, 250);
+  }
+  textOut.addEventListener("keydown", (e) => {
+    if (!ac.open) {
+      if (e.key === " " && e.ctrlKey) { e.preventDefault(); showAC(); }
+      return;
+    }
+    if (e.key === "ArrowDown") { e.preventDefault(); ac.sel = (ac.sel + 1) % ac.items.length; renderAC(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); ac.sel = (ac.sel - 1 + ac.items.length) % ac.items.length; renderAC(); }
+    else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); acceptAC(); }
+    else if (e.key === "Escape") { e.preventDefault(); hideAC(); }
+  });
+  textOut.addEventListener("blur", () => setTimeout(hideAC, 150));
+  window._sinAC = { show: showAC, state: ac, accept: acceptAC }; // 测试探针
 
   // ---------------- 一键导出 .sin（自动补运行时声明，使其可独立编译） ----------------
   const RUNTIME_EXTERN_DECLS = [
