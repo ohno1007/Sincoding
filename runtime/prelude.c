@@ -52,6 +52,10 @@ void draw_text(const char* text, double x, double y, long long size) {
     rt_draw_text(text, (float)x, (float)y, (int)size);
 }
 
+void draw_number(long long n, double x, double y, long long size) {
+    rt_draw_int(n, (float)x, (float)y, (int)size);
+}
+
 void sprite_move_to(long long s, double x, double y) {
     rt_goto((rt_sprite)s, (float)x, (float)y);
 }

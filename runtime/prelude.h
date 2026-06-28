@@ -36,6 +36,7 @@ void sprite_draw(long long s);
 // 文字 / 气泡（string 接入运行时）
 void say(long long s, const char* text);
 void draw_text(const char* text, double x, double y, long long size);
+void draw_number(long long n, double x, double y, long long size);
 
 // 输入
 bool key_down(long long key);

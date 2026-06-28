@@ -46,6 +46,10 @@
 
 ![运行时文字/造型](docs/images/runtime_say.png)
 
+**完整可玩小游戏「接球」**（`examples/catch.sin`）：方向键移动挡板接住下落小球。综合用到定长数组（小球句柄与坐标）、字符串/整数文字、键盘输入与计分逻辑。下图为无头运行 60 帧所得，`Score: 2` 证明计分逻辑确实在跑：
+
+![接球小游戏](docs/images/game_catch.png)
+
 阶段 4：同一份 `game.sin` 转 C 后经 emscripten 编成 **WebAssembly**，在浏览器中由 raylib 渲染（最像 Scratch 的发布方式）：
 
 ![阶段4 Web成品](docs/images/stage4_web.png)

@@ -211,6 +211,26 @@ else
     echo "○ 跳过（未检测到 raylib 或 xvfb）"
 fi
 
+# ---- 完整小游戏：接球（数组 + 输入 + 文字 + 计分逻辑） ----
+echo
+echo "=== 完整小游戏「接球」（数组/字符串/输入/计分综合） ==="
+if have_raylib && command -v xvfb-run >/dev/null 2>&1; then
+    CATCH="$WORK/catch"
+    if "$ROOT/tools/build_native.sh" "$ROOT/examples/catch.sin" "$CATCH" >/dev/null 2>&1; then
+        score="$(cd "$WORK" && LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
+                  SIN_MAX_FRAMES=60 SIN_SCREENSHOT="catch.png" \
+                  xvfb-run -a -s "-screen 0 800x600x24" "$CATCH" 2>/dev/null | tail -1)"
+        nonbg="$(python3 "$ROOT/tools/png_nonbg.py" "$WORK/catch.png" 2>/dev/null || echo 0)"
+        if [[ "$score" =~ ^[0-9]+$ && "$score" -ge 1 && "$nonbg" -gt 1000 ]]; then
+            echo "✓ catch: 游戏运行，计分逻辑生效（最终分数 $score，画面像素 $nonbg）"; ((PASS++))
+        else
+            echo "✗ catch: 分数=$score 像素=$nonbg"; ((FAIL++))
+        fi
+    else echo "✗ catch: 构建失败"; ((FAIL++)); fi
+else
+    echo "○ 跳过（未检测到 raylib 或 xvfb）"
+fi
+
 # ---- 阶段 5：JSON 桥接外部 ELF（静态 + 动态） ----
 echo
 echo "=== 阶段 5：JSON 桥接外部 ELF（static + dynamic dlopen） ==="

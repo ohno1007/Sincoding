@@ -14,6 +14,7 @@
 #include "runtime.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "raylib.h"
@@ -217,6 +218,13 @@ void rt_set_scale(rt_sprite s, float scale) {
 void rt_draw_text(const char* text, float x, float y, int size) {
     Vector2 p = stage_to_screen(x, y);
     DrawText(text ? text : "", (int)p.x, (int)p.y, size, BLACK);
+}
+
+void rt_draw_int(long long n, float x, float y, int size) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%lld", n);
+    Vector2 p = stage_to_screen(x, y);
+    DrawText(buf, (int)p.x, (int)p.y, size, BLACK);
 }
 
 // ---------- 声音 ----------

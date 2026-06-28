@@ -1,0 +1,87 @@
+// catch.sin — 一个可玩的小游戏「接球」
+// 方向键左右移动挡板，接住下落的小球得分。
+// 综合运用：定长数组（多个小球的坐标与句柄）、字符串/整数文字、键盘输入、控制流。
+
+extern fn stage_init(w: int, h: int)
+extern fn stage_running() -> bool
+extern fn frame_begin()
+extern fn frame_end()
+extern fn stage_close()
+
+extern fn sprite_new(x: float, y: float, size: float) -> int
+extern fn sprite_move_to(s: int, x: float, y: float)
+extern fn sprite_draw(s: int)
+
+extern fn key_down(key: int) -> bool
+extern fn key_left() -> int
+extern fn key_right() -> int
+
+extern fn draw_text(text: string, x: float, y: float, size: int)
+extern fn draw_number(n: int, x: float, y: float, size: int)
+
+fn abs_f(v: float) -> float {
+    if v < 0.0 {
+        return 0.0 - v
+    }
+    return v
+}
+
+fn main() -> int {
+    stage_init(800, 600)
+
+    let n = 5
+    let balls: int[5]
+    let xs: float[5] = [-220.0, -110.0, 0.0, 110.0, 220.0]
+    let ys: float[5] = [120.0, 40.0, 200.0, 90.0, 10.0]
+    let i = 0
+    while i < n {
+        balls[i] = sprite_new(xs[i], ys[i], 22.0)
+        i = i + 1
+    }
+
+    let paddle = sprite_new(0.0, -250.0, 90.0)
+    let px = 0.0
+    let speed = 22.0
+    let score = 0
+
+    while stage_running() {
+        // 输入：左右移动挡板
+        if key_down(key_left()) {
+            px = px - 14.0
+        }
+        if key_down(key_right()) {
+            px = px + 14.0
+        }
+        sprite_move_to(paddle, px, -250.0)
+
+        // 更新小球：下落，触底则判断是否被接住并重置
+        i = 0
+        while i < n {
+            ys[i] = ys[i] - speed
+            if ys[i] < -240.0 {
+                if abs_f(xs[i] - px) < 55.0 {
+                    score = score + 1     // 接住，得分
+                }
+                ys[i] = 280.0             // 重置到顶部
+            }
+            sprite_move_to(balls[i], xs[i], ys[i])
+            i = i + 1
+        }
+
+        // 渲染
+        frame_begin()
+        i = 0
+        while i < n {
+            sprite_draw(balls[i])
+            i = i + 1
+        }
+        sprite_draw(paddle)
+        draw_text("Score:", -370.0, 270.0, 28)
+        draw_number(score, -250.0, 270.0, 28)
+        frame_end()
+    }
+
+    stage_close()
+    print(score)        // 退出时打印最终分数
+    return 0
+}
