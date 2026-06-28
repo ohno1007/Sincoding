@@ -30,6 +30,17 @@
       canvas.addEventListener("keyup", (e) => {
         const c = KEYMAP[e.key]; if (c !== undefined) this.keys.delete(c);
       });
+      // 鼠标：记录舞台坐标（中心原点、y 向上）与按下状态
+      this.mouse = { x: 0, y: 0, down: false };
+      canvas.addEventListener("mousemove", (e) => {
+        const r = canvas.getBoundingClientRect();
+        const cx = (e.clientX - r.left) * (canvas.width / r.width);
+        const cy = (e.clientY - r.top) * (canvas.height / r.height);
+        this.mouse.x = cx - canvas.width / 2;
+        this.mouse.y = canvas.height / 2 - cy;
+      });
+      canvas.addEventListener("mousedown", () => { this.mouse.down = true; });
+      window.addEventListener("mouseup", () => { this.mouse.down = false; });
     }
 
     stop() { if (this.raf) cancelAnimationFrame(this.raf); this.raf = 0; if (this.world) this.world.running = false; }
@@ -81,6 +92,11 @@
         keys: this.keys, broadcasts: new Set(), nextBroadcasts: new Set(),
         soundCount: 0, console: [],
       };
+      // 画笔持久层：与主画布同尺寸的离屏画布，跨帧保留，每帧贴回主画布
+      this.penCanvas = document.createElement("canvas");
+      this.penCanvas.width = w; this.penCanvas.height = h;
+      this.penCtx = this.penCanvas.getContext("2d");
+      this.penColor = "#000"; this.penSize = 2;
       // 共享全局作用域：所有精灵 actor 的 env 栈底都是同一个 Map，
       // 因此一个精灵对全局数组/结构体/变量的修改对其它精灵立即可见。
       this.structDefs = {};
@@ -262,6 +278,7 @@
       // 每帧只清一次（多精灵共享同一帧）；广播交换由 frameLoop 统一处理
       if (!this.world.frameCleared) {
         this.ctx.fillStyle = "#f5f5f7"; this.ctx.fillRect(0, 0, this.world.W, this.world.H);
+        if (this.penCanvas) this.ctx.drawImage(this.penCanvas, 0, 0); // 贴回画笔持久层
         this.world.frameCleared = true;
       }
     },
@@ -274,14 +291,14 @@
     sprite_y(a) { const s = this.world.sprites[a[0]]; return s ? s.y : 0; },
     sprite_draw(a) {
       const s = this.world.sprites[a[0]]; if (!s) return;
-      const ctx = this.ctx, [cx, cy] = this.s2c(s.x, s.y);
-      let z = s.size;
+      const ctx = this.ctx, [cx, cy] = this.s2c(s.x, s.y), k = s.scale || 1;
+      let z = s.size * k;
       if (s.kind === "image") {
         // 造型纹理：画的就是 sprite_load 的真实图像（与成品同源）
         const t = s.tex;
         const ready = t && (t.tagName === "CANVAS" ? (t.width > 0) : (t.complete && t.naturalWidth > 0));
         if (ready) {
-          const tw = t.naturalWidth || t.width, th = t.naturalHeight || t.height;
+          const tw = (t.naturalWidth || t.width) * k, th = (t.naturalHeight || t.height) * k;
           ctx.drawImage(t, cx - tw / 2, cy - th / 2, tw, th);
           if (s.bubble) { ctx.fillStyle = "#000"; ctx.font = "16px sans-serif"; ctx.fillText(s.bubble, cx + tw / 2, cy - th / 2 - 6); }
           return;
@@ -298,7 +315,23 @@
       if (s.bubble) { ctx.fillStyle = "#000"; ctx.font = "16px sans-serif"; ctx.fillText(s.bubble, cx + z / 2, cy - z / 2 - 6); }
     },
     key_down(a) { return this.world.keys.has(a[0]); },
-    key_left() { return 263; }, key_right() { return 262; }, key_up() { return 265; }, key_down_arrow() { return 264; },
+    key_left() { return 263; }, key_right() { return 262; }, key_up() { return 265; }, key_down_arrow() { return 264; }, key_space() { return 32; },
+    mouse_x() { return this.mouse.x; }, mouse_y() { return this.mouse.y; }, mouse_down() { return this.mouse.down; },
+    // 运动（精灵）
+    sprite_move(a) { const s = this.world.sprites[a[0]]; if (!s) return; const rad = (s.heading || 0) * Math.PI / 180; s.x += Math.cos(rad) * a[1]; s.y += Math.sin(rad) * a[1]; },
+    sprite_turn(a) { const s = this.world.sprites[a[0]]; if (s) s.heading = (s.heading || 0) + a[1]; },
+    sprite_point(a) { const s = this.world.sprites[a[0]]; if (s) s.heading = a[1]; },
+    sprite_scale(a) { const s = this.world.sprites[a[0]]; if (s) s.scale = a[1]; },
+    // 平台 / 工具
+    random_int(a) { let lo = a[0], hi = a[1]; if (lo > hi) { const t = lo; lo = hi; hi = t; } return Math.floor(Math.random() * (hi - lo + 1)) + lo; },
+    screen_width() { return this.world.W; }, screen_height() { return this.world.H; },
+    frame_index() { return this.world.frame; },
+    // 画笔（持久层）
+    pen_clear() { if (this.penCtx) this.penCtx.clearRect(0, 0, this.world.W, this.world.H); },
+    pen_color(a) { this.penColor = "rgb(" + (a[0] | 0) + "," + (a[1] | 0) + "," + (a[2] | 0) + ")"; },
+    pen_size(a) { this.penSize = Math.max(1, a[0]); },
+    pen_line(a) { const p = this.penCtx; if (!p) return; const [x1, y1] = this.s2c(a[0], a[1]), [x2, y2] = this.s2c(a[2], a[3]); p.strokeStyle = this.penColor; p.lineWidth = this.penSize; p.lineCap = "round"; p.beginPath(); p.moveTo(x1, y1); p.lineTo(x2, y2); p.stroke(); },
+    pen_dot(a) { const p = this.penCtx; if (!p) return; const [x, y] = this.s2c(a[0], a[1]); p.fillStyle = this.penColor; p.beginPath(); p.arc(x, y, this.penSize, 0, 2 * Math.PI); p.fill(); },
     say(a) { const s = this.world.sprites[a[0]]; if (s) s.bubble = a[1]; },
     draw_text(a) { const [cx, cy] = this.s2c(a[1], a[2]); this.ctx.fillStyle = "#222"; this.ctx.font = a[3] + "px monospace"; this.ctx.fillText(a[0], cx, cy); },
     draw_number(a) { const [cx, cy] = this.s2c(a[1], a[2]); this.ctx.fillStyle = "#222"; this.ctx.font = a[3] + "px monospace"; this.ctx.fillText(String(a[0]), cx, cy); },

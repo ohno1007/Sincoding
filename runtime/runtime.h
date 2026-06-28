@@ -45,6 +45,19 @@ bool rt_mouse_down(int button);
 float rt_mouse_x(void);
 float rt_mouse_y(void);
 
+// ---------- 平台 / 工具 ----------
+int rt_random(int lo, int hi);    // [lo, hi] 闭区间随机整数
+int rt_screen_w(void);
+int rt_screen_h(void);
+long long rt_frame_index(void);   // 已渲染帧数（计时/动画用）
+
+// ---------- 画笔（持久绘制层，跨帧保留，类似 Scratch 画笔） ----------
+void rt_pen_clear(void);
+void rt_pen_color(int r, int g, int b);
+void rt_pen_size(float w);
+void rt_pen_line(float x1, float y1, float x2, float y2);
+void rt_pen_dot(float x, float y);
+
 // ---------- 外观 ----------
 void rt_say(rt_sprite s, const char* text);  // 气泡：DrawText
 void rt_set_scale(rt_sprite s, float scale);

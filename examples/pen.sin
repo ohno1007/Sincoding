@@ -1,0 +1,47 @@
+// pen.sin —— 画笔（持久绘制层）演示
+// 画笔层跨帧保留：每帧画一条随机彩色线段，线段不断累积成图案。
+// 综合用到：pen_* 画笔 API、random_int / screen 等平台 API、int↔float 转换。
+
+extern fn stage_init(w: int, h: int)
+extern fn stage_running() -> bool
+extern fn frame_begin()
+extern fn frame_end()
+extern fn stage_close()
+
+extern fn pen_clear()
+extern fn pen_color(r: int, g: int, b: int)
+extern fn pen_size(w: float)
+extern fn pen_line(x1: float, y1: float, x2: float, y2: float)
+extern fn pen_dot(x: float, y: float)
+
+extern fn random_int(lo: int, hi: int) -> int
+extern fn screen_width() -> int
+extern fn draw_text(text: string, x: float, y: float, size: int)
+extern fn to_float(n: int) -> float
+
+fn main() -> int {
+    stage_init(600, 600)
+    pen_clear()
+    pen_size(3.0)
+
+    let half = screen_width() / 2 - 40
+    let px = 0.0
+    let py = 0.0
+
+    while stage_running() {
+        let nx = to_float(random_int(0 - half, half))
+        let ny = to_float(random_int(0 - half, half))
+        pen_color(random_int(0, 255), random_int(0, 255), random_int(0, 255))
+        pen_line(px, py, nx, ny)
+        pen_dot(nx, ny)
+        px = nx
+        py = ny
+
+        frame_begin()
+        draw_text("Pen demo", -280.0, 270.0, 28)
+        frame_end()
+    }
+
+    stage_close()
+    return 0
+}

@@ -22,7 +22,7 @@
 | 4 | CMake 多平台（Web → Windows → Android） | ✅ **Web(wasm) / Windows(.exe) / Android(.so) 三平台均打通**（iOS 按设计放弃） |
 | 5 | JSON 桥接外部 ELF（静态 + 动态） | ✅ 静态链接 + 动态 dlopen/dlsym 均打通（含三层类型映射） |
 
-> 设计文档的 6 个阶段（0–5）已全部落地，并各有可复现的验证（`tests/run_tests.sh`，共 46 项）。
+> 设计文档的 6 个阶段（0–5）已全部落地，并各有可复现的验证（`tests/run_tests.sh`，共 48 项）。
 
 核心设计原则：**AST 是唯一真相源**。积木是 AST 的可视化渲染，文本是 AST 的序列化。
 
@@ -73,6 +73,12 @@ python3 tools/ide_server.py 8000      # 浏览器开 http://127.0.0.1:8000/index
 舞台：精灵以其「造型」为外观/纹理（下图左为占位、右为画板里画的造型），可拖动摆位：
 
 ![阶段3 舞台](docs/images/stage3_stage.png)
+
+**画笔持久层 + 平台 API**（`examples/pen.sin`）：`pen_*` 在一张**跨帧保留**的绘制层上画线/点，
+每帧贴回屏幕，笔迹不断累积；配合 `random_int` / `screen_width` 等平台 API。下图为无头跑 60 帧
+所得（随机彩色线段累积成网）：
+
+![画笔演示](docs/images/pen_demo.png)
 
 字符串接入运行时：PNG 造型经 `sprite_load` 当纹理、`say` 气泡、`draw_text` 画文字（`examples/say.sin` 无头运行）：
 

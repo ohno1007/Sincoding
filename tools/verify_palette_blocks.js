@@ -42,6 +42,24 @@ const body = [
     Ex(C("say", Vr("s"), S("你好"))),
     Ex(C("draw_text", S("文字"), F(0), F(0), I(24))),
     Ex(C("draw_number", Vr("x"), F(0), F(0), I(24))),
+    // 运动（朝向）
+    Ex(C("sprite_move", Vr("s"), F(10))),
+    Ex(C("sprite_turn", Vr("s"), F(15))),
+    Ex(C("sprite_point", Vr("s"), F(90))),
+    Ex(C("sprite_scale", Vr("s"), F(1))),
+    // 平台 API
+    { block: "if", cond: C("mouse_down"), then: [] },
+    L("mx", "float", C("mouse_x")), L("my", "float", C("mouse_y")),
+    L("r", "int", C("random_int", I(1), I(10))),
+    L("sw", "int", C("screen_width")), L("sh", "int", C("screen_height")),
+    L("fi", "int", C("frame_index")),
+    { block: "if", cond: C("key_down", C("key_space")), then: [] },
+    // 画笔
+    Ex(C("pen_clear")),
+    Ex(C("pen_color", I(255), I(0), I(0))),
+    Ex(C("pen_size", F(2))),
+    Ex(C("pen_line", F(0), F(0), F(100), F(100))),
+    Ex(C("pen_dot", F(0), F(0))),
     Ex(C("frame_end")),
   ] },
   Ex(C("stage_close")),
@@ -60,6 +78,14 @@ const externs = [
   "extern fn play_sound(snd: int)", "extern fn play_tone(freq: int, ms: int)",
   "extern fn broadcast(message: string)", "extern fn received(message: string) -> bool",
   "extern fn to_float(n: int) -> float", "extern fn to_int(f: float) -> int",
+  "extern fn key_space() -> int", "extern fn mouse_x() -> float", "extern fn mouse_y() -> float",
+  "extern fn mouse_down() -> bool",
+  "extern fn sprite_move(s: int, steps: float)", "extern fn sprite_turn(s: int, degrees: float)",
+  "extern fn sprite_point(s: int, degrees: float)", "extern fn sprite_scale(s: int, k: float)",
+  "extern fn random_int(lo: int, hi: int) -> int", "extern fn screen_width() -> int",
+  "extern fn screen_height() -> int", "extern fn frame_index() -> int",
+  "extern fn pen_clear()", "extern fn pen_color(r: int, g: int, b: int)", "extern fn pen_size(w: float)",
+  "extern fn pen_line(x1: float, y1: float, x2: float, y2: float)", "extern fn pen_dot(x: float, y: float)",
 ];
 const src = externs.join("\n") + "\n\n" + BlockModel.modelToSource(model);
 const out = process.argv[2] || "/tmp/palette_blocks.sin";

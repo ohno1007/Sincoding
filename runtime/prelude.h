@@ -44,6 +44,29 @@ long long key_left(void);
 long long key_right(void);
 long long key_up(void);
 long long key_down_arrow(void);
+long long key_space(void);
+double mouse_x(void);
+double mouse_y(void);
+bool mouse_down(void);
+
+// 运动（精灵，Scratch 风格）
+void sprite_move(long long s, double steps);   // 沿当前朝向前进
+void sprite_turn(long long s, double degrees);
+void sprite_point(long long s, double degrees);
+void sprite_scale(long long s, double k);
+
+// 平台 / 工具
+long long random_int(long long lo, long long hi);
+long long screen_width(void);
+long long screen_height(void);
+long long frame_index(void);
+
+// 画笔（持久绘制层，跨帧保留）
+void pen_clear(void);
+void pen_color(long long r, long long g, long long b);
+void pen_size(double w);
+void pen_line(double x1, double y1, double x2, double y2);
+void pen_dot(double x, double y);
 
 // 声音
 long long sound_load(const char* path);

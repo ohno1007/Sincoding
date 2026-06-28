@@ -330,6 +330,20 @@ if "$ROOT/tools/build_native.sh" "$ROOT/examples/guardian.sin" "$GUARD" >/dev/nu
     else echo "✗ guardian: 运行失败"; ((FAIL++)); fi
 else echo "✗ guardian: 构建失败"; ((FAIL++)); fi
 
+# ---- 画笔持久层（pen.sin 无头跑，截图应有大量非背景像素=笔迹累积） ----
+echo
+echo "=== 画笔：pen.sin（持久绘制层 + 平台 API random/screen） ==="
+PENBIN="$WORK/pen"
+if "$ROOT/tools/build_native.sh" "$ROOT/examples/pen.sin" "$PENBIN" >/dev/null 2>&1; then
+    if ( cd "$WORK" && SIN_MAX_FRAMES=60 SIN_SCREENSHOT=pen.png \
+         xvfb-run -a -s "-screen 0 600x600x24" "$PENBIN" >/dev/null 2>&1 ) && [[ -f "$WORK/pen.png" ]]; then
+        nb="$(python3 "$ROOT/tools/png_nonbg.py" "$WORK/pen.png" 2>/dev/null || echo 0)"
+        if [[ "${nb:-0}" -gt 2000 ]]; then
+            echo "✓ pen: 画笔持久层累积笔迹（非背景像素 $nb）"; ((PASS++))
+        else echo "✗ pen: 笔迹像素过少（$nb）"; ((FAIL++)); fi
+    else echo "✗ pen: 运行/截图失败"; ((FAIL++)); fi
+else echo "✗ pen: 构建失败"; ((FAIL++)); fi
+
 # ---- Android APK 打包（aapt2 链接 + 签名，需 Android SDK build-tools） ----
 echo
 echo "=== Android APK：guardian.sin → 签名 APK（需 SDK build-tools） ==="

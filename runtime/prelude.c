@@ -70,6 +70,29 @@ long long key_left(void)       { return RT_KEY_LEFT; }
 long long key_right(void)      { return RT_KEY_RIGHT; }
 long long key_up(void)         { return RT_KEY_UP; }
 long long key_down_arrow(void) { return RT_KEY_DOWN; }
+long long key_space(void)      { return RT_KEY_SPACE; }
+
+double mouse_x(void) { return (double)rt_mouse_x(); }
+double mouse_y(void) { return (double)rt_mouse_y(); }
+bool mouse_down(void) { return rt_mouse_down(0); }
+
+void sprite_move(long long s, double steps)   { rt_move((rt_sprite)s, (float)steps); }
+void sprite_turn(long long s, double degrees) { rt_turn((rt_sprite)s, (float)degrees); }
+void sprite_point(long long s, double degrees){ rt_point((rt_sprite)s, (float)degrees); }
+void sprite_scale(long long s, double k)      { rt_set_scale((rt_sprite)s, (float)k); }
+
+long long random_int(long long lo, long long hi) { return (long long)rt_random((int)lo, (int)hi); }
+long long screen_width(void)  { return (long long)rt_screen_w(); }
+long long screen_height(void) { return (long long)rt_screen_h(); }
+long long frame_index(void)   { return rt_frame_index(); }
+
+void pen_clear(void) { rt_pen_clear(); }
+void pen_color(long long r, long long g, long long b) { rt_pen_color((int)r, (int)g, (int)b); }
+void pen_size(double w) { rt_pen_size((float)w); }
+void pen_line(double x1, double y1, double x2, double y2) {
+    rt_pen_line((float)x1, (float)y1, (float)x2, (float)y2);
+}
+void pen_dot(double x, double y) { rt_pen_dot((float)x, (float)y); }
 
 long long sound_load(const char* path) { return (long long)rt_sound_load(path); }
 void play_sound(long long snd) { rt_sound_play((rt_sound)snd); }

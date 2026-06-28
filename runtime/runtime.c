@@ -54,6 +54,13 @@ static int g_events_next_n = 0;
 
 static int g_stage_w = 800, g_stage_h = 600;
 static bool g_audio_inited = false;
+static long long g_frame_index = 0;
+
+// 画笔持久层：跨帧保留的离屏画布（RenderTexture），每帧开始时贴回屏幕
+static RenderTexture2D g_pen;
+static bool g_pen_ready = false;
+static Color g_pen_color = { 0, 0, 0, 255 };
+static float g_pen_size = 2.0f;
 
 // 舞台坐标 → 屏幕坐标（中心原点、y 向上 → 左上原点、y 向下）
 static Vector2 stage_to_screen(float sx, float sy) {
@@ -71,6 +78,13 @@ void rt_stage_init(int width, int height, const char* title) {
     InitAudioDevice();
     g_audio_inited = true;
     SetTargetFPS(60);
+    // 画笔持久层（透明底）
+    g_pen = LoadRenderTexture(width, height);
+    BeginTextureMode(g_pen);
+    ClearBackground(BLANK);
+    EndTextureMode();
+    g_pen_ready = true;
+    g_frame_index = 0;
 }
 
 bool rt_stage_running(void) {
@@ -85,10 +99,16 @@ void rt_frame_begin(void) {
 
     BeginDrawing();
     ClearBackground(RAYWHITE);
+    // 贴回画笔持久层（RenderTexture 的 y 轴与屏幕相反，源矩形高取负翻转）
+    if (g_pen_ready) {
+        Rectangle src = { 0, 0, (float)g_pen.texture.width, -(float)g_pen.texture.height };
+        DrawTextureRec(g_pen.texture, src, (Vector2){ 0, 0 }, WHITE);
+    }
 }
 
 void rt_frame_end(void) {
     EndDrawing();
+    g_frame_index++;
 }
 
 void rt_stage_close(void) {
@@ -96,6 +116,7 @@ void rt_stage_close(void) {
         if (g_sprites[i].loaded) UnloadTexture(g_sprites[i].tex);
     for (int i = 0; i < g_sound_count; i++)
         if (g_sound_loaded[i]) UnloadSound(g_sounds[i]);
+    if (g_pen_ready) { UnloadRenderTexture(g_pen); g_pen_ready = false; }
     if (g_audio_inited) CloseAudioDevice();
     CloseWindow();
 }
@@ -199,6 +220,41 @@ float rt_mouse_x(void) {
 }
 float rt_mouse_y(void) {
     return (float)g_stage_h * 0.5f - (float)GetMouseY();
+}
+
+// ---------- 平台 / 工具 ----------
+int rt_random(int lo, int hi) {
+    if (lo > hi) { int t = lo; lo = hi; hi = t; }
+    return GetRandomValue(lo, hi);
+}
+int rt_screen_w(void) { return g_stage_w; }
+int rt_screen_h(void) { return g_stage_h; }
+long long rt_frame_index(void) { return g_frame_index; }
+
+// ---------- 画笔（持久层） ----------
+void rt_pen_clear(void) {
+    if (!g_pen_ready) return;
+    BeginTextureMode(g_pen);
+    ClearBackground(BLANK);
+    EndTextureMode();
+}
+void rt_pen_color(int r, int g, int b) {
+    g_pen_color = (Color){ (unsigned char)r, (unsigned char)g, (unsigned char)b, 255 };
+}
+void rt_pen_size(float w) { g_pen_size = w < 1.0f ? 1.0f : w; }
+void rt_pen_line(float x1, float y1, float x2, float y2) {
+    if (!g_pen_ready) return;
+    Vector2 a = stage_to_screen(x1, y1), b = stage_to_screen(x2, y2);
+    BeginTextureMode(g_pen);
+    DrawLineEx(a, b, g_pen_size, g_pen_color);
+    EndTextureMode();
+}
+void rt_pen_dot(float x, float y) {
+    if (!g_pen_ready) return;
+    Vector2 p = stage_to_screen(x, y);
+    BeginTextureMode(g_pen);
+    DrawCircleV(p, g_pen_size, g_pen_color);
+    EndTextureMode();
 }
 
 // ---------- 外观 ----------

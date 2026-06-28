@@ -219,6 +219,26 @@
   }
 
   // ---------------- 积木渲染 ----------------
+  // 运行时函数的中文显示名（仅用于积木 UI；AST 与文本仍是英文，保证「AST 唯一真相」）
+  const CALL_LABELS = {
+    stage_init: "初始化舞台", stage_running: "舞台运行中?", frame_begin: "开始绘制",
+    frame_end: "结束绘制", stage_close: "关闭舞台",
+    sprite_new: "新建精灵", sprite_load: "载入造型", sprite_move_to: "移动到",
+    sprite_x: "精灵x", sprite_y: "精灵y", sprite_draw: "画出精灵",
+    sprite_move: "前进", sprite_turn: "右转", sprite_point: "面向", sprite_scale: "设大小",
+    say: "说", draw_text: "画文字", draw_number: "画数字",
+    key_down: "按下键?", key_left: "←键", key_right: "→键", key_up: "↑键",
+    key_down_arrow: "↓键", key_space: "空格键",
+    mouse_x: "鼠标x", mouse_y: "鼠标y", mouse_down: "按下鼠标?",
+    sound_load: "载入声音", play_sound: "播放声音", play_tone: "播放音调",
+    broadcast: "广播", received: "收到?",
+    to_float: "转浮点", to_int: "取整",
+    random_int: "随机数", screen_width: "屏幕宽", screen_height: "屏幕高", frame_index: "帧数",
+    pen_clear: "清空画笔", pen_color: "设笔颜色", pen_size: "设笔粗细",
+    pen_line: "画线", pen_dot: "画点", print: "打印",
+  };
+  const callLabel = (callee) => CALL_LABELS[callee] || callee;
+
   function renderExpr(node) {
     switch (node.block) {
       case "int":
@@ -258,7 +278,9 @@
       }
       case "call": {
         const p = el("span", "pill call");
-        p.append(el("span", "kw", node.callee + " ("));
+        const label = callLabel(node.callee);
+        if (!node.args.length) { p.append(el("span", "kw", label)); return p; } // 无参：仅显示中文名
+        p.append(el("span", "kw", label + " ("));
         node.args.forEach((a, i) => { if (i) p.append(el("span", "kw", ",")); p.append(renderExpr(a)); });
         p.append(el("span", "kw", ")"));
         return p;
@@ -538,6 +560,23 @@
     ["received", "extern fn received(message: string) -> bool"],
     ["to_float", "extern fn to_float(n: int) -> float"],
     ["to_int", "extern fn to_int(f: float) -> int"],
+    ["key_space", "extern fn key_space() -> int"],
+    ["mouse_x", "extern fn mouse_x() -> float"],
+    ["mouse_y", "extern fn mouse_y() -> float"],
+    ["mouse_down", "extern fn mouse_down() -> bool"],
+    ["sprite_move", "extern fn sprite_move(s: int, steps: float)"],
+    ["sprite_turn", "extern fn sprite_turn(s: int, degrees: float)"],
+    ["sprite_point", "extern fn sprite_point(s: int, degrees: float)"],
+    ["sprite_scale", "extern fn sprite_scale(s: int, k: float)"],
+    ["random_int", "extern fn random_int(lo: int, hi: int) -> int"],
+    ["screen_width", "extern fn screen_width() -> int"],
+    ["screen_height", "extern fn screen_height() -> int"],
+    ["frame_index", "extern fn frame_index() -> int"],
+    ["pen_clear", "extern fn pen_clear()"],
+    ["pen_color", "extern fn pen_color(r: int, g: int, b: int)"],
+    ["pen_size", "extern fn pen_size(w: float)"],
+    ["pen_line", "extern fn pen_line(x1: float, y1: float, x2: float, y2: float)"],
+    ["pen_dot", "extern fn pen_dot(x: float, y: float)"],
   ];
   function exportSource() {
     const model = fullModel();
@@ -836,7 +875,7 @@
     to_float: () => ({ block: "let", name: "f", type: "float", len: 0, value: C("to_float", I(0)) }),
     // 运动（精灵）
     sprite_new: () => ({ block: "let", name: "s", type: "int", len: 0, value: C("sprite_new", F(0), F(0), F(40)) }),
-    sprite_move: () => Ex(C("sprite_move_to", Vr("s"), F(0), F(0))),
+    sprite_move_to: () => Ex(C("sprite_move_to", Vr("s"), F(0), F(0))),
     sprite_x: () => ({ block: "let", name: "px", type: "float", len: 0, value: C("sprite_x", Vr("s")) }),
     sprite_y: () => ({ block: "let", name: "py", type: "float", len: 0, value: C("sprite_y", Vr("s")) }),
     // 外观
@@ -861,6 +900,23 @@
     if_received: () => ({ block: "if", cond: C("received", S("go")), then: [] }),
     play_tone: () => Ex(C("play_tone", I(440), I(200))),
     play_sound: () => Ex(C("play_sound", I(0))),
+    // 运动（朝向）
+    sprite_move: () => Ex(C("sprite_move", Vr("s"), F(10))),
+    sprite_turn: () => Ex(C("sprite_turn", Vr("s"), F(15))),
+    sprite_point: () => Ex(C("sprite_point", Vr("s"), F(90))),
+    sprite_scale: () => Ex(C("sprite_scale", Vr("s"), F(1))),
+    // 画笔
+    pen_clear: () => Ex(C("pen_clear")),
+    pen_color: () => Ex(C("pen_color", I(255), I(0), I(0))),
+    pen_size: () => Ex(C("pen_size", F(2))),
+    pen_line: () => Ex(C("pen_line", F(0), F(0), F(100), F(100))),
+    pen_dot: () => Ex(C("pen_dot", F(0), F(0))),
+    // 平台 API
+    if_mouse: () => ({ block: "if", cond: C("mouse_down"), then: [] }),
+    let_mouse_x: () => ({ block: "let", name: "mx", type: "float", len: 0, value: C("mouse_x") }),
+    let_mouse_y: () => ({ block: "let", name: "my", type: "float", len: 0, value: C("mouse_y") }),
+    let_random: () => ({ block: "let", name: "r", type: "int", len: 0, value: C("random_int", I(1), I(10)) }),
+    let_screen_w: () => ({ block: "let", name: "w", type: "int", len: 0, value: C("screen_width") }),
   };
   function addStmt(kind) {
     if (!selected || !selected.body) return;
@@ -913,7 +969,11 @@
     item("关闭舞台", "#FFAB19", () => addStmt("stage_close"), "stop");
     pal.append(el("h2", null, "运动（精灵）"));
     item("新建精灵", "#4C97FF", () => addStmt("sprite_new"));
-    item("移动精灵到 x y", "#4C97FF", () => addStmt("sprite_move"), "move");
+    item("移动精灵到 x y", "#4C97FF", () => addStmt("sprite_move_to"), "move");
+    item("前进 步", "#4C97FF", () => addStmt("sprite_move"), "move");
+    item("右转 度", "#4C97FF", () => addStmt("sprite_turn"));
+    item("面向 度", "#4C97FF", () => addStmt("sprite_point"));
+    item("设大小 ×", "#4C97FF", () => addStmt("sprite_scale"));
     item("取精灵 x", "#4C97FF", () => addStmt("sprite_x"));
     item("取精灵 y", "#4C97FF", () => addStmt("sprite_y"));
     pal.append(el("h2", null, "外观"));
@@ -922,6 +982,18 @@
     item("说 …", "#9966FF", () => addStmt("say"));
     item("画文字", "#9966FF", () => addStmt("draw_text"));
     item("画数字", "#9966FF", () => addStmt("draw_number"));
+    pal.append(el("h2", null, "画笔"));
+    item("清空画笔", "#0FBD8C", () => addStmt("pen_clear"), "trash");
+    item("设笔颜色 r g b", "#0FBD8C", () => addStmt("pen_color"), "palette");
+    item("设笔粗细", "#0FBD8C", () => addStmt("pen_size"), "pencil");
+    item("画线 x1y1→x2y2", "#0FBD8C", () => addStmt("pen_line"), "pencil");
+    item("画点 x y", "#0FBD8C", () => addStmt("pen_dot"), "pencil");
+    pal.append(el("h2", null, "平台 API"));
+    item("如果按下鼠标", "#5CB1D6", () => addStmt("if_mouse"));
+    item("取鼠标 x", "#5CB1D6", () => addStmt("let_mouse_x"));
+    item("取鼠标 y", "#5CB1D6", () => addStmt("let_mouse_y"));
+    item("随机数 1..10", "#5CB1D6", () => addStmt("let_random"));
+    item("取屏幕宽", "#5CB1D6", () => addStmt("let_screen_w"));
     pal.append(el("h2", null, "事件 / 声音"));
     item("当按← 如果", "#FFBF00", () => addStmt("if_key"));
     item("当按→ 如果", "#FFBF00", () => addStmt("if_key_right"));
