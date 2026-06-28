@@ -42,6 +42,10 @@
 
 ![阶段3 舞台](docs/images/stage3_stage.png)
 
+字符串接入运行时：PNG 造型经 `sprite_load` 当纹理、`say` 气泡、`draw_text` 画文字（`examples/say.sin` 无头运行）：
+
+![运行时文字/造型](docs/images/runtime_say.png)
+
 阶段 4：同一份 `game.sin` 转 C 后经 emscripten 编成 **WebAssembly**，在浏览器中由 raylib 渲染（最像 Scratch 的发布方式）：
 
 ![阶段4 Web成品](docs/images/stage4_web.png)

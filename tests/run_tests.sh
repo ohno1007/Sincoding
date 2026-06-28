@@ -188,6 +188,26 @@ else
     echo "○ 跳过（未检测到 raylib 或 xvfb）"
 fi
 
+# ---- 运行时：字符串接入（sprite_load PNG + say + draw_text） ----
+echo
+echo "=== 运行时：字符串接入（加载 PNG 造型 + 文字渲染） ==="
+if have_raylib && command -v xvfb-run >/dev/null 2>&1; then
+    SAY="$WORK/say"
+    if "$ROOT/tools/build_native.sh" "$ROOT/examples/say.sin" "$SAY" >/dev/null 2>&1; then
+        cp "$ROOT/examples/assets/ball.png" "$WORK/"
+        if (cd "$WORK" && LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
+           SIN_MAX_FRAMES=8 SIN_SCREENSHOT="say.png" \
+           xvfb-run -a -s "-screen 0 800x600x24" "$SAY" >/dev/null 2>&1); then
+            nonbg="$(python3 "$ROOT/tools/png_nonbg.py" "$WORK/say.png" 2>/dev/null || echo 0)"
+            if [[ "$nonbg" -gt 1000 ]]; then
+                echo "✓ say: 加载 PNG 造型为纹理 + say/draw_text 文字渲染（非背景像素 $nonbg）"; ((PASS++))
+            else echo "✗ say: 渲染疑似空白（$nonbg）"; ((FAIL++)); fi
+        else echo "✗ say: 无头运行失败"; ((FAIL++)); fi
+    else echo "✗ say: 构建失败"; ((FAIL++)); fi
+else
+    echo "○ 跳过（未检测到 raylib 或 xvfb）"
+fi
+
 # ---- 阶段 5：JSON 桥接外部 ELF（静态 + 动态） ----
 echo
 echo "=== 阶段 5：JSON 桥接外部 ELF（static + dynamic dlopen） ==="

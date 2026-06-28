@@ -108,7 +108,11 @@ while cond {
 
 | 函数 | 说明 |
 |---|---|
-| `print(x)` | 打印 `int` / `float` / `bool`，自动换行 |
+| `print(x)` | 打印 `int` / `float` / `bool` / `string`，自动换行 |
+
+运行时（图形）函数通过 `extern fn` 接入（实现在 `runtime/prelude`），例如：
+`sprite_load(path: string)` 加载 PNG 造型为纹理、`say(s, text: string)` 气泡、
+`draw_text(text: string, x, y, size)` 画文字，见 [`examples/say.sin`](../examples/say.sin)。
 
 > 图形/输入/声音等 Scratch API 通过 `extern fn` 接入（见上文 FFI 一节），
 > 实现在 `runtime/prelude`。后续会再通过 JSON 桥接外部 ELF 扩展更多函数。

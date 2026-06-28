@@ -1,0 +1,30 @@
+// say.sin — 字符串接入运行时：加载 PNG 造型、说话气泡、画文字
+// 闭合「造型画板画的 PNG → sprite_load 当纹理 → 运行时渲染」。
+extern fn stage_init(w: int, h: int)
+extern fn stage_running() -> bool
+extern fn frame_begin()
+extern fn frame_end()
+extern fn stage_close()
+
+extern fn sprite_load(path: string) -> int
+extern fn sprite_move_to(s: int, x: float, y: float)
+extern fn sprite_draw(s: int)
+extern fn say(s: int, text: string)
+extern fn draw_text(text: string, x: float, y: float, size: int)
+
+fn main() -> int {
+    stage_init(800, 600)
+    let hero = sprite_load("ball.png")   // 造型 PNG 作为纹理
+    sprite_move_to(hero, 0.0, 0.0)
+
+    while stage_running() {
+        frame_begin()
+        say(hero, "Hi!")                 // 角色说话气泡
+        sprite_draw(hero)
+        draw_text("Sincoding", -130.0, -200.0, 36)  // 舞台上画标题文字
+        frame_end()
+    }
+
+    stage_close()
+    return 0
+}

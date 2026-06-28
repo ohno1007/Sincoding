@@ -26,10 +26,16 @@ void stage_close(void);
 
 // 方块角色（无需图片资源）
 long long sprite_new(double x, double y, double size);
+// 从 PNG 造型加载纹理角色（造型画板导出的 PNG 即可直接用）
+long long sprite_load(const char* path);
 void sprite_move_to(long long s, double x, double y);
 double sprite_x(long long s);
 double sprite_y(long long s);
 void sprite_draw(long long s);
+
+// 文字 / 气泡（string 接入运行时）
+void say(long long s, const char* text);
+void draw_text(const char* text, double x, double y, long long size);
 
 // 输入
 bool key_down(long long key);

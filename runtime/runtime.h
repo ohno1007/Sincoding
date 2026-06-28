@@ -48,6 +48,7 @@ float rt_mouse_y(void);
 // ---------- 外观 ----------
 void rt_say(rt_sprite s, const char* text);  // 气泡：DrawText
 void rt_set_scale(rt_sprite s, float scale);
+void rt_draw_text(const char* text, float x, float y, int size); // 在舞台坐标处画文字
 
 // ---------- 声音 ----------
 typedef int rt_sound;

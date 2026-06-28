@@ -214,6 +214,11 @@ void rt_set_scale(rt_sprite s, float scale) {
     if (sprite_valid(s)) g_sprites[s].scale = scale;
 }
 
+void rt_draw_text(const char* text, float x, float y, int size) {
+    Vector2 p = stage_to_screen(x, y);
+    DrawText(text ? text : "", (int)p.x, (int)p.y, size, BLACK);
+}
+
 // ---------- 声音 ----------
 rt_sound rt_sound_load(const char* path) {
     if (g_sound_count >= RT_MAX_SOUNDS) return -1;

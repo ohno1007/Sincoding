@@ -42,6 +42,16 @@ long long sprite_new(double x, double y, double size) {
     return (long long)rt_sprite_rect((float)x, (float)y, (float)size);
 }
 
+long long sprite_load(const char* path) {
+    return (long long)rt_sprite_load(path);
+}
+
+void say(long long s, const char* text) { rt_say((rt_sprite)s, text); }
+
+void draw_text(const char* text, double x, double y, long long size) {
+    rt_draw_text(text, (float)x, (float)y, (int)size);
+}
+
 void sprite_move_to(long long s, double x, double y) {
     rt_goto((rt_sprite)s, (float)x, (float)y);
 }
