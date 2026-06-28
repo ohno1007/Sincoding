@@ -303,81 +303,92 @@
   };
   const callLabel = (callee) => CALL_LABELS[callee] || callee;
 
-  function renderExpr(node) {
+  // 表达式渲染。replace(newNode) 若提供，则该元素成为可放置 reporter 的「槽位」。
+  function renderExpr(node, replace) {
+    let out;
     switch (node.block) {
       case "int":
-        return field(() => String(node.value),
-          (s) => { const n = parseInt(s, 10); node.value = isNaN(n) ? 0 : n; }, "lit");
+        out = field(() => String(node.value),
+          (s) => { const n = parseInt(s, 10); node.value = isNaN(n) ? 0 : n; }, "lit"); break;
       case "float":
-        return field(() => String(node.value),
-          (s) => { const n = parseFloat(s); node.value = isNaN(n) ? 0 : n; }, "lit");
+        out = field(() => String(node.value),
+          (s) => { const n = parseFloat(s); node.value = isNaN(n) ? 0 : n; }, "lit"); break;
       case "bool": {
-        const p = el("span", "pill lit", node.value ? "true" : "false");
-        p.style.cursor = "pointer";
-        p.addEventListener("pointerdown", (e) => e.stopPropagation());
-        p.addEventListener("click", () => { node.value = !node.value; p.textContent = node.value ? "true" : "false"; refreshText(); });
-        return p;
+        out = el("span", "pill lit", node.value ? "true" : "false");
+        out.style.cursor = "pointer";
+        out.addEventListener("pointerdown", (e) => e.stopPropagation());
+        out.addEventListener("click", () => { node.value = !node.value; out.textContent = node.value ? "true" : "false"; refreshText(); });
+        break;
       }
       case "string": {
-        const p = el("span", "pill lit");
-        p.append(el("span", "kw", '"'));
-        p.append(field(() => node.value, (s) => { node.value = s; }));
-        p.append(el("span", "kw", '"'));
-        return p;
+        out = el("span", "pill lit");
+        out.append(el("span", "kw", '"'), field(() => node.value, (s) => { node.value = s; }), el("span", "kw", '"'));
+        break;
       }
       case "var": {
-        const p = el("span", "pill varref");
-        p.append(field(() => node.name, (s) => { node.name = s || "x"; }));
-        return p;
+        out = el("span", "pill varref");
+        out.append(field(() => node.name, (s) => { node.name = s || "x"; }));
+        break;
       }
       case "unary": {
-        const p = el("span", "pill op");
-        p.append(el("span", "kw", node.op), renderExpr(node.operand));
-        return p;
+        out = el("span", "pill op");
+        out.append(el("span", "kw", node.op), renderExpr(node.operand, (n) => { node.operand = n; render(); }));
+        break;
       }
       case "binary": {
-        const p = el("span", "pill op");
-        p.append(renderExpr(node.lhs), el("span", "kw", node.op), renderExpr(node.rhs));
-        return p;
+        out = el("span", "pill op");
+        out.append(renderExpr(node.lhs, (n) => { node.lhs = n; render(); }),
+          el("span", "kw", node.op),
+          renderExpr(node.rhs, (n) => { node.rhs = n; render(); }));
+        break;
       }
       case "call": {
-        const p = el("span", "pill call");
+        out = el("span", "pill call");
         const label = callLabel(node.callee);
-        if (!node.args.length) { p.append(el("span", "kw", label)); return p; } // 无参：仅显示中文名
-        p.append(el("span", "kw", label + " ("));
-        node.args.forEach((a, i) => { if (i) p.append(el("span", "kw", ",")); p.append(renderExpr(a)); });
-        p.append(el("span", "kw", ")"));
-        return p;
+        if (!node.args.length) { out.append(el("span", "kw", label)); break; }
+        out.append(el("span", "kw", label + " ("));
+        node.args.forEach((a, i) => { if (i) out.append(el("span", "kw", ",")); out.append(renderExpr(a, (n) => { node.args[i] = n; render(); })); });
+        out.append(el("span", "kw", ")"));
+        break;
       }
       case "index": {
-        const p = el("span", "pill varref");
-        p.append(renderExpr(node.arr), el("span", "kw", "["), renderExpr(node.idx), el("span", "kw", "]"));
-        return p;
+        out = el("span", "pill varref");
+        out.append(renderExpr(node.arr, (n) => { node.arr = n; render(); }), el("span", "kw", "["),
+          renderExpr(node.idx, (n) => { node.idx = n; render(); }), el("span", "kw", "]"));
+        break;
       }
       case "array": {
-        const p = el("span", "pill lit");
-        p.append(el("span", "kw", "["));
-        node.elems.forEach((a, i) => { if (i) p.append(el("span", "kw", ",")); p.append(renderExpr(a)); });
-        p.append(el("span", "kw", "]"));
-        return p;
+        out = el("span", "pill lit");
+        out.append(el("span", "kw", "["));
+        node.elems.forEach((a, i) => { if (i) out.append(el("span", "kw", ",")); out.append(renderExpr(a, (n) => { node.elems[i] = n; render(); })); });
+        out.append(el("span", "kw", "]"));
+        break;
       }
       case "field": {
-        const p = el("span", "pill varref");
-        p.append(renderExpr(node.obj), el("span", "kw", "."), el("span", null, node.name));
-        return p;
+        out = el("span", "pill varref");
+        out.append(renderExpr(node.obj, (n) => { node.obj = n; render(); }), el("span", "kw", "."), el("span", null, node.name));
+        break;
       }
       case "structlit": {
-        const p = el("span", "pill call");
-        p.append(el("span", "kw", node.typeName + " {"));
+        out = el("span", "pill call");
+        out.append(el("span", "kw", node.typeName + " {"));
         node.fields.forEach((f, i) => {
-          if (i) p.append(el("span", "kw", ","));
-          p.append(el("span", "kw", f.name + ":"), renderExpr(f.value));
+          if (i) out.append(el("span", "kw", ","));
+          out.append(el("span", "kw", f.name + ":"), renderExpr(f.value, (n) => { f.value = n; render(); }));
         });
-        p.append(el("span", "kw", "}"));
-        return p;
+        out.append(el("span", "kw", "}"));
+        break;
       }
+      default: out = el("span", "pill lit", "?");
     }
-    return el("span", "pill lit", "?");
+    if (replace) {
+      out.classList.add("expr-slot");
+      out._slot = { node, replace };
+      out.addEventListener("contextmenu", (e) => {   // 右键把槽位重置为默认数字（撤销嵌套）
+        e.preventDefault(); e.stopPropagation(); replace({ block: "int", value: 0 });
+      });
+    }
+    return out;
   }
 
   function renderStmtList(list) {
@@ -398,95 +409,117 @@
         const t = node.type + (node.len > 0 ? "[" + node.len + "]" : "");
         row.append(el("span", "kw", ": " + t));
       } else if (node.index) {
-        row.append(el("span", "kw", "["), renderExpr(node.index), el("span", "kw", "]"));
+        row.append(el("span", "kw", "["), renderExpr(node.index, (n) => { node.index = n; render(); }), el("span", "kw", "]"));
       }
-      if (node.value !== undefined) row.append(el("span", "kw", "="), renderExpr(node.value));
+      if (node.value !== undefined) row.append(el("span", "kw", "="), renderExpr(node.value, (n) => { node.value = n; render(); }));
       blk.append(row);
     } else if (node.block === "if") {
       blk = el("div", "block ctrl");
       const row = el("div", "hdr");
-      row.append(el("span", "label", "如果"), renderExpr(node.cond), el("span", "kw", "那么"));
+      row.append(el("span", "label", "如果"), renderExpr(node.cond, (n) => { node.cond = n; render(); }), el("span", "kw", "那么"));
       blk.append(row);
       const m = el("div", "mouth"); m.append(renderStmtList(node.then)); blk.append(m);
       if (node.else) { blk.append(el("div", "hdr")); const m2 = el("div", "mouth"); m2.append(renderStmtList(node.else)); blk.append(m2); }
     } else if (node.block === "while") {
       blk = el("div", "block ctrl");
       const row = el("div", "hdr");
-      row.append(el("span", "label", "重复直到非"), renderExpr(node.cond));
+      row.append(el("span", "label", "重复直到非"), renderExpr(node.cond, (n) => { node.cond = n; render(); }));
       blk.append(row);
       const m = el("div", "mouth"); m.append(renderStmtList(node.body)); blk.append(m);
     } else if (node.block === "for") {
       blk = el("div", "block ctrl");
       const row = el("div", "hdr");
       row.append(el("span", "label", "对"), field(() => node.var, (s) => { node.var = s || "i"; }),
-        el("span", "kw", "从"), renderExpr(node.start), el("span", "kw", ".."), renderExpr(node.end));
+        el("span", "kw", "从"), renderExpr(node.start, (n) => { node.start = n; render(); }),
+        el("span", "kw", ".."), renderExpr(node.end, (n) => { node.end = n; render(); }));
       blk.append(row);
       const m = el("div", "mouth"); m.append(renderStmtList(node.body)); blk.append(m);
     } else if (node.block === "return") {
       blk = el("div", "block ret");
       const row = el("div", "hdr");
       row.append(el("span", "label", "返回"));
-      if (node.value) row.append(renderExpr(node.value));
+      if (node.value) row.append(renderExpr(node.value, (n) => { node.value = n; render(); }));
       blk.append(row);
     } else if (node.block === "expr") {
       blk = el("div", "block ev");
-      const row = el("div", "hdr"); row.append(renderExpr(node.expr)); blk.append(row);
+      const row = el("div", "hdr"); row.append(renderExpr(node.expr, (n) => { node.expr = n; render(); })); blk.append(row);
     } else {
       blk = el("div", "block", JSON.stringify(node));
     }
     node._el = blk;   // 供「执行高亮」按节点定位 DOM
-    // 拖拽重排：按住语句积木拖动，可在各 stack（函数体 / 控制块嘴巴）间移动
+    // 拖拽重排：按住语句积木拖动，可在各 stack（函数体 / 控制块嘴巴）间移动；拖到调色板=删除
     blk.addEventListener("pointerdown", (e) => {
       if (e.target.classList.contains("field")) return;
-      if (list) startStmtDrag(node, list, blk, e);
+      if (list) startStmtDrag({ node, fromList: list, blockEl: blk, e });
+    });
+    // 右键删除积木
+    blk.addEventListener("contextmenu", (e) => {
+      if (!list) return;
+      e.preventDefault(); e.stopPropagation();
+      const i = list.indexOf(node); if (i >= 0) { list.splice(i, 1); render(); }
     });
     return blk;
   }
 
-  // ---------------- 语句积木拖拽重排 ----------------
+  // ---------------- 积木拖拽（语句重排 / 从调色板拖入 / 拖到调色板删除 / 表达式嵌套） ----------------
   let drag = null;
-  function startStmtDrag(node, fromList, blockEl, e) {
-    e.stopPropagation();
-    const r = blockEl.getBoundingClientRect();
-    const ghost = blockEl.cloneNode(true);
+  window._sinDragState = () => (drag ? { kind: drag.kind, hasTarget: !!drag.target, hasSlot: !!drag.slot, fromList: !!drag.fromList } : null);
+  function isOverPalette(ev) {
+    if (!ev) return false;
+    const r = document.getElementById("palette").getBoundingClientRect();
+    return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
+  }
+  function makeGhost(srcEl, e) {
+    const r = srcEl.getBoundingClientRect();
+    const ghost = srcEl.cloneNode(true);
     Object.assign(ghost.style, {
       position: "fixed", left: r.left + "px", top: r.top + "px", width: r.width + "px",
-      pointerEvents: "none", opacity: ".9", zIndex: 9999, transform: "rotate(2deg)",
-      boxShadow: "0 8px 20px rgba(0,0,0,.3)",
+      pointerEvents: "none", opacity: ".92", zIndex: 9999, transform: "rotate(2deg)",
+      boxShadow: "0 8px 20px rgba(0,0,0,.3)", margin: 0,
     });
     document.body.appendChild(ghost);
-    blockEl.style.opacity = ".25";
-    const indicator = el("div", "drop-indicator");
-    drag = { node, fromList, blockEl, ghost, indicator, target: null,
-      offx: e.clientX - r.left, offy: e.clientY - r.top };
+    return { ghost, offx: e.clientX - r.left, offy: e.clientY - r.top };
+  }
+  function markDeleteZone(ev) {
+    const pal = document.getElementById("palette");
+    pal.classList.toggle("delete-zone", !drag.target && !drag.slot && isOverPalette(ev));
+  }
 
+  // 语句积木拖拽：fromList=null 表示来自调色板的新积木；拖到调色板上松手 = 删除
+  function startStmtDrag({ node, fromList, blockEl, srcEl, e }) {
+    e.stopPropagation();
+    const { ghost, offx, offy } = makeGhost(srcEl || blockEl, e);
+    if (blockEl) blockEl.style.opacity = ".25";
+    const indicator = el("div", "drop-indicator");
+    document.body.classList.add("dragging-block");
+    drag = { kind: "stmt", node, fromList, blockEl, ghost, indicator, target: null, offx, offy, lastEv: e };
     const move = (ev) => {
-      ghost.style.left = (ev.clientX - drag.offx) + "px";
-      ghost.style.top = (ev.clientY - drag.offy) + "px";
-      updateDropTarget(ev);
+      drag.lastEv = ev;
+      ghost.style.left = (ev.clientX - offx) + "px"; ghost.style.top = (ev.clientY - offy) + "px";
+      updateDropTarget(ev); markDeleteZone(ev);
     };
     const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      ghost.remove();
-      if (indicator.parentNode) indicator.remove();
-      finishDrop();
-      drag = null;
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      ghost.remove(); if (indicator.parentNode) indicator.remove();
+      document.body.classList.remove("dragging-block");
+      document.getElementById("palette").classList.remove("delete-zone");
+      finishStmtDrop(); drag = null;
     };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   }
 
   function updateDropTarget(ev) {
     const stacks = [...canvas.querySelectorAll(".stack")];
     let best = null;
     for (const st of stacks) {
-      if (drag.blockEl.contains(st)) continue;       // 不能放进自身子树
+      if (drag.blockEl && drag.blockEl.contains(st)) continue;   // 不能放进自身子树
       const r = st.getBoundingClientRect();
-      if (ev.clientX >= r.left - 12 && ev.clientX <= r.right + 12 &&
-          ev.clientY >= r.top - 24 && ev.clientY <= r.bottom + 24) { best = st; break; }
+      if (ev.clientX >= r.left - 14 && ev.clientX <= r.right + 14 &&
+          ev.clientY >= r.top - 22 && ev.clientY <= r.bottom + 22) { best = st; break; }
     }
+    [...canvas.querySelectorAll(".mouth.drop-in")].forEach((m) => m.classList.remove("drop-in"));
     if (!best) { drag.target = null; if (drag.indicator.parentNode) drag.indicator.remove(); return; }
+    if (best.parentNode && best.parentNode.classList.contains("mouth")) best.parentNode.classList.add("drop-in");
     const kids = [...best.children].filter((c) => c.classList.contains("block"));
     let idx = kids.length;
     for (let i = 0; i < kids.length; i++) {
@@ -497,8 +530,17 @@
     drag.target = { list: best._list, index: idx };
   }
 
-  function finishDrop() {
-    if (!drag.target) { render(); return; }
+  function finishStmtDrop() {
+    if (!drag.fromList) {                 // 来自调色板的新积木：有落点就插入，没有就丢弃
+      if (drag.target) drag.target.list.splice(drag.target.index, 0, drag.node);
+      render(); return;
+    }
+    if (!drag.target) {                   // 没落点：拖到调色板 = 删除，否则原样复位
+      if (isOverPalette(drag.lastEv)) {
+        const i = drag.fromList.indexOf(drag.node); if (i >= 0) drag.fromList.splice(i, 1);
+      }
+      render(); return;
+    }
     const fromIdx = drag.fromList.indexOf(drag.node);
     if (fromIdx < 0) { render(); return; }
     drag.fromList.splice(fromIdx, 1);
@@ -506,6 +548,33 @@
     if (drag.target.list === drag.fromList && fromIdx < idx) idx--;
     drag.target.list.splice(idx, 0, drag.node);
     render();
+  }
+
+  // 表达式积木拖拽：从调色板把「运算/侦测」reporter 拖进某个表达式槽位（嵌套）
+  function startExprDrag({ node, srcEl, e }) {
+    e.stopPropagation();
+    const { ghost, offx, offy } = makeGhost(srcEl, e);
+    document.body.classList.add("dragging-block");
+    drag = { kind: "expr", node, ghost, offx, offy, slot: null, slotEl: null, lastEv: e };
+    const move = (ev) => {
+      drag.lastEv = ev;
+      ghost.style.left = (ev.clientX - offx) + "px"; ghost.style.top = (ev.clientY - offy) + "px";
+      updateExprTarget(ev);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      ghost.remove(); document.body.classList.remove("dragging-block");
+      if (drag.slotEl) drag.slotEl.classList.remove("slot-hover");
+      if (drag.slot) drag.slot.replace(drag.node); else render();
+      drag = null;
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  }
+  function updateExprTarget(ev) {
+    if (drag.slotEl) { drag.slotEl.classList.remove("slot-hover"); drag.slotEl = null; drag.slot = null; }
+    const hit = document.elementFromPoint(ev.clientX, ev.clientY);
+    const slotEl = hit && hit.closest && hit.closest(".expr-slot");
+    if (slotEl && canvas.contains(slotEl)) { slotEl.classList.add("slot-hover"); drag.slotEl = slotEl; drag.slot = slotEl._slot; }
   }
 
   function renderFn(fn) {
@@ -966,22 +1035,20 @@
 
   // ---------------- 精灵列表（多精灵 / 多页积木） ----------------
   // 造型是否有绘制内容（非全透明），用于判断是否以造型为纹理
+  function curCostume(sp) { return (sp.costumes || [])[sp._costume || 0] || null; }
   function spriteHasArt(sp, isCurrent) {
     let d = null;
     if (isCurrent && ce) {
       const c = ce.canvas; d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
-    } else if (sp.costumes && sp.costumes[0] && sp.costumes[0].data) {
-      d = sp.costumes[0].data.data;
-    }
+    } else { const cc = curCostume(sp); if (cc && cc.data) d = cc.data.data; }
     if (!d) return false;
     for (let i = 3; i < d.length; i += 4) if (d[i] > 8) return true;
     return false;
   }
 
   function costumeThumb(sp, isCurrent) {
-    let data = null;
     if (isCurrent && ce) return ce.toDataURL();
-    if (sp.costumes && sp.costumes[0] && sp.costumes[0].data) data = sp.costumes[0].data;
+    const cc = curCostume(sp); const data = cc && cc.data;
     if (!data) return null;
     const off = document.createElement("canvas");
     off.width = data.width; off.height = data.height;
@@ -1001,6 +1068,9 @@
       card.append(thumb);
       const nm = el("div", "nm", sp.name);
       card.append(nm);
+      // 当前造型名（仿 Scratch：精灵上显示其当前造型）
+      const cc = (i === project.cur && ce) ? { name: ce.currentName() } : curCostume(sp);
+      if (cc && cc.name) card.append(el("div", "cos-nm", "🎨 " + cc.name));
       if (project.sprites.length > 1) {
         const del = el("button", "del", "×");
         del.addEventListener("click", (e) => { e.stopPropagation(); delSprite(i); });
@@ -1109,6 +1179,22 @@
     let_mouse_y: () => ({ block: "let", name: "my", type: "float", len: 0, value: C("mouse_y") }),
     let_random: () => ({ block: "let", name: "r", type: "int", len: 0, value: C("random_int", I(1), I(10)) }),
     let_screen_w: () => ({ block: "let", name: "w", type: "int", len: 0, value: C("screen_width") }),
+    repeat: () => ({ block: "for", var: "i", start: { block: "int", value: 0 }, end: { block: "int", value: 10 }, body: [] }),
+  };
+  // reporter（表达式）积木：从调色板拖进某个表达式槽位即可嵌套（运算 / 比较 / 字符串 / 侦测）
+  const B2 = (op) => () => Bn(op, I(0), I(0));
+  const Bb = (op) => () => Bn(op, { block: "bool", value: true }, { block: "bool", value: true });
+  const REPORTERS = {
+    r_add: B2("+"), r_sub: B2("-"), r_mul: B2("*"),
+    r_div: () => Bn("/", I(0), I(1)), r_mod: () => Bn("%", I(0), I(1)),
+    r_lt: B2("<"), r_gt: B2(">"), r_eq: B2("=="), r_le: B2("<="), r_ge: B2(">="), r_ne: B2("!="),
+    r_and: Bb("&&"), r_or: Bb("||"), r_not: () => ({ block: "unary", op: "!", operand: { block: "bool", value: true } }),
+    r_int: () => I(0), r_float: () => F(0), r_str: () => S("文字"),
+    r_true: () => ({ block: "bool", value: true }), r_var: () => Vr("x"),
+    r_random: () => C("random_int", I(1), I(10)),
+    r_mouse_x: () => C("mouse_x"), r_mouse_y: () => C("mouse_y"), r_mouse_down: () => C("mouse_down"),
+    r_key: () => C("key_down", C("key_left")), r_received: () => C("received", S("go")),
+    r_sprite_x: () => C("sprite_x", Vr("s")), r_sprite_y: () => C("sprite_y", Vr("s")),
   };
   function addStmt(kind) {
     if (!selected || !selected.body) return;
@@ -1126,7 +1212,11 @@
     { id: "custom", name: "自制积木", color: "#FF6680", items: [{ special: "addFn", label: "新建函数" }] },
     { id: "data", name: "变量 / 数据", color: "#FF8C1A", items: ["let", "let_str", "let_arr", "set_idx"] },
     { id: "op", name: "运算", color: "#59C059", items: ["incr", "decr", "set_op", "to_int", "to_float"] },
-    { id: "control", name: "控制", color: "#FFAB19", items: ["if", "if_else", "while", "for", "return", "print"] },
+    { id: "reporters", name: "运算块 (拖入槽)", color: "#59C059", reporter: true,
+      items: ["r_add", "r_sub", "r_mul", "r_div", "r_mod", "r_lt", "r_gt", "r_eq", "r_le", "r_ge", "r_ne",
+        "r_and", "r_or", "r_not", "r_int", "r_float", "r_str", "r_true", "r_var", "r_random",
+        "r_mouse_x", "r_mouse_y", "r_mouse_down", "r_key", "r_received", "r_sprite_x", "r_sprite_y"] },
+    { id: "control", name: "控制", color: "#FFAB19", items: ["if", "if_else", "while", "for", "repeat", "return", "print"] },
     { id: "stage", name: "舞台", color: "#FFAB19", items: ["stage_init", "game_loop", "frame_begin", "frame_end", "stage_close"] },
     { id: "motion", name: "运动", color: "#4C97FF", items: ["sprite_new", "sprite_move_to", "sprite_move", "sprite_turn", "sprite_point", "sprite_scale", "sprite_x", "sprite_y"] },
     { id: "looks", name: "外观", color: "#9966FF", items: ["sprite_load", "sprite_draw", "say", "draw_text", "draw_number"] },
@@ -1189,17 +1279,38 @@
       // 右侧分类区：所见即所得的积木预览（与画布上完全一致）
       const sec = el("div", "cat-sec"); sec.id = "cat-" + cat.id;
       const h = el("h2", null, cat.name); h.style.setProperty("--cc", cat.color); sec.append(h);
+      const isReporter = cat.reporter === true;
       cat.items.forEach((it) => {
-        const wys = el("div", "pal-wys");
-        if (typeof it === "object" && it.special) {
-          wys.dataset.kind = it.special;
-          wys.append(specialPreview(it));
-          wys.addEventListener("click", () => { if (it.special === "addFn") addFn(); });
-        } else {
-          wys.dataset.kind = it;
-          wys.append(renderStmt(NEW[it](), null));   // 复用积木渲染器 → 与画布同款外观
-          wys.addEventListener("click", () => addStmt(it));
-        }
+        const wys = el("div", "pal-wys" + (isReporter ? " pal-reporter" : ""));
+        const special = typeof it === "object" && it.special;
+        wys.dataset.kind = special ? it.special : it;
+        let preview;
+        if (special) preview = specialPreview(it);
+        else if (isReporter) { preview = el("span", "expr-wrap"); preview.append(renderExpr(REPORTERS[it]())); }
+        else preview = renderStmt(NEW[it](), null);   // 与画布同款外观
+        wys.append(preview);
+
+        // 按下并拖动 = 拖入画布/槽位；原地松手 = 点击加入
+        wys.addEventListener("pointerdown", (e) => {
+          if (e.button !== 0) return;
+          e.preventDefault(); hidePalHover();
+          const sx = e.clientX, sy = e.clientY; let started = false;
+          const mv = (ev) => {
+            if (started || Math.hypot(ev.clientX - sx, ev.clientY - sy) <= 5) return;
+            started = true;
+            window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
+            if (special) return;
+            if (isReporter) startExprDrag({ node: REPORTERS[it](), srcEl: preview, e: ev });
+            else startStmtDrag({ node: NEW[it](), fromList: null, blockEl: null, srcEl: preview, e: ev });
+          };
+          const up = () => {
+            window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
+            if (started) return;
+            if (special) { if (it.special === "addFn") addFn(); }
+            else if (!isReporter) addStmt(it);   // reporter 只能拖入槽位
+          };
+          window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+        });
         wys.addEventListener("mouseenter", () => showPalHover(wys));  // 悬停显示完整积木
         wys.addEventListener("mouseleave", hidePalHover);
         sec.append(wys);
@@ -1273,6 +1384,12 @@
         eraser: document.getElementById("tool-eraser"),
       },
       sizeInput: document.getElementById("brush-size"),
+      // 造型增删改/切换 → 记录当前精灵的当前造型，并刷新舞台/精灵栏/预览
+      onChange: () => {
+        if (!ce) return;   // 构造期 addCostume 会触发，此时 ce 尚未赋值
+        if (project.sprites[project.cur]) sprite()._costume = ce.current;
+        renderSpriteBar(); renderStage(); schedulePreview();
+      },
     });
     document.getElementById("tool-pencil").addEventListener("click", () => ce.setTool("pencil"));
     document.getElementById("tool-eraser").addEventListener("click", () => ce.setTool("eraser"));

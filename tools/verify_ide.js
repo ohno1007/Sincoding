@@ -32,6 +32,12 @@ function freePort() {
   page.on("pageerror", (e) => errors.push("PAGEERR: " + e.message));
 
   const val = () => page.inputValue("#text-out");
+  const dragTo = async (fx, fy, tx, ty) => {
+    await page.mouse.move(fx, fy); await page.mouse.down();
+    await page.mouse.move((fx + tx) / 2, (fy + ty) / 2, { steps: 8 });
+    await page.mouse.move(tx, ty, { steps: 10 }); await page.waitForTimeout(60);
+    await page.mouse.up(); await page.waitForTimeout(120);
+  };
   let result = {};
   try {
     await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "networkidle" });
@@ -77,6 +83,31 @@ function freePort() {
     await page.click('#palette .cat-rail .cat-btn:nth-child(6)');
     await page.waitForTimeout(60);
     const catNav = await page.evaluate(() => document.querySelectorAll('#palette .cat-btn.active').length === 1);
+
+    // 从调色板把积木拖进控制块「嘴巴」（嵌套进 if/while 内部）
+    const pit = await page.$('#palette .pal-wys[data-kind="print"]');
+    await pit.scrollIntoViewIfNeeded();
+    const pib = await pit.boundingBox();
+    const mb0 = await (await page.$('#canvas .script .mouth .stack')).boundingBox();
+    const beforeDrag = await val();
+    await dragTo(pib.x + pib.width / 2, pib.y + pib.height / 2, mb0.x + 28, mb0.y + 10);
+    const paletteDrag = (await val()).includes("print") && (await val()) !== beforeDrag;
+
+    // 右键删除积木
+    const beforeDel = await val();
+    await page.click('#canvas .script .mouth .stack .block', { button: "right" });
+    await page.waitForTimeout(90);
+    const blockDelete = (await val()).length < beforeDel.length;
+
+    // 把 reporter（字符串）拖进某个表达式槽 → 嵌套表达式
+    const rep = await page.$('#palette .pal-wys[data-kind="r_str"]');
+    await rep.scrollIntoViewIfNeeded();
+    const rb = await rep.boundingBox();
+    const slot = await page.$('#canvas .script .expr-slot');
+    const sb = await slot.boundingBox();
+    const beforeNest = await val();
+    await dragTo(rb.x + rb.width / 2, rb.y + rb.height / 2, sb.x + sb.width / 2, sb.y + sb.height / 2);
+    const exprNest = (await val()).includes('"文字"') && (await val()) !== beforeNest;
 
     // 反向同步：编辑文本 → wasm 编译器解析 → 积木更新
     await page.waitForFunction(() => window.__sincReady === true, { timeout: 20000 });
@@ -171,6 +202,14 @@ function freePort() {
     // 造型画板：切 tab，画几笔，断言有像素
     await page.click('header .tabs button[data-view="costume-view"]');
     await page.waitForSelector("#paint-canvas");
+    // 造型列表显示名称 + 可新增（仿 Scratch）：加一个造型，断言出现命名造型卡
+    await page.click("#costume-list .costume-add");
+    await page.waitForTimeout(80);
+    const costumeNames = await page.evaluate(() => {
+      const cards = document.querySelectorAll("#costume-list .costume-card");
+      const named = [...document.querySelectorAll("#costume-list .costume-nm")].some((n) => /造型/.test(n.textContent));
+      return cards.length >= 2 && named;
+    });
     const box = await page.locator("#paint-canvas").boundingBox();
     await page.mouse.move(box.x + 80, box.y + 80); await page.mouse.down();
     await page.mouse.move(box.x + 220, box.y + 150, { steps: 8 });
@@ -225,8 +264,8 @@ function freePort() {
     });
     await page.click("#publish-close");
 
-    result = { writeback, reorder, palette, catNav, reverse, spriteSwitch, sharedState, preview, costume, parallel, dockConsole, exportOk, highlighted, autocomplete, diagnostics, consolePanel, saveOpen, publishModal, stage, paintedPixels: painted, errors };
-    result.ok = writeback && reorder && palette && catNav && reverse && spriteSwitch && sharedState && preview && costume && parallel && dockConsole &&
+    result = { writeback, reorder, palette, catNav, paletteDrag, blockDelete, exprNest, reverse, spriteSwitch, sharedState, preview, costume, costumeNames, parallel, dockConsole, exportOk, highlighted, autocomplete, diagnostics, consolePanel, saveOpen, publishModal, stage, paintedPixels: painted, errors };
+    result.ok = writeback && reorder && palette && catNav && paletteDrag && blockDelete && exprNest && reverse && spriteSwitch && sharedState && preview && costume && costumeNames && parallel && dockConsole &&
       exportOk && highlighted && autocomplete && diagnostics && consolePanel && saveOpen && publishModal && stageOk && painted > 100 && errors.length === 0;
   } finally {
     await browser.close();

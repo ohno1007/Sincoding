@@ -18,6 +18,7 @@
       this.swatchesEl = opts.swatchesEl;
       this.toolButtons = opts.toolButtons;   // { pencil, eraser }
       this.sizeInput = opts.sizeInput;
+      this.onChange = opts.onChange || (() => {});   // 造型增删改/切换时回调（让舞台/精灵栏同步）
 
       this.tool = "pencil";
       this.color = "#4c97ff";
@@ -124,7 +125,27 @@
       this.costumes.push({ name: name || ("造型" + (this.costumes.length + 1)), data: null });
       this.select(this.costumes.length - 1);
       this._renderList();
+      this.onChange();
     }
+
+    rename(i, name) {
+      if (i < 0 || i >= this.costumes.length) return;
+      this.costumes[i].name = (name || "").trim() || this.costumes[i].name;
+      this._renderList(); this.onChange();
+    }
+
+    remove(i) {
+      if (this.costumes.length <= 1 || i < 0 || i >= this.costumes.length) return;
+      this.costumes.splice(i, 1);
+      if (this.current >= this.costumes.length) this.current = this.costumes.length - 1;
+      this.current = Math.max(0, this.current);
+      // 重画当前
+      this.ctx.clearRect(0, 0, W, H);
+      const d = this.costumes[this.current].data; if (d) this.ctx.putImageData(d, 0, 0);
+      this._renderList(); this.onChange();
+    }
+
+    currentName() { return (this.costumes[this.current] || {}).name || ""; }
 
     select(i) {
       if (i < 0 || i >= this.costumes.length) return;
@@ -134,6 +155,7 @@
       const d = this.costumes[i].data;
       if (d) this.ctx.putImageData(d, 0, 0);
       this._renderList();
+      this.onChange();
     }
 
     _commit() {
@@ -156,9 +178,10 @@
       if (!this.listEl) return;
       this.listEl.innerHTML = "<h2>造型</h2>";
       this.costumes.forEach((c, i) => {
+        const card = document.createElement("div");
+        card.className = "costume-card" + (i === this.current ? " sel" : "");
         const t = document.createElement("div");
-        t.className = "costume-thumb" + (i === this.current ? " sel" : "");
-        // 缩略图：把当前画布或已存数据画到小图
+        t.className = "costume-thumb";
         if (i === this.current) t.style.backgroundImage = "url(" + this.toDataURL() + ")";
         else if (c.data) {
           const off = document.createElement("canvas");
@@ -166,13 +189,28 @@
           off.getContext("2d").putImageData(c.data, 0, 0);
           t.style.backgroundImage = "url(" + off.toDataURL() + ")";
         }
-        t.title = c.name;
-        t.addEventListener("click", () => this.select(i));
-        this.listEl.appendChild(t);
+        card.appendChild(t);
+        // 序号 + 可改名的造型名（双击改名）
+        const nm = document.createElement("div");
+        nm.className = "costume-nm"; nm.textContent = (i + 1) + " " + c.name; nm.title = "双击改名";
+        nm.addEventListener("dblclick", (e) => {
+          e.stopPropagation();
+          const v = prompt("造型名称", c.name);
+          if (v !== null) this.rename(i, v);
+        });
+        card.appendChild(nm);
+        if (this.costumes.length > 1) {
+          const del = document.createElement("button");
+          del.className = "costume-del"; del.textContent = "×"; del.title = "删除造型";
+          del.addEventListener("click", (e) => { e.stopPropagation(); this.remove(i); });
+          card.appendChild(del);
+        }
+        card.addEventListener("click", () => this.select(i));
+        this.listEl.appendChild(card);
       });
       const add = document.createElement("button");
-      add.className = "pal-block"; add.style.background = "#59c059";
-      add.textContent = "+ 新造型";
+      add.className = "costume-add";
+      add.textContent = "＋ 新造型";
       add.addEventListener("click", () => this.addCostume());
       this.listEl.appendChild(add);
     }
