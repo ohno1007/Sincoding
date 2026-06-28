@@ -124,6 +124,16 @@ function freePort() {
     // 多精灵并行：状态栏应显示「并行」
     const pvStatus = await page.evaluate(() => document.getElementById("pv-status").textContent);
     const parallel = /并行/.test(pvStatus);
+    // 积木/代码页内「预览 ⇄ 控制台」切页：切到控制台 → 画布隐藏、控制台显示并有输出
+    await page.click('.pv-tab[data-dock="console"]');
+    await page.click("#dock-print-info");
+    await page.waitForTimeout(80);
+    const dockConsole = await page.evaluate(() => {
+      const con = document.getElementById("dock-console"), cv = document.getElementById("preview-canvas");
+      const out = document.getElementById("dock-con-out");
+      return con && !con.hidden && cv && cv.hidden && out && out.querySelectorAll(".con-line").length > 0;
+    });
+    await page.click('.pv-tab[data-dock="preview"]'); // 切回预览，便于后续观察
     // 一键导出：补全 extern 声明，可独立编译
     const exp = await page.evaluate(() => (window._sinExport ? window._sinExport() : ""));
     const exportOk = exp.includes("extern fn stage_init") && exp.includes("fn main");
@@ -215,8 +225,8 @@ function freePort() {
     });
     await page.click("#publish-close");
 
-    result = { writeback, reorder, palette, catNav, reverse, spriteSwitch, sharedState, preview, costume, parallel, exportOk, highlighted, autocomplete, diagnostics, consolePanel, saveOpen, publishModal, stage, paintedPixels: painted, errors };
-    result.ok = writeback && reorder && palette && catNav && reverse && spriteSwitch && sharedState && preview && costume && parallel &&
+    result = { writeback, reorder, palette, catNav, reverse, spriteSwitch, sharedState, preview, costume, parallel, dockConsole, exportOk, highlighted, autocomplete, diagnostics, consolePanel, saveOpen, publishModal, stage, paintedPixels: painted, errors };
+    result.ok = writeback && reorder && palette && catNav && reverse && spriteSwitch && sharedState && preview && costume && parallel && dockConsole &&
       exportOk && highlighted && autocomplete && diagnostics && consolePanel && saveOpen && publishModal && stageOk && painted > 100 && errors.length === 0;
   } finally {
     await browser.close();

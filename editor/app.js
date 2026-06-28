@@ -219,20 +219,37 @@
     elx._glowT = setTimeout(() => elx.classList.remove("running"), 240);
   }
 
-  // ---------------- 控制台（舞台区） ----------------
-  const conOut = () => document.getElementById("console-out");
+  // ---------------- 控制台（舞台区 + 积木/代码页共享同一份输出） ----------------
+  const conSinks = () => [...document.querySelectorAll(".con-sink")];
   let conLines = [];
-  function conLog(text) {
-    conLines.push(String(text));
-    if (conLines.length > 200) conLines = conLines.slice(-200);
-    const out = conOut();
-    if (out) {
-      const row = el("div", "con-line", String(text));
-      out.append(row); out.scrollTop = out.scrollHeight;
-      while (out.childElementCount > 200) out.removeChild(out.firstChild);
-    }
+  function conAppend(sink, text) {
+    const row = el("div", "con-line", text);
+    sink.append(row); sink.scrollTop = sink.scrollHeight;
+    while (sink.childElementCount > 200) sink.removeChild(sink.firstChild);
   }
-  function conClear() { conLines = []; const out = conOut(); if (out) out.innerHTML = ""; }
+  function conLog(text) {
+    const t = String(text);
+    conLines.push(t);
+    if (conLines.length > 200) conLines = conLines.slice(-200);
+    conSinks().forEach((s) => conAppend(s, t));   // 所有控制台面板同步显示
+  }
+  function conClear() { conLines = []; conSinks().forEach((s) => { s.innerHTML = ""; }); }
+  // 积木/代码页底部的「预览 ⇄ 控制台」切页（边写边看）
+  function setupDockTabs() {
+    const tabs = [...document.querySelectorAll(".pv-tab")];
+    const canvas = document.getElementById("preview-canvas");
+    const con = document.getElementById("dock-console");
+    tabs.forEach((t) => t.addEventListener("click", () => {
+      tabs.forEach((x) => x.classList.toggle("active", x === t));
+      const showCon = t.dataset.dock === "console";
+      if (canvas) canvas.hidden = showCon;
+      if (con) con.hidden = !showCon;
+    }));
+    const dpi = document.getElementById("dock-print-info");
+    if (dpi) dpi.addEventListener("click", printBlockInfo);
+    const dcc = document.getElementById("dock-con-clear");
+    if (dcc) dcc.addEventListener("click", conClear);
+  }
   function printBlockInfo() {
     const sp = sprite();
     conLog("— 积木信息：" + sp.name + " —");
@@ -1274,6 +1291,7 @@
   setupTabs();
   setupCostume();
   setupPreview();
+  setupDockTabs();
   setupPublish();
   const expBtn = document.getElementById("btn-export-sin");
   if (expBtn) expBtn.addEventListener("click", exportSin);

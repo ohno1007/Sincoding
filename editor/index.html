@@ -87,12 +87,22 @@
           <div id="diag-list" hidden></div>
           <div id="preview-dock">
             <div class="pv-bar">
-              <span data-icon="play" data-icon-size="14"></span>实时预览
+              <button class="pv-tab active" data-dock="preview"><span data-icon="play" data-icon-size="13"></span>预览</button>
+              <button class="pv-tab" data-dock="console"><span data-icon="code" data-icon-size="13"></span>控制台</button>
               <button id="pv-run" title="重新运行" data-icon="play" data-icon-size="14"></button>
               <button id="pv-stop" title="停止" data-icon="stop" data-icon-size="14"></button>
               <span id="pv-status"></span>
             </div>
-            <canvas id="preview-canvas" width="480" height="360" tabindex="0"></canvas>
+            <div id="dock-body">
+              <canvas id="preview-canvas" width="480" height="360" tabindex="0"></canvas>
+              <div id="dock-console" hidden>
+                <div class="dock-con-bar">
+                  <button id="dock-print-info">打印积木信息</button>
+                  <button id="dock-con-clear">清空</button>
+                </div>
+                <div id="dock-con-out" class="con-sink"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -134,7 +144,7 @@
           <button id="con-print-info" title="打印当前精灵的积木信息到控制台">打印积木信息</button>
           <button id="con-clear" title="清空控制台">清空</button>
         </div>
-        <div id="console-out"></div>
+        <div id="console-out" class="con-sink"></div>
       </div>
     </div>
   </div>
