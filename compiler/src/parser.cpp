@@ -137,9 +137,16 @@ StmtPtr Parser::parseLet() {
     s->line = cur().line;
     expect(TokKind::KwLet, "'let'");
     s->name = expect(TokKind::Ident, "变量名").text;
-    if (match(TokKind::Colon)) s->declared = parseType();
-    expect(TokKind::Assign, "'='");
-    s->init = parseExpr();
+    if (match(TokKind::Colon)) {
+        s->declared = parseType();
+        if (match(TokKind::LBracket)) { // 数组类型 T[N]
+            const Token& n = expect(TokKind::Int, "数组长度");
+            s->declaredLen = (int)std::strtoll(n.text.c_str(), nullptr, 10);
+            expect(TokKind::RBracket, "']'");
+        }
+    }
+    // 初始化可选：有类型标注时可省略（零初始化）
+    if (match(TokKind::Assign)) s->init = parseExpr();
     match(TokKind::Semicolon); // 分号可选
     return s;
 }
@@ -185,6 +192,28 @@ StmtPtr Parser::parseReturn() {
 
 StmtPtr Parser::parseExprOrAssign() {
     int line = cur().line;
+    // 元素赋值或下标表达式：Ident '[' expr ']' ...
+    if (check(TokKind::Ident) && peek(1).kind == TokKind::LBracket) {
+        std::string name = advance().text; // ident
+        advance();                          // '['
+        ExprPtr idx = parseExpr();
+        expect(TokKind::RBracket, "']'");
+        if (check(TokKind::Assign)) {        // name[idx] = value
+            advance();
+            auto s = std::make_unique<AssignStmt>();
+            s->line = line; s->name = name; s->index = std::move(idx);
+            s->value = parseExpr();
+            match(TokKind::Semicolon);
+            return s;
+        }
+        // 否则当作表达式语句 name[idx]
+        auto v = std::make_unique<Var>(); v->name = name; v->line = line;
+        auto ix = std::make_unique<IndexExpr>();
+        ix->line = line; ix->arr = std::move(v); ix->idx = std::move(idx);
+        auto es = std::make_unique<ExprStmt>(); es->line = line; es->expr = std::move(ix);
+        match(TokKind::Semicolon);
+        return es;
+    }
     // 赋值：Ident '=' expr
     if (check(TokKind::Ident) && peek(1).kind == TokKind::Assign) {
         auto s = std::make_unique<AssignStmt>();
@@ -336,7 +365,28 @@ ExprPtr Parser::parsePrimary() {
             auto v = std::make_unique<Var>();
             v->name = name;
             v->line = line;
-            return v;
+            // 后缀下标：a[i]（支持多次，但语义上仅一维）
+            ExprPtr e = std::move(v);
+            while (check(TokKind::LBracket)) {
+                advance();
+                auto ix = std::make_unique<IndexExpr>();
+                ix->line = line;
+                ix->arr = std::move(e);
+                ix->idx = parseExpr();
+                expect(TokKind::RBracket, "']'");
+                e = std::move(ix);
+            }
+            return e;
+        }
+        case TokKind::LBracket: { // 数组字面量 [e1, e2, ...]
+            auto arr = std::make_unique<ArrayLit>();
+            arr->line = t.line;
+            advance();
+            if (!check(TokKind::RBracket)) {
+                do { arr->elems.push_back(parseExpr()); } while (match(TokKind::Comma));
+            }
+            expect(TokKind::RBracket, "']'");
+            return arr;
         }
         case TokKind::LParen: {
             advance();

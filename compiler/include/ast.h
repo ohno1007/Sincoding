@@ -16,11 +16,12 @@ const char* typeName(Type t);
 const char* typeToC(Type t);
 
 // ---------- 表达式 ----------
-enum class ExprKind { IntLit, FloatLit, BoolLit, StringLit, Var, Unary, Binary, Call };
+enum class ExprKind { IntLit, FloatLit, BoolLit, StringLit, Var, Unary, Binary, Call, Index, ArrayLit };
 
 struct Expr {
     ExprKind kind;
-    Type type = Type::Unknown; // 由类型检查阶段填充
+    Type type = Type::Unknown; // 元素/标量类型，由类型检查阶段填充
+    int arrayLen = 0;          // >0 表示该表达式是定长数组（type 为元素类型）
     int line = 0;
     virtual ~Expr() = default;
 protected:
@@ -71,6 +72,17 @@ struct Call : Expr {
     Call() : Expr(ExprKind::Call) {}
 };
 
+struct IndexExpr : Expr {     // arr[idx]
+    ExprPtr arr;
+    ExprPtr idx;
+    IndexExpr() : Expr(ExprKind::Index) {}
+};
+
+struct ArrayLit : Expr {      // [e1, e2, ...]，仅用于 let 初始化
+    std::vector<ExprPtr> elems;
+    ArrayLit() : Expr(ExprKind::ArrayLit) {}
+};
+
 // ---------- 语句 ----------
 enum class StmtKind { Let, Assign, If, While, Return, ExprStmt, Block };
 
@@ -92,12 +104,14 @@ using BlockPtr = std::unique_ptr<Block>;
 struct LetStmt : Stmt {
     std::string name;
     Type declared = Type::Unknown; // Unknown 表示需要推断
-    ExprPtr init;
+    int declaredLen = 0;           // >0 表示定长数组
+    ExprPtr init;                  // 可为空（有类型标注时零初始化）
     LetStmt() : Stmt(StmtKind::Let) {}
 };
 
 struct AssignStmt : Stmt {
     std::string name;
+    ExprPtr index;   // 非空表示元素赋值 name[index] = value
     ExprPtr value;
     AssignStmt() : Stmt(StmtKind::Assign) {}
 };

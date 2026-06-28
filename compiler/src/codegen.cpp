@@ -74,15 +74,30 @@ void CodeGen::emitStmt(const Stmt& s) {
         case StmtKind::Let: {
             auto& ls = static_cast<const LetStmt&>(s);
             indent();
-            out_ << typeToC(ls.declared) << " " << ls.name << " = ";
-            emitExpr(*ls.init);
+            out_ << typeToC(ls.declared) << " " << ls.name;
+            if (ls.declaredLen > 0) out_ << "[" << ls.declaredLen << "]";
+            out_ << " = ";
+            if (ls.init) {
+                emitExpr(*ls.init);
+            } else if (ls.declaredLen > 0) {
+                out_ << "{0}";                       // 数组零初始化
+            } else {                                 // 标量默认值
+                switch (ls.declared) {
+                    case Type::Float: out_ << "0.0"; break;
+                    case Type::Bool: out_ << "false"; break;
+                    case Type::String: out_ << "\"\""; break;
+                    default: out_ << "0"; break;
+                }
+            }
             out_ << ";\n";
             break;
         }
         case StmtKind::Assign: {
             auto& as = static_cast<const AssignStmt&>(s);
             indent();
-            out_ << as.name << " = ";
+            out_ << as.name;
+            if (as.index) { out_ << "["; emitExpr(*as.index); out_ << "]"; }
+            out_ << " = ";
             emitExpr(*as.value);
             out_ << ";\n";
             break;
@@ -200,6 +215,24 @@ void CodeGen::emitExpr(const Expr& e) {
         case ExprKind::Var:
             out_ << static_cast<const Var&>(e).name;
             break;
+        case ExprKind::Index: {
+            auto& ix = static_cast<const IndexExpr&>(e);
+            emitExpr(*ix.arr);
+            out_ << "[";
+            emitExpr(*ix.idx);
+            out_ << "]";
+            break;
+        }
+        case ExprKind::ArrayLit: {
+            auto& al = static_cast<const ArrayLit&>(e);
+            out_ << "{";
+            for (size_t i = 0; i < al.elems.size(); i++) {
+                if (i) out_ << ", ";
+                emitExpr(*al.elems[i]);
+            }
+            out_ << "}";
+            break;
+        }
         case ExprKind::Unary: {
             auto& u = static_cast<const Unary&>(e);
             out_ << "(" << u.op;

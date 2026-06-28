@@ -95,6 +95,7 @@ window.SIN_BLOCKS = {
           "block": "let",
           "name": "a",
           "type": "int",
+          "len": 0,
           "value": {
             "block": "int",
             "value": 0
@@ -104,6 +105,7 @@ window.SIN_BLOCKS = {
           "block": "let",
           "name": "b",
           "type": "int",
+          "len": 0,
           "value": {
             "block": "int",
             "value": 1
@@ -113,6 +115,7 @@ window.SIN_BLOCKS = {
           "block": "let",
           "name": "i",
           "type": "int",
+          "len": 0,
           "value": {
             "block": "int",
             "value": 0
@@ -137,6 +140,7 @@ window.SIN_BLOCKS = {
               "block": "let",
               "name": "t",
               "type": "int",
+              "len": 0,
               "value": {
                 "block": "binary",
                 "op": "+",
@@ -203,6 +207,7 @@ window.SIN_BLOCKS = {
           "block": "let",
           "name": "n",
           "type": "int",
+          "len": 0,
           "value": {
             "block": "int",
             "value": 10

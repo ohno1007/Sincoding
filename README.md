@@ -126,8 +126,8 @@ fn main() -> int {
 }
 ```
 
-支持：`int` / `float` / `bool` / `string`、函数（含递归/互递归）、`if/else`、`while`、
-算术与逻辑运算、内建 `print`。完整文法见 [`docs/LANGUAGE.md`](docs/LANGUAGE.md)。
+支持：`int` / `float` / `bool` / `string`、**定长数组 `T[N]`**、函数（含递归/互递归）、
+`if/else`、`while`、算术与逻辑运算、内建 `print`。完整文法见 [`docs/LANGUAGE.md`](docs/LANGUAGE.md)。
 
 ---
 

@@ -77,6 +77,24 @@ struct SourceWriter {
                 out << ")";
                 break;
             }
+            case ExprKind::Index: {
+                auto& ix = static_cast<const IndexExpr&>(e);
+                writeExpr(*ix.arr);
+                out << "[";
+                writeExpr(*ix.idx);
+                out << "]";
+                break;
+            }
+            case ExprKind::ArrayLit: {
+                auto& al = static_cast<const ArrayLit&>(e);
+                out << "[";
+                for (size_t i = 0; i < al.elems.size(); i++) {
+                    if (i) out << ", ";
+                    writeExpr(*al.elems[i]);
+                }
+                out << "]";
+                break;
+            }
         }
     }
 
@@ -94,14 +112,17 @@ struct SourceWriter {
         switch (s.kind) {
             case StmtKind::Let: {
                 auto& ls = static_cast<const LetStmt&>(s);
-                out << "let " << ls.name << ": " << typeName(ls.declared) << " = ";
-                writeExpr(*ls.init);
+                out << "let " << ls.name << ": " << typeName(ls.declared);
+                if (ls.declaredLen > 0) out << "[" << ls.declaredLen << "]";
+                if (ls.init) { out << " = "; writeExpr(*ls.init); }
                 out << "\n";
                 break;
             }
             case StmtKind::Assign: {
                 auto& as = static_cast<const AssignStmt&>(s);
-                out << as.name << " = ";
+                out << as.name;
+                if (as.index) { out << "["; writeExpr(*as.index); out << "]"; }
+                out << " = ";
                 writeExpr(*as.value);
                 out << "\n";
                 break;
@@ -249,6 +270,17 @@ struct JsonWriter {
                 out << ","; nl(); key("args"); array(c.args);
                 break;
             }
+            case ExprKind::Index: {
+                auto& ix = static_cast<const IndexExpr&>(e);
+                str("index"); out << ","; nl(); key("arr"); expr(*ix.arr);
+                out << ","; nl(); key("idx"); expr(*ix.idx);
+                break;
+            }
+            case ExprKind::ArrayLit: {
+                auto& al = static_cast<const ArrayLit&>(e);
+                str("array"); out << ","; nl(); key("elems"); array(al.elems);
+                break;
+            }
         }
         depth--; nl(); out << "}";
     }
@@ -282,12 +314,14 @@ struct JsonWriter {
                 auto& ls = static_cast<const LetStmt&>(s);
                 str("let"); out << ","; nl(); key("name"); str(ls.name);
                 out << ","; nl(); key("type"); str(typeName(ls.declared));
-                out << ","; nl(); key("value"); expr(*ls.init);
+                out << ","; nl(); key("len"); out << ls.declaredLen;
+                if (ls.init) { out << ","; nl(); key("value"); expr(*ls.init); }
                 break;
             }
             case StmtKind::Assign: {
                 auto& as = static_cast<const AssignStmt&>(s);
                 str("assign"); out << ","; nl(); key("name"); str(as.name);
+                if (as.index) { out << ","; nl(); key("index"); expr(*as.index); }
                 out << ","; nl(); key("value"); expr(*as.value);
                 break;
             }

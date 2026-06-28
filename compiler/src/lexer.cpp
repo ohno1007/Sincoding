@@ -44,6 +44,8 @@ const char* tokKindName(TokKind k) {
         case TokKind::RParen: return ")";
         case TokKind::LBrace: return "{";
         case TokKind::RBrace: return "}";
+        case TokKind::LBracket: return "[";
+        case TokKind::RBracket: return "]";
         case TokKind::Comma: return ",";
         case TokKind::Colon: return ":";
         case TokKind::Semicolon: return ";";
@@ -175,6 +177,8 @@ std::vector<Token> Lexer::tokenize() {
             case ')': addToken(TokKind::RParen, ")"); break;
             case '{': addToken(TokKind::LBrace, "{"); break;
             case '}': addToken(TokKind::RBrace, "}"); break;
+            case '[': addToken(TokKind::LBracket, "["); break;
+            case ']': addToken(TokKind::RBracket, "]"); break;
             case ',': addToken(TokKind::Comma, ","); break;
             case ':': addToken(TokKind::Colon, ":"); break;
             case ';': addToken(TokKind::Semicolon, ";"); break;

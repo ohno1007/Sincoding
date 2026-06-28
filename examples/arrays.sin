@@ -1,0 +1,26 @@
+// arrays.sin — 定长栈数组（列表）
+fn sum(n: int) -> int {
+    let xs: int[5] = [2, 4, 6, 8, 10]
+    let total = 0
+    let i = 0
+    while i < n {
+        total = total + xs[i]
+        i = i + 1
+    }
+    return total
+}
+
+fn main() -> int {
+    print(sum(5))          // 30
+
+    let grid: int[4]       // 零初始化
+    grid[0] = 7
+    grid[3] = grid[0] * 2
+    print(grid[0])         // 7
+    print(grid[3])         // 14
+    print(grid[1])         // 0
+
+    let names = ["a", "b"] // 推断 string[2]
+    print(names[1])        // b
+    return 0
+}

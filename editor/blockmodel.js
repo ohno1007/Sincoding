@@ -38,6 +38,8 @@
       case "binary": return "(" + expr(node.lhs) + " " + node.op + " " + expr(node.rhs) + ")";
       case "call":
         return node.callee + "(" + node.args.map(expr).join(", ") + ")";
+      case "index": return expr(node.arr) + "[" + expr(node.idx) + "]";
+      case "array": return "[" + node.elems.map(expr).join(", ") + "]";
       default: throw new Error("未知表达式积木: " + node.block);
     }
   }
@@ -47,10 +49,17 @@
   function stmt(node, d) {
     const ind = pad(d);
     switch (node.block) {
-      case "let":
-        return ind + "let " + node.name + ": " + node.type + " = " + expr(node.value) + "\n";
-      case "assign":
-        return ind + node.name + " = " + expr(node.value) + "\n";
+      case "let": {
+        let s = ind + "let " + node.name + ": " + node.type;
+        if (node.len > 0) s += "[" + node.len + "]";
+        if (node.value) s += " = " + expr(node.value);
+        return s + "\n";
+      }
+      case "assign": {
+        let lhs = node.name;
+        if (node.index) lhs += "[" + expr(node.index) + "]";
+        return ind + lhs + " = " + expr(node.value) + "\n";
+      }
       case "if": {
         let s = ind + "if " + expr(node.cond) + " " + block(node.then, d);
         if (node.else) s += " else " + block(node.else, d);

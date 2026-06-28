@@ -18,7 +18,7 @@ enum class TokKind {
     AndAnd, OrOr, Not,      // && || !
     Arrow,                  // ->
     // 标点
-    LParen, RParen, LBrace, RBrace,
+    LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     Comma, Colon, Semicolon,
     // 结束
     End,

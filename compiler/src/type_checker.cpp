@@ -28,19 +28,26 @@ void TypeChecker::error(int line, const std::string& msg) {
     errors_.push_back({line, 0, msg});
 }
 
-bool TypeChecker::declare(const std::string& name, Type t) {
+bool TypeChecker::declare(const std::string& name, VarType t) {
     auto& scope = scopes_.back();
     if (scope.count(name)) return false;
     scope[name] = t;
     return true;
 }
 
-Type TypeChecker::lookup(const std::string& name) const {
+VarType TypeChecker::lookup(const std::string& name) const {
     for (auto it = scopes_.rbegin(); it != scopes_.rend(); ++it) {
         auto found = it->find(name);
         if (found != it->end()) return found->second;
     }
-    return Type::Unknown;
+    return {Type::Unknown, 0};
+}
+
+// 把 (base,len) 渲染成可读类型名，如 "int" 或 "int[8]"
+static std::string typeStr(Type base, int len) {
+    std::string s = typeName(base);
+    if (len > 0) s += "[" + std::to_string(len) + "]";
+    return s;
 }
 
 bool TypeChecker::check(Program& prog) {
@@ -71,7 +78,7 @@ void TypeChecker::checkFn(FnDecl& fn) {
     for (auto& p : fn.params) {
         if (p.type == Type::Void)
             error(p.line, "参数 '" + p.name + "' 不能是 void 类型");
-        if (!declare(p.name, p.type))
+        if (!declare(p.name, {p.type, 0}))
             error(p.line, "参数名重复: " + p.name);
     }
     checkBlock(*fn.body);
@@ -88,31 +95,59 @@ void TypeChecker::checkStmt(Stmt& s) {
     switch (s.kind) {
         case StmtKind::Let: {
             auto& ls = static_cast<LetStmt&>(s);
-            Type initT = checkExpr(*ls.init);
-            if (ls.declared == Type::Unknown) {
-                // 局部推断
-                if (initT == Type::Void)
-                    error(ls.line, "无法从 void 表达式推断 'let " + ls.name + "' 的类型");
-                ls.declared = (initT == Type::Void) ? Type::Int : initT;
-            } else if (initT != Type::Unknown && initT != ls.declared) {
-                error(ls.line, "类型不匹配: 'let " + ls.name + ": " +
-                                   typeName(ls.declared) + "' 不能用 " +
-                                   typeName(initT) + " 初始化");
+            if (ls.init) {
+                Type initT = checkExpr(*ls.init);
+                int initLen = ls.init->arrayLen;
+                if (ls.declared == Type::Unknown && ls.declaredLen == 0) {
+                    // 完全推断
+                    if (initT == Type::Void)
+                        error(ls.line, "无法从 void 表达式推断 'let " + ls.name + "' 的类型");
+                    ls.declared = (initT == Type::Void) ? Type::Int : initT;
+                    ls.declaredLen = initLen;
+                } else {
+                    if (initT != Type::Unknown && initT != ls.declared)
+                        error(ls.line, "类型不匹配: 'let " + ls.name + ": " +
+                                           typeStr(ls.declared, ls.declaredLen) +
+                                           "' 不能用 " + typeStr(initT, initLen) + " 初始化");
+                    else if (ls.declaredLen != initLen)
+                        error(ls.line, "数组长度不匹配: 'let " + ls.name + "' 期望 " +
+                                           typeStr(ls.declared, ls.declaredLen) + "，得到长度 " +
+                                           std::to_string(initLen));
+                }
+            } else if (ls.declared == Type::Unknown) {
+                error(ls.line, "无初始化的 'let " + ls.name + "' 必须标注类型");
             }
-            if (!declare(ls.name, ls.declared))
+            if (!declare(ls.name, {ls.declared, ls.declaredLen}))
                 error(ls.line, "变量重复定义: " + ls.name);
             break;
         }
         case StmtKind::Assign: {
             auto& as = static_cast<AssignStmt&>(s);
-            Type varT = lookup(as.name);
-            if (varT == Type::Unknown) {
+            VarType vt = lookup(as.name);
+            if (vt.base == Type::Unknown)
                 error(as.line, "赋值给未声明的变量: " + as.name);
+            if (as.index) {
+                // 元素赋值 name[idx] = value
+                if (vt.len == 0 && vt.base != Type::Unknown)
+                    error(as.line, as.name + " 不是数组，不能用下标赋值");
+                Type it = checkExpr(*as.index);
+                if (it != Type::Int && it != Type::Unknown)
+                    error(as.line, "数组下标必须是 int，而非 " + std::string(typeName(it)));
+                Type valT = checkExpr(*as.value);
+                if (as.value->arrayLen != 0)
+                    error(as.line, "不能把数组赋给单个元素");
+                else if (valT != Type::Unknown && vt.base != Type::Unknown && valT != vt.base)
+                    error(as.line, "元素类型不匹配: " + as.name + " 的元素是 " +
+                                       typeName(vt.base) + "，却赋以 " + typeName(valT));
+            } else {
+                Type valT = checkExpr(*as.value);
+                int valLen = as.value->arrayLen;
+                if (vt.base != Type::Unknown && valT != Type::Unknown &&
+                    (valT != vt.base || valLen != vt.len))
+                    error(as.line, "赋值类型不匹配: " + as.name + " 是 " +
+                                       typeStr(vt.base, vt.len) + "，却赋以 " +
+                                       typeStr(valT, valLen));
             }
-            Type valT = checkExpr(*as.value);
-            if (varT != Type::Unknown && valT != Type::Unknown && varT != valT)
-                error(as.line, "赋值类型不匹配: " + as.name + " 是 " +
-                                   typeName(varT) + "，却赋以 " + typeName(valT));
             break;
         }
         case StmtKind::If: {
@@ -136,6 +171,8 @@ void TypeChecker::checkStmt(Stmt& s) {
             auto& rs = static_cast<ReturnStmt&>(s);
             if (rs.value) {
                 Type vt = checkExpr(*rs.value);
+                if (rs.value->arrayLen != 0)
+                    error(rs.line, "不能返回数组");
                 if (curRet_ == Type::Void)
                     error(rs.line, "void 函数不能返回值");
                 else if (vt != Type::Unknown && vt != curRet_)
@@ -167,15 +204,49 @@ Type TypeChecker::checkExpr(Expr& e) {
         case ExprKind::StringLit: e.type = Type::String; return Type::String;
         case ExprKind::Var: {
             auto& v = static_cast<Var&>(e);
-            Type t = lookup(v.name);
-            if (t == Type::Unknown)
+            VarType t = lookup(v.name);
+            if (t.base == Type::Unknown)
                 error(v.line, "使用了未声明的变量: " + v.name);
-            v.type = t;
-            return t;
+            v.type = t.base;
+            v.arrayLen = t.len;
+            return t.base;
+        }
+        case ExprKind::Index: {
+            auto& ix = static_cast<IndexExpr&>(e);
+            Type at = checkExpr(*ix.arr);
+            if (ix.arr->arrayLen == 0 && at != Type::Unknown)
+                error(ix.line, "下标访问的不是数组");
+            Type it = checkExpr(*ix.idx);
+            if (it != Type::Int && it != Type::Unknown)
+                error(ix.line, "数组下标必须是 int，而非 " + std::string(typeName(it)));
+            ix.type = at;       // 元素类型
+            ix.arrayLen = 0;
+            return at;
+        }
+        case ExprKind::ArrayLit: {
+            auto& al = static_cast<ArrayLit&>(e);
+            if (al.elems.empty()) {
+                error(al.line, "数组字面量不能为空");
+                al.type = Type::Int; al.arrayLen = 0; return Type::Int;
+            }
+            Type elemT = checkExpr(*al.elems[0]);
+            for (size_t i = 1; i < al.elems.size(); i++) {
+                Type t = checkExpr(*al.elems[i]);
+                if (t != Type::Unknown && elemT != Type::Unknown && t != elemT)
+                    error(al.line, "数组元素类型不一致: " + std::string(typeName(elemT)) +
+                                       " 与 " + typeName(t));
+            }
+            for (auto& el : al.elems)
+                if (el->arrayLen != 0) error(al.line, "不支持嵌套数组");
+            al.type = elemT;
+            al.arrayLen = (int)al.elems.size();
+            return elemT;
         }
         case ExprKind::Unary: {
             auto& u = static_cast<Unary&>(e);
             Type ot = checkExpr(*u.operand);
+            if (u.operand->arrayLen != 0)
+                error(u.line, "一元运算 '" + u.op + "' 不能用于数组");
             if (u.op == "-") {
                 if (ot != Type::Int && ot != Type::Float && ot != Type::Unknown)
                     error(u.line, "一元 '-' 需要数值类型，而非 " + std::string(typeName(ot)));
@@ -191,6 +262,8 @@ Type TypeChecker::checkExpr(Expr& e) {
             auto& b = static_cast<Binary&>(e);
             Type lt = checkExpr(*b.lhs);
             Type rt = checkExpr(*b.rhs);
+            if (b.lhs->arrayLen != 0 || b.rhs->arrayLen != 0)
+                error(b.line, "运算 '" + b.op + "' 不能用于数组");
             const std::string& op = b.op;
             if (op == "&&" || op == "||") {
                 if (lt != Type::Bool && lt != Type::Unknown)
@@ -232,6 +305,8 @@ Type TypeChecker::checkExpr(Expr& e) {
                     Type at = checkExpr(*c.args[0]);
                     if (at == Type::Void)
                         error(c.line, "print 不能打印 void");
+                    if (c.args[0]->arrayLen != 0)
+                        error(c.line, "print 不能打印数组");
                 }
                 c.type = Type::Void;
                 return Type::Void;
@@ -250,6 +325,8 @@ Type TypeChecker::checkExpr(Expr& e) {
                                   std::to_string(c.args.size()));
             for (size_t i = 0; i < c.args.size(); i++) {
                 Type at = checkExpr(*c.args[i]);
+                if (c.args[i]->arrayLen != 0)
+                    error(c.line, "不能把数组作为参数传递");
                 if (i < sig.params.size() && at != Type::Unknown &&
                     at != sig.params[i])
                     error(c.line, "函数 " + c.callee + " 第 " + std::to_string(i + 1) +

@@ -142,6 +142,18 @@
         p.append(el("span", "kw", ")"));
         return p;
       }
+      case "index": {
+        const p = el("span", "pill varref");
+        p.append(renderExpr(node.arr), el("span", "kw", "["), renderExpr(node.idx), el("span", "kw", "]"));
+        return p;
+      }
+      case "array": {
+        const p = el("span", "pill lit");
+        p.append(el("span", "kw", "["));
+        node.elems.forEach((a, i) => { if (i) p.append(el("span", "kw", ",")); p.append(renderExpr(a)); });
+        p.append(el("span", "kw", "]"));
+        return p;
+      }
     }
     return el("span", "pill lit", "?");
   }
@@ -160,8 +172,13 @@
       const row = el("div", "hdr");
       row.append(el("span", "label", node.block === "let" ? "设" : "赋"));
       row.append(field(() => node.name, (s) => { node.name = s || "x"; }));
-      if (node.block === "let") row.append(el("span", "kw", ": " + node.type));
-      row.append(el("span", "kw", "="), renderExpr(node.value));
+      if (node.block === "let") {
+        const t = node.type + (node.len > 0 ? "[" + node.len + "]" : "");
+        row.append(el("span", "kw", ": " + t));
+      } else if (node.index) {
+        row.append(el("span", "kw", "["), renderExpr(node.index), el("span", "kw", "]"));
+      }
+      if (node.value !== undefined) row.append(el("span", "kw", "="), renderExpr(node.value));
       blk.append(row);
     } else if (node.block === "if") {
       blk = el("div", "block ctrl");

@@ -43,6 +43,23 @@ x = x + 1            // 赋值（类型必须一致）
 - `let name: T = expr`：显式标注，且要求 `expr` 类型为 `T`。
 - 变量先声明后使用；同一作用域内不可重复声明。
 
+## 3.5 数组（定长列表）
+
+定长、栈分配，不引入堆分配/GC——适合分数表、敌人列表等：
+
+```rust
+let xs: int[5] = [2, 4, 6, 8, 10]   // 字面量初始化
+let g: int[4]                        // 省略初始化 → 全部置 0
+let ys = [1, 2, 3]                   // 推断为 int[3]
+
+g[0] = 7                             // 写元素
+let v = xs[2] + g[0]                 // 读元素（下标须为 int）
+```
+
+- 类型写作 `T[N]`（`T` 为 `int/float/bool/string`，`N` 为长度）。
+- 越界访问不做运行时检查（同 C），由编写者负责。
+- 当前不支持：嵌套数组、把数组作为参数/返回值、对数组整体做运算或 `print`。
+
 ## 4. 函数
 
 ```rust
@@ -130,11 +147,11 @@ program   ::= fn_decl*
 fn_decl   ::= 'extern'? 'fn' IDENT '(' params? ')' ('->' type)? (block | ';'?)
 params    ::= param (',' param)*
 param     ::= IDENT ':' type
-type      ::= 'int' | 'float' | 'bool' | 'string' | 'void'
+type      ::= ('int' | 'float' | 'bool' | 'string' | 'void') ('[' INT ']')?
 block     ::= '{' stmt* '}'
 stmt      ::= let | assign | if | while | return | expr_stmt
-let       ::= 'let' IDENT (':' type)? '=' expr ';'?
-assign    ::= IDENT '=' expr ';'?
+let       ::= 'let' IDENT (':' type)? ('=' expr)? ';'?
+assign    ::= IDENT ('[' expr ']')? '=' expr ';'?
 if        ::= 'if' expr block ('else' (if | block))?
 while     ::= 'while' expr block
 return    ::= 'return' expr? ';'?
@@ -148,8 +165,10 @@ comparison::= term (('<' | '<=' | '>' | '>=') term)*
 term      ::= factor (('+' | '-') factor)*
 factor    ::= unary (('*' | '/' | '%') unary)*
 unary     ::= ('-' | '!') unary | primary
-primary   ::= INT | FLOAT | STRING | 'true' | 'false' | IDENT
-            | IDENT '(' args? ')' | '(' expr ')'
+primary   ::= INT | FLOAT | STRING | 'true' | 'false'
+            | IDENT ('[' expr ']')* | IDENT '(' args? ')'
+            | '[' (expr (',' expr)*)? ']'      // 数组字面量
+            | '(' expr ')'
 args      ::= expr (',' expr)*
 ```
 
