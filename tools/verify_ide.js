@@ -109,6 +109,13 @@ function freePort() {
     await dragTo(rb.x + rb.width / 2, rb.y + rb.height / 2, sb.x + sb.width / 2, sb.y + sb.height / 2);
     const exprNest = (await val()).includes('"文字"') && (await val()) !== beforeNest;
 
+    // 变量下拉：积木里的变量渲染成下拉框，自动列出作用域里的多个变量
+    const varDropdown = await page.evaluate(() => {
+      const sels = [...document.querySelectorAll("#canvas .var-select")];
+      const opts = new Set(sels.flatMap((s) => [...s.options].map((o) => o.value)));
+      return sels.length >= 2 && opts.size >= 2;
+    });
+
     // 反向同步：编辑文本 → wasm 编译器解析 → 积木更新
     await page.waitForFunction(() => window.__sincReady === true, { timeout: 20000 });
     await page.fill("#text-out", "fn demo() -> int {\n  let z: int = 9\n  return z\n}\n");
@@ -264,8 +271,8 @@ function freePort() {
     });
     await page.click("#publish-close");
 
-    result = { writeback, reorder, palette, catNav, paletteDrag, blockDelete, exprNest, reverse, spriteSwitch, sharedState, preview, costume, costumeNames, parallel, dockConsole, exportOk, highlighted, autocomplete, diagnostics, consolePanel, saveOpen, publishModal, stage, paintedPixels: painted, errors };
-    result.ok = writeback && reorder && palette && catNav && paletteDrag && blockDelete && exprNest && reverse && spriteSwitch && sharedState && preview && costume && costumeNames && parallel && dockConsole &&
+    result = { writeback, reorder, palette, catNav, paletteDrag, blockDelete, exprNest, varDropdown, reverse, spriteSwitch, sharedState, preview, costume, costumeNames, parallel, dockConsole, exportOk, highlighted, autocomplete, diagnostics, consolePanel, saveOpen, publishModal, stage, paintedPixels: painted, errors };
+    result.ok = writeback && reorder && palette && catNav && paletteDrag && blockDelete && exprNest && varDropdown && reverse && spriteSwitch && sharedState && preview && costume && costumeNames && parallel && dockConsole &&
       exportOk && highlighted && autocomplete && diagnostics && consolePanel && saveOpen && publishModal && stageOk && painted > 100 && errors.length === 0;
   } finally {
     await browser.close();

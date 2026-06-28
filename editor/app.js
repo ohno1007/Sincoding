@@ -303,8 +303,54 @@
   };
   const callLabel = (callee) => CALL_LABELS[callee] || callee;
 
+  // 收集某函数内「当前作用域」可见的变量（全局 + 参数 + 所有 let + for 变量）
+  function collectScope(fn) {
+    const vars = [], seen = new Set();
+    const add = (v) => { if (v && v.name && !seen.has(v.name)) { seen.add(v.name); vars.push(v); } };
+    (project.globals || []).forEach((g) => add({ name: g.name, type: g.type, len: g.len || 0 }));
+    (fn.params || []).forEach((p) => add({ name: p.name, type: p.type, len: 0 }));
+    const walk = (list) => (list || []).forEach((s) => {
+      if (s.block === "let") add({ name: s.name, type: s.type, len: s.len || 0 });
+      if (s.block === "for") add({ name: s.var, type: "int", len: 0 });
+      if (s.then) walk(s.then); if (s.else) walk(s.else); if (s.body) walk(s.body);
+    });
+    walk(fn.body);
+    return { vars, structs: project.structs || [] };
+  }
+  // 变量下拉框：自动列出作用域里的变量（可按类型过滤：数组 / 结构体）
+  function varSelect(scope, getName, setName, filter) {
+    const sel = el("select", "var-select");
+    let names = ((scope && scope.vars) || []).filter(filter || (() => true)).map((v) => v.name);
+    const cur = getName();
+    if (cur && !names.includes(cur)) names = [cur, ...names];
+    if (!names.length) names = [cur || "x"];
+    names.forEach((n) => { const o = document.createElement("option"); o.value = n; o.textContent = n; if (n === cur) o.selected = true; sel.append(o); });
+    sel.addEventListener("pointerdown", (e) => e.stopPropagation());   // 不触发积木拖拽
+    sel.addEventListener("change", () => { setName(sel.value); render(); });
+    return sel;
+  }
+  const structOf = (scope, name) => {
+    const v = ((scope && scope.vars) || []).find((x) => x.name === name);
+    return v && (scope.structs || []).find((s) => s.name === v.type);
+  };
+  // 结构体字段下拉（能解析出结构体则给字段下拉，否则文本可编辑）
+  function fieldSelect(node, scope) {
+    const st = node.obj.block === "var" ? structOf(scope, node.obj.name) : null;
+    if (st && st.fields) {
+      const sel = el("select", "var-select");
+      let names = st.fields.map((f) => f.name);
+      if (!names.includes(node.name)) names = [node.name, ...names];
+      names.forEach((n) => { const o = document.createElement("option"); o.value = n; o.textContent = n; if (n === node.name) o.selected = true; sel.append(o); });
+      sel.addEventListener("pointerdown", (e) => e.stopPropagation());
+      sel.addEventListener("change", () => { node.name = sel.value; render(); });
+      return sel;
+    }
+    return field(() => node.name, (s) => { node.name = s || "f"; });
+  }
+
   // 表达式渲染。replace(newNode) 若提供，则该元素成为可放置 reporter 的「槽位」。
-  function renderExpr(node, replace) {
+  // scope 提供作用域变量，用于变量/数组/结构体下拉。
+  function renderExpr(node, replace, scope) {
     let out;
     switch (node.block) {
       case "int":
@@ -327,19 +373,21 @@
       }
       case "var": {
         out = el("span", "pill varref");
-        out.append(field(() => node.name, (s) => { node.name = s || "x"; }));
+        // 变量下拉：自动列出作用域里的变量供选择（无作用域时退化为文本）
+        if (scope) out.append(varSelect(scope, () => node.name, (v) => { node.name = v; }));
+        else out.append(field(() => node.name, (s) => { node.name = s || "x"; }));
         break;
       }
       case "unary": {
         out = el("span", "pill op");
-        out.append(el("span", "kw", node.op), renderExpr(node.operand, (n) => { node.operand = n; render(); }));
+        out.append(el("span", "kw", node.op), renderExpr(node.operand, (n) => { node.operand = n; render(); }, scope));
         break;
       }
       case "binary": {
         out = el("span", "pill op");
-        out.append(renderExpr(node.lhs, (n) => { node.lhs = n; render(); }),
+        out.append(renderExpr(node.lhs, (n) => { node.lhs = n; render(); }, scope),
           el("span", "kw", node.op),
-          renderExpr(node.rhs, (n) => { node.rhs = n; render(); }));
+          renderExpr(node.rhs, (n) => { node.rhs = n; render(); }, scope));
         break;
       }
       case "call": {
@@ -347,26 +395,31 @@
         const label = callLabel(node.callee);
         if (!node.args.length) { out.append(el("span", "kw", label)); break; }
         out.append(el("span", "kw", label + " ("));
-        node.args.forEach((a, i) => { if (i) out.append(el("span", "kw", ",")); out.append(renderExpr(a, (n) => { node.args[i] = n; render(); })); });
+        node.args.forEach((a, i) => { if (i) out.append(el("span", "kw", ",")); out.append(renderExpr(a, (n) => { node.args[i] = n; render(); }, scope)); });
         out.append(el("span", "kw", ")"));
         break;
       }
       case "index": {
         out = el("span", "pill varref");
-        out.append(renderExpr(node.arr, (n) => { node.arr = n; render(); }), el("span", "kw", "["),
-          renderExpr(node.idx, (n) => { node.idx = n; render(); }), el("span", "kw", "]"));
+        // 数组名下拉（只列数组类变量）+ 索引槽
+        if (scope && node.arr.block === "var") out.append(varSelect(scope, () => node.arr.name, (v) => { node.arr.name = v; }, (x) => x.len > 0));
+        else out.append(renderExpr(node.arr, (n) => { node.arr = n; render(); }, scope));
+        out.append(el("span", "kw", "["), renderExpr(node.idx, (n) => { node.idx = n; render(); }, scope), el("span", "kw", "]"));
         break;
       }
       case "array": {
         out = el("span", "pill lit");
         out.append(el("span", "kw", "["));
-        node.elems.forEach((a, i) => { if (i) out.append(el("span", "kw", ",")); out.append(renderExpr(a, (n) => { node.elems[i] = n; render(); })); });
+        node.elems.forEach((a, i) => { if (i) out.append(el("span", "kw", ",")); out.append(renderExpr(a, (n) => { node.elems[i] = n; render(); }, scope)); });
         out.append(el("span", "kw", "]"));
         break;
       }
       case "field": {
         out = el("span", "pill varref");
-        out.append(renderExpr(node.obj, (n) => { node.obj = n; render(); }), el("span", "kw", "."), el("span", null, node.name));
+        // 结构体变量下拉（只列结构体类变量）. 字段下拉
+        if (scope && node.obj.block === "var") out.append(varSelect(scope, () => node.obj.name, (v) => { node.obj.name = v; }, (x) => structOf(scope, x.name)));
+        else out.append(renderExpr(node.obj, (n) => { node.obj = n; render(); }, scope));
+        out.append(el("span", "kw", "."), scope ? fieldSelect(node, scope) : el("span", null, node.name));
         break;
       }
       case "structlit": {
@@ -374,7 +427,7 @@
         out.append(el("span", "kw", node.typeName + " {"));
         node.fields.forEach((f, i) => {
           if (i) out.append(el("span", "kw", ","));
-          out.append(el("span", "kw", f.name + ":"), renderExpr(f.value, (n) => { f.value = n; render(); }));
+          out.append(el("span", "kw", f.name + ":"), renderExpr(f.value, (n) => { f.value = n; render(); }, scope));
         });
         out.append(el("span", "kw", "}"));
         break;
@@ -391,58 +444,60 @@
     return out;
   }
 
-  function renderStmtList(list) {
+  function renderStmtList(list, scope) {
     const s = el("div", "stack");
     s._list = list;                 // 作为拖拽重排的落点（drop zone）
-    list.forEach((st) => s.append(renderStmt(st, list)));
+    list.forEach((st) => s.append(renderStmt(st, list, scope)));
     return s;
   }
 
-  function renderStmt(node, list) {
+  function renderStmt(node, list, scope) {
     let blk;
     if (node.block === "let" || node.block === "assign") {
       blk = el("div", "block var");
       const row = el("div", "hdr");
       row.append(el("span", "label", node.block === "let" ? "设" : "赋"));
-      row.append(field(() => node.name, (s) => { node.name = s || "x"; }));
+      // 赋值语句的变量名也用下拉；let 声明仍是文本（在定义新变量）
+      if (node.block === "assign" && scope) row.append(varSelect(scope, () => node.name, (v) => { node.name = v; }));
+      else row.append(field(() => node.name, (s) => { node.name = s || "x"; }));
       if (node.block === "let") {
         const t = node.type + (node.len > 0 ? "[" + node.len + "]" : "");
         row.append(el("span", "kw", ": " + t));
       } else if (node.index) {
-        row.append(el("span", "kw", "["), renderExpr(node.index, (n) => { node.index = n; render(); }), el("span", "kw", "]"));
+        row.append(el("span", "kw", "["), renderExpr(node.index, (n) => { node.index = n; render(); }, scope), el("span", "kw", "]"));
       }
-      if (node.value !== undefined) row.append(el("span", "kw", "="), renderExpr(node.value, (n) => { node.value = n; render(); }));
+      if (node.value !== undefined) row.append(el("span", "kw", "="), renderExpr(node.value, (n) => { node.value = n; render(); }, scope));
       blk.append(row);
     } else if (node.block === "if") {
       blk = el("div", "block ctrl");
       const row = el("div", "hdr");
-      row.append(el("span", "label", "如果"), renderExpr(node.cond, (n) => { node.cond = n; render(); }), el("span", "kw", "那么"));
+      row.append(el("span", "label", "如果"), renderExpr(node.cond, (n) => { node.cond = n; render(); }, scope), el("span", "kw", "那么"));
       blk.append(row);
-      const m = el("div", "mouth"); m.append(renderStmtList(node.then)); blk.append(m);
-      if (node.else) { blk.append(el("div", "hdr")); const m2 = el("div", "mouth"); m2.append(renderStmtList(node.else)); blk.append(m2); }
+      const m = el("div", "mouth"); m.append(renderStmtList(node.then, scope)); blk.append(m);
+      if (node.else) { blk.append(el("div", "hdr")); const m2 = el("div", "mouth"); m2.append(renderStmtList(node.else, scope)); blk.append(m2); }
     } else if (node.block === "while") {
       blk = el("div", "block ctrl");
       const row = el("div", "hdr");
-      row.append(el("span", "label", "重复直到非"), renderExpr(node.cond, (n) => { node.cond = n; render(); }));
+      row.append(el("span", "label", "重复直到非"), renderExpr(node.cond, (n) => { node.cond = n; render(); }, scope));
       blk.append(row);
-      const m = el("div", "mouth"); m.append(renderStmtList(node.body)); blk.append(m);
+      const m = el("div", "mouth"); m.append(renderStmtList(node.body, scope)); blk.append(m);
     } else if (node.block === "for") {
       blk = el("div", "block ctrl");
       const row = el("div", "hdr");
       row.append(el("span", "label", "对"), field(() => node.var, (s) => { node.var = s || "i"; }),
-        el("span", "kw", "从"), renderExpr(node.start, (n) => { node.start = n; render(); }),
-        el("span", "kw", ".."), renderExpr(node.end, (n) => { node.end = n; render(); }));
+        el("span", "kw", "从"), renderExpr(node.start, (n) => { node.start = n; render(); }, scope),
+        el("span", "kw", ".."), renderExpr(node.end, (n) => { node.end = n; render(); }, scope));
       blk.append(row);
-      const m = el("div", "mouth"); m.append(renderStmtList(node.body)); blk.append(m);
+      const m = el("div", "mouth"); m.append(renderStmtList(node.body, scope)); blk.append(m);
     } else if (node.block === "return") {
       blk = el("div", "block ret");
       const row = el("div", "hdr");
       row.append(el("span", "label", "返回"));
-      if (node.value) row.append(renderExpr(node.value, (n) => { node.value = n; render(); }));
+      if (node.value) row.append(renderExpr(node.value, (n) => { node.value = n; render(); }, scope));
       blk.append(row);
     } else if (node.block === "expr") {
       blk = el("div", "block ev");
-      const row = el("div", "hdr"); row.append(renderExpr(node.expr, (n) => { node.expr = n; render(); })); blk.append(row);
+      const row = el("div", "hdr"); row.append(renderExpr(node.expr, (n) => { node.expr = n; render(); }, scope)); blk.append(row);
     } else {
       blk = el("div", "block", JSON.stringify(node));
     }
@@ -587,7 +642,7 @@
     fn.params.forEach((p) => hdr.append(el("span", "param", p.name + ": " + p.type)));
     if (fn.ret && fn.ret !== "void") hdr.append(el("span", "kw", "→ " + fn.ret));
     blk.append(hdr);
-    if (fn.body) { const m = el("div", "mouth"); m.append(renderStmtList(fn.body)); blk.append(m); }
+    if (fn.body) { const m = el("div", "mouth"); m.append(renderStmtList(fn.body, collectScope(fn))); blk.append(m); }
     script.append(blk);
 
     hdr.addEventListener("pointerdown", (e) => {
@@ -1191,6 +1246,8 @@
     r_and: Bb("&&"), r_or: Bb("||"), r_not: () => ({ block: "unary", op: "!", operand: { block: "bool", value: true } }),
     r_int: () => I(0), r_float: () => F(0), r_str: () => S("文字"),
     r_true: () => ({ block: "bool", value: true }), r_var: () => Vr("x"),
+    r_index: () => ({ block: "index", arr: Vr("a"), idx: I(0) }),       // 数组元素 a[i]
+    r_field: () => ({ block: "field", obj: Vr("s"), name: "field" }),   // 结构体字段 s.field
     r_random: () => C("random_int", I(1), I(10)),
     r_mouse_x: () => C("mouse_x"), r_mouse_y: () => C("mouse_y"), r_mouse_down: () => C("mouse_down"),
     r_key: () => C("key_down", C("key_left")), r_received: () => C("received", S("go")),
@@ -1213,8 +1270,9 @@
     { id: "data", name: "变量 / 数据", color: "#FF8C1A", items: ["let", "let_str", "let_arr", "set_idx"] },
     { id: "op", name: "运算", color: "#59C059", items: ["incr", "decr", "set_op", "to_int", "to_float"] },
     { id: "reporters", name: "运算块 (拖入槽)", color: "#59C059", reporter: true,
-      items: ["r_add", "r_sub", "r_mul", "r_div", "r_mod", "r_lt", "r_gt", "r_eq", "r_le", "r_ge", "r_ne",
-        "r_and", "r_or", "r_not", "r_int", "r_float", "r_str", "r_true", "r_var", "r_random",
+      items: ["r_var", "r_index", "r_field", "r_add", "r_sub", "r_mul", "r_div", "r_mod",
+        "r_lt", "r_gt", "r_eq", "r_le", "r_ge", "r_ne", "r_and", "r_or", "r_not",
+        "r_int", "r_float", "r_str", "r_true", "r_random",
         "r_mouse_x", "r_mouse_y", "r_mouse_down", "r_key", "r_received", "r_sprite_x", "r_sprite_y"] },
     { id: "control", name: "控制", color: "#FFAB19", items: ["if", "if_else", "while", "for", "repeat", "return", "print"] },
     { id: "stage", name: "舞台", color: "#FFAB19", items: ["stage_init", "game_loop", "frame_begin", "frame_end", "stage_close"] },

@@ -407,3 +407,10 @@ body.dragging-block { cursor:grabbing; }
 /* reporter 调色板项（拖入槽用） */
 .pal-reporter .expr-wrap { display:inline-block; }
 .pal-reporter { padding:1px 0; }
+
+/* 变量 / 数组 / 结构体字段下拉（积木里选作用域变量） */
+.var-select { font:inherit; font-size:12px; font-weight:600; border:0; border-radius:999px;
+  padding:1px 4px; background:#fff; color:#2b3a4b; cursor:pointer; max-width:130px;
+  outline:none; box-shadow:0 1px 1px rgba(0,0,0,.12); }
+.var-select:focus { box-shadow:0 0 0 2px rgba(76,151,255,.45); }
+.pill.varref { padding:2px 6px; gap:3px; }
