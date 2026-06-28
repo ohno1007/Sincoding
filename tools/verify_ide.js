@@ -50,6 +50,13 @@ const { chromium } = require("playwright");
     reorder = afterR !== beforeR && fibBody.indexOf("return") < fibBody.indexOf("if (");
   }
 
+  // 调色板：加入「数组」与「for」积木 → 文本应出现 int[3] 与 for
+  await page.click('#palette button:has-text("设 数组")');
+  await page.click('#palette button:has-text("for i in")');
+  await page.waitForTimeout(40);
+  const palText = await page.textContent("#text-out");
+  const palette = palText.includes("int[3]") && palText.includes("for ");
+
   // 多精灵 / 多页积木：切到第二个精灵 → 文本页应切换
   const sprite1Text = await page.textContent("#text-out");
   await page.click("#sprite-list .sprite-card:nth-child(2)");
@@ -86,7 +93,7 @@ const { chromium } = require("playwright");
 
   await browser.close();
 
-  const ok = writeback && reorder && spriteSwitch && stageOk && painted > 100 && errors.length === 0;
-  console.log(JSON.stringify({ writeback, reorder, spriteSwitch, stage, paintedPixels: painted, errors }));
+  const ok = writeback && reorder && palette && spriteSwitch && stageOk && painted > 100 && errors.length === 0;
+  console.log(JSON.stringify({ writeback, reorder, palette, spriteSwitch, stage, paintedPixels: painted, errors }));
   process.exit(ok ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

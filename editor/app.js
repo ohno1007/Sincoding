@@ -415,9 +415,14 @@
 
   // ---------------- 调色板 ----------------
   const NEW = {
-    let: () => ({ block: "let", name: "x", type: "int", value: { block: "int", value: 0 } }),
+    let: () => ({ block: "let", name: "x", type: "int", len: 0, value: { block: "int", value: 0 } }),
+    let_str: () => ({ block: "let", name: "s", type: "string", len: 0, value: { block: "string", value: "你好" } }),
+    let_arr: () => ({ block: "let", name: "a", type: "int", len: 3,
+      value: { block: "array", elems: [{ block: "int", value: 0 }, { block: "int", value: 0 }, { block: "int", value: 0 }] } }),
+    set_idx: () => ({ block: "assign", name: "a", index: { block: "int", value: 0 }, value: { block: "int", value: 0 } }),
     if: () => ({ block: "if", cond: { block: "bool", value: true }, then: [] }),
     while: () => ({ block: "while", cond: { block: "bool", value: true }, body: [] }),
+    for: () => ({ block: "for", var: "i", start: { block: "int", value: 0 }, end: { block: "int", value: 10 }, body: [] }),
     return: () => ({ block: "return", value: { block: "int", value: 0 } }),
     print: () => ({ block: "expr", expr: { block: "call", callee: "print", args: [{ block: "int", value: 0 }] } }),
   };
@@ -446,11 +451,15 @@
     };
     pal.append(el("h2", null, "自定义"));
     item("新建函数", "#FF6680", addFn, "plus");
-    pal.append(el("h2", null, "变量"));
+    pal.append(el("h2", null, "变量 / 数据"));
     item("设 变量", "#FF8C1A", () => addStmt("let"));
+    item("设 字符串", "#FF8C1A", () => addStmt("let_str"));
+    item("设 数组", "#FF8C1A", () => addStmt("let_arr"));
+    item("数组赋值 a[i]=v", "#FF8C1A", () => addStmt("set_idx"));
     pal.append(el("h2", null, "控制"));
     item("如果 …", "#FFAB19", () => addStmt("if"));
     item("重复直到 …", "#FFAB19", () => addStmt("while"));
+    item("for i in a..b", "#FFAB19", () => addStmt("for"));
     pal.append(el("h2", null, "外观"));
     item("返回 …", "#9966FF", () => addStmt("return"));
     item("print( … )", "#4C97FF", () => addStmt("print"));
