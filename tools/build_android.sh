@@ -40,7 +40,7 @@ echo "[1/2] 转译 $SRC → C"
 echo "[2/2] NDK 链接 → $OUT （$ABI, API $API）"
 mkdir -p "$(dirname "$OUT")"
 # -u 强制从 raylib 静态库拉入 NativeActivity 入口
-"$CC" -shared -fPIC -std=c11 \
+"$CC" -shared -fPIC -std=c11 -O2 \
     -I"$ROOT/runtime" -I"$RAYLIB_ANDROID_INCLUDE" \
     -I"$ANDROID_NDK/sources/android/native_app_glue" \
     "$TMP/program.c" "$ROOT/runtime/prelude.c" "$ROOT/runtime/runtime.c" \

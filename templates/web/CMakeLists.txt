@@ -23,9 +23,14 @@ add_executable(index
 target_include_directories(index PRIVATE ${SIN_RUNTIME_DIR} ${RAYLIB_WEB_INCLUDE})
 target_link_libraries(index ${RAYLIB_WEB_LIB})
 
+# 优化级别：emscripten 在编译与链接两端都吃 -O，发布成品达到原生 C(-O2) 水平
+target_compile_options(index PRIVATE "-O2")
+
 # 产出 .html（含 .js + .wasm）；ASYNCIFY 让 while 主循环在浏览器中可用
 set_target_properties(index PROPERTIES SUFFIX ".html")
 target_link_options(index PRIVATE
+  "-O2"
+  "-sMINIFY_HTML=0"        # 关闭 HTML 压缩（本机 emscripten 的 htmlmin 有 bug）
   "-sUSE_GLFW=3"
   "-sASYNCIFY"
   "-sALLOW_MEMORY_GROWTH=1"

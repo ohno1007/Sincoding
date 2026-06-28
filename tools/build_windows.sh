@@ -28,6 +28,7 @@ echo "[1/3] 转译 $SRC → C"
 echo "[2/3] CMake + MinGW 交叉编译"
 cmake -S "$ROOT/templates/windows" -B "$BUILD" \
     -DCMAKE_TOOLCHAIN_FILE="$ROOT/templates/windows/mingw-toolchain.cmake" \
+    -DCMAKE_BUILD_TYPE=Release \
     -DSIN_PROGRAM_C="$GEN" \
     -DSIN_RUNTIME_DIR="$ROOT/runtime" \
     -DRAYLIB_WIN_LIB="$RAYLIB_WIN_LIB" \
