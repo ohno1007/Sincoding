@@ -45,6 +45,15 @@ long long key_right(void);
 long long key_up(void);
 long long key_down_arrow(void);
 
+// 声音
+long long sound_load(const char* path);
+void play_sound(long long snd);
+void play_tone(long long freq, long long ms);
+
+// 广播 / 事件
+void broadcast(const char* message);
+bool received(const char* message);
+
 #ifdef __cplusplus
 }
 #endif

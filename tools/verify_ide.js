@@ -81,12 +81,22 @@ function freePort() {
     const reverse = await page.evaluate(() =>
       [...document.querySelectorAll("#canvas .script .field")].some((f) => f.textContent === "demo"));
 
-    // 多精灵 / 多页积木：切到第二个精灵 → 文本页应切换
+    // 多精灵 / 多页积木：切到第二个精灵（游戏）→ 文本页应切换
     const s1 = await val();
     await page.click("#sprite-list .sprite-card:nth-child(2)");
     await page.waitForTimeout(50);
     const s2 = await val();
-    const spriteSwitch = s2 !== s1 && s2.includes("update");
+    const spriteSwitch = s2 !== s1 && s2.includes("sprite_new");
+
+    // 实时预览：切到游戏精灵后，解释器应在预览画布跑出非空画面
+    await page.waitForTimeout(1000);
+    const previewPx = await page.evaluate(() => {
+      const c = document.getElementById("preview-canvas");
+      const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+      let n = 0; for (let i = 0; i < d.length; i += 4) { const r = d[i], g = d[i + 1], b = d[i + 2]; if (!(r > 230 && g > 230 && b > 230)) n++; }
+      return n;
+    });
+    const preview = previewPx > 200;
 
     // 造型画板：切 tab，画几笔，断言有像素
     await page.click('header .tabs button[data-view="costume-view"]');
@@ -114,8 +124,8 @@ function freePort() {
     const stageOk = stage.count >= 2 && stage.textured >= 1;
     if (shots) await page.screenshot({ path: shots + "/ide_stage.png" });
 
-    result = { writeback, reorder, palette, reverse, spriteSwitch, stage, paintedPixels: painted, errors };
-    result.ok = writeback && reorder && palette && reverse && spriteSwitch && stageOk && painted > 100 && errors.length === 0;
+    result = { writeback, reorder, palette, reverse, spriteSwitch, preview, previewPx, stage, paintedPixels: painted, errors };
+    result.ok = writeback && reorder && palette && reverse && spriteSwitch && preview && stageOk && painted > 100 && errors.length === 0;
   } finally {
     await browser.close();
     srv.kill();

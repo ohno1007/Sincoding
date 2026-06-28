@@ -12,6 +12,8 @@
     puzzle: '<path d="M15.5 3.5a2 2 0 0 1 2 2V8H20a2 2 0 1 1 0 4h-2.5v2.5a2 2 0 0 1-2 2H13V19a2 2 0 1 1-4 0v-.5H6.5a2 2 0 0 1-2-2V14H4a2 2 0 1 1 0-4h.5V7.5a2 2 0 0 1 2-2H9V5a2 2 0 1 1 4 0v.5h2.5Z"/>',
     move: '<polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/>',
     play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+    stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+    bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   };
   function svg(name, size) {
     const body = P[name] || "";

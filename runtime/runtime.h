@@ -55,6 +55,7 @@ void rt_draw_int(long long n, float x, float y, int size);       // 在舞台坐
 typedef int rt_sound;
 rt_sound rt_sound_load(const char* path);
 void rt_sound_play(rt_sound snd);
+void rt_play_tone(int freq, int ms);   // 简易蜂鸣（无音频设备时为空操作）
 
 // ---------- 广播 / 事件（自建事件队列） ----------
 void rt_broadcast(const char* message);

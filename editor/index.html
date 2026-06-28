@@ -35,6 +35,15 @@
         <div id="text-pane">
           <div class="hd"><span data-icon="code" data-icon-size="15"></span>文本 ⇄ 积木（可编辑，由 wasm 编译器反向解析）<span id="text-status"></span></div>
           <textarea id="text-out" spellcheck="false"></textarea>
+          <div id="preview-dock">
+            <div class="pv-bar">
+              <span data-icon="play" data-icon-size="14"></span>实时预览
+              <button id="pv-run" title="重新运行" data-icon="play" data-icon-size="14"></button>
+              <button id="pv-stop" title="停止" data-icon="stop" data-icon-size="14"></button>
+              <span id="pv-status"></span>
+            </div>
+            <canvas id="preview-canvas" width="480" height="360" tabindex="0"></canvas>
+          </div>
         </div>
       </div>
       <div id="sprite-bar">
@@ -75,6 +84,7 @@
 
 <script src="./sinc.js"></script>
 <script src="./icons.js"></script>
+<script src="./interp.js"></script>
 <script src="./blockmodel.js"></script>
 <script src="./paint.js"></script>
 <script src="./blocks_data.js"></script>

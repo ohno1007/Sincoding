@@ -1,0 +1,248 @@
+// interp.js — 积木模型解释器 + 实时预览
+//
+// 直接在浏览器里「跑」积木模型（不经编译）：解释表达式/语句/函数，并把
+// 运行时内建（精灵/移动/文字/按键/广播/声音）画到预览画布上。游戏主循环
+// while stage_running() {...} 被特殊处理为 requestAnimationFrame 逐帧执行，
+// 从而不阻塞页面。编辑积木/文本即可重跑（类 Vue 实时预览）。
+(function (root) {
+  "use strict";
+
+  const KEYMAP = { ArrowLeft: 263, ArrowRight: 262, ArrowUp: 265, ArrowDown: 264, " ": 32 };
+
+  class ReturnSignal { constructor(v) { this.value = v; } }
+
+  class SinPreview {
+    constructor(canvas) {
+      this.canvas = canvas;
+      this.ctx = canvas.getContext("2d");
+      this.keys = new Set();
+      this.raf = 0;
+      this.audio = null;
+      canvas.tabIndex = 0;
+      canvas.addEventListener("keydown", (e) => {
+        const c = KEYMAP[e.key]; if (c !== undefined) { this.keys.add(c); e.preventDefault(); }
+      });
+      canvas.addEventListener("keyup", (e) => {
+        const c = KEYMAP[e.key]; if (c !== undefined) this.keys.delete(c);
+      });
+    }
+
+    stop() { if (this.raf) cancelAnimationFrame(this.raf); this.raf = 0; if (this.world) this.world.running = false; }
+
+    beep(freq, ms) {
+      try {
+        if (!this.audio) this.audio = new (window.AudioContext || window.webkitAudioContext)();
+        const o = this.audio.createOscillator(), g = this.audio.createGain();
+        o.frequency.value = freq || 440; o.type = "square";
+        g.gain.value = 0.05; o.connect(g); g.connect(this.audio.destination);
+        o.start(); o.stop(this.audio.currentTime + (ms || 120) / 1000);
+      } catch (e) { /* 预览无声不致命 */ }
+    }
+
+    // ---- 运行 ----
+    run(program, onStatus) {
+      this.stop();
+      this.onStatus = onStatus || (() => {});
+      this.fns = {};
+      (program || []).forEach((f) => { if (f.block === "fn") this.fns[f.name] = f; });
+      const main = this.fns["main"];
+      const w = this.canvas.width, h = this.canvas.height;
+      this.ctx.fillStyle = "#f5f5f7"; this.ctx.fillRect(0, 0, w, h);
+      if (!main) { this.onStatus("没有 main()，无法预览", "warn"); return; }
+
+      this.world = {
+        W: w, H: h, running: true, frame: 0, sprites: [],
+        keys: this.keys, broadcasts: new Set(), nextBroadcasts: new Set(),
+        soundCount: 0, console: [],
+      };
+      const env = [new Map()];
+      const body = main.body || [];
+      const loopIdx = body.findIndex((s) => s.block === "while" && s.cond &&
+        s.cond.block === "call" && s.cond.callee === "stage_running");
+      try {
+        if (loopIdx < 0) {                       // 非游戏：跑到结束，展示输出
+          this.execList(body, env);
+          this.drawConsole();
+          this.onStatus("运行完成 ✓", "ok");
+          return;
+        }
+        for (let i = 0; i < loopIdx; i++) this.execStmt(body[i], env);  // 初始化
+        this.env = env;
+        this.loop = body[loopIdx];
+        this.post = body.slice(loopIdx + 1);
+        this.onStatus("运行中 ▶（点画面后用方向键/空格）", "ok");
+        this.frameLoop();
+      } catch (e) {
+        if (!(e instanceof ReturnSignal)) this.onStatus("运行出错: " + e.message, "warn");
+      }
+    }
+
+    frameLoop() {
+      const wd = this.world;
+      if (!wd || !wd.running) {
+        try { for (const s of this.post || []) this.execStmt(s, this.env); } catch (e) {}
+        if (wd) this.onStatus("已结束", "ok");
+        return;
+      }
+      try {
+        this.execList(this.loop.body, this.env);
+      } catch (e) {
+        if (e instanceof ReturnSignal) { wd.running = false; }
+        else { this.onStatus("运行出错: " + e.message, "warn"); return; }
+      }
+      wd.frame++;
+      this.raf = requestAnimationFrame(() => this.frameLoop());
+    }
+
+    // ---- 语句 ----
+    execList(list, env) {
+      env.push(new Map());
+      try { for (const s of list) this.execStmt(s, env); }
+      finally { env.pop(); }
+    }
+
+    execStmt(node, env) {
+      const w = this.world;
+      switch (node.block) {
+        case "let": {
+          let v = node.value !== undefined ? this.eval(node.value, env) : this.defaultVal(node);
+          env[env.length - 1].set(node.name, v);
+          break;
+        }
+        case "assign": {
+          if (node.field) { const o = this.lookup(env, node.name); if (o) o[node.field] = this.eval(node.value, env); }
+          else if (node.index) { const a = this.lookup(env, node.name); a[this.eval(node.index, env)] = this.eval(node.value, env); }
+          else this.setVar(env, node.name, this.eval(node.value, env));
+          break;
+        }
+        case "if":
+          if (this.eval(node.cond, env)) this.execList(node.then, env);
+          else if (node.else) this.execList(node.else, env);
+          break;
+        case "while": {
+          let g = 0;
+          while (this.eval(node.cond, env)) {
+            this.execList(node.body, env);
+            if (++g > 2000000) throw new Error("循环次数过多");
+          }
+          break;
+        }
+        case "for": {
+          const a = this.eval(node.start, env), b = this.eval(node.end, env);
+          env.push(new Map());
+          try { for (let i = a; i < b; i++) { env[env.length - 1].set(node.var, i); this.execList(node.body, env); } }
+          finally { env.pop(); }
+          break;
+        }
+        case "return":
+          throw new ReturnSignal(node.value !== undefined ? this.eval(node.value, env) : 0);
+        case "expr":
+          this.eval(node.expr, env);
+          break;
+      }
+    }
+
+    defaultVal(node) {
+      if (node.len > 0) return new Array(node.len).fill(node.type === "float" ? 0 : (node.type === "bool" ? false : (node.type === "string" ? "" : 0)));
+      if (node.type === "bool") return false;
+      if (node.type === "string") return "";
+      if (node.type === "float" || node.type === "int") return 0;
+      return {}; // 结构体零初始化
+    }
+
+    // ---- 表达式 ----
+    eval(node, env) {
+      switch (node.block) {
+        case "int": case "float": case "bool": return node.value;
+        case "string": return node.value;
+        case "var": return this.lookup(env, node.name);
+        case "unary": { const v = this.eval(node.operand, env); return node.op === "-" ? -v : !v; }
+        case "binary": return this.binop(node.op, this.eval(node.lhs, env), this.eval(node.rhs, env));
+        case "call": return this.callFn(node.callee, node.args.map((a) => this.eval(a, env)));
+        case "index": return this.eval(node.arr, env)[this.eval(node.idx, env)];
+        case "array": return node.elems.map((e) => this.eval(e, env));
+        case "field": { const o = this.eval(node.obj, env); const v = o ? o[node.name] : undefined; return v === undefined ? 0 : v; }
+        case "structlit": { const o = {}; node.fields.forEach((f) => { o[f.name] = this.eval(f.value, env); }); return o; }
+      }
+      return 0;
+    }
+
+    binop(op, l, r) {
+      switch (op) {
+        case "+": return l + r; case "-": return l - r; case "*": return l * r;
+        case "/": return (Number.isInteger(l) && Number.isInteger(r)) ? Math.trunc(l / r) : l / r;
+        case "%": return l % r;
+        case "==": return l === r; case "!=": return l !== r;
+        case "<": return l < r; case "<=": return l <= r; case ">": return l > r; case ">=": return l >= r;
+        case "&&": return l && r; case "||": return l || r;
+      }
+      return 0;
+    }
+
+    lookup(env, name) { for (let i = env.length - 1; i >= 0; i--) if (env[i].has(name)) return env[i].get(name); return 0; }
+    setVar(env, name, v) { for (let i = env.length - 1; i >= 0; i--) if (env[i].has(name)) { env[i].set(name, v); return; } env[env.length - 1].set(name, v); }
+
+    callFn(name, args) {
+      const b = this.BUILTINS[name];
+      if (b) return b.call(this, args);
+      const fn = this.fns[name];
+      if (!fn) throw new Error("未定义函数 " + name);
+      const scope = new Map();
+      (fn.params || []).forEach((p, i) => scope.set(p.name, args[i]));
+      try { this.execList(fn.body, [scope]); }
+      catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; }
+      return 0;
+    }
+
+    // 舞台坐标（中心原点、y 向上）→ 画布坐标
+    s2c(x, y) { return [x + this.world.W / 2, this.world.H / 2 - y]; }
+
+    drawConsole() {
+      const ctx = this.ctx; ctx.fillStyle = "#333"; ctx.font = "16px monospace";
+      this.world.console.slice(0, 12).forEach((line, i) => ctx.fillText(line, 16, 28 + i * 22));
+    }
+  }
+
+  // ---- 运行时内建（对应 runtime/prelude） ----
+  SinPreview.prototype.BUILTINS = {
+    stage_init(a) { this.world.W = a[0]; this.world.H = a[1];
+      this.canvas.width = a[0]; this.canvas.height = a[1]; },
+    stage_running() { return this.world.running; },
+    frame_begin() {
+      this.world.broadcasts = this.world.nextBroadcasts; this.world.nextBroadcasts = new Set();
+      this.ctx.fillStyle = "#f5f5f7"; this.ctx.fillRect(0, 0, this.world.W, this.world.H);
+    },
+    frame_end() {},
+    stage_close() { this.world.running = false; },
+    sprite_new(a) { const s = { kind: "rect", x: a[0], y: a[1], size: a[2], bubble: "" }; this.world.sprites.push(s); return this.world.sprites.length - 1; },
+    sprite_load() { const s = { kind: "ball", x: 0, y: 0, size: 48, bubble: "" }; this.world.sprites.push(s); return this.world.sprites.length - 1; },
+    sprite_move_to(a) { const s = this.world.sprites[a[0]]; if (s) { s.x = a[1]; s.y = a[2]; } },
+    sprite_x(a) { const s = this.world.sprites[a[0]]; return s ? s.x : 0; },
+    sprite_y(a) { const s = this.world.sprites[a[0]]; return s ? s.y : 0; },
+    sprite_draw(a) {
+      const s = this.world.sprites[a[0]]; if (!s) return;
+      const ctx = this.ctx, [cx, cy] = this.s2c(s.x, s.y), z = s.size;
+      if (s.kind === "ball") {
+        ctx.fillStyle = "#ffd21a"; ctx.beginPath(); ctx.arc(cx, cy, z / 2, 0, 2 * Math.PI); ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = "#e64646"; ctx.stroke();
+      } else {
+        ctx.fillStyle = "#be2d3c"; ctx.fillRect(cx - z / 2, cy - z / 2, z, z);
+        ctx.lineWidth = 2; ctx.strokeStyle = "#000"; ctx.strokeRect(cx - z / 2, cy - z / 2, z, z);
+      }
+      if (s.bubble) { ctx.fillStyle = "#000"; ctx.font = "16px sans-serif"; ctx.fillText(s.bubble, cx + z / 2, cy - z / 2 - 6); }
+    },
+    key_down(a) { return this.world.keys.has(a[0]); },
+    key_left() { return 263; }, key_right() { return 262; }, key_up() { return 265; }, key_down_arrow() { return 264; },
+    say(a) { const s = this.world.sprites[a[0]]; if (s) s.bubble = a[1]; },
+    draw_text(a) { const [cx, cy] = this.s2c(a[1], a[2]); this.ctx.fillStyle = "#222"; this.ctx.font = a[3] + "px monospace"; this.ctx.fillText(a[0], cx, cy); },
+    draw_number(a) { const [cx, cy] = this.s2c(a[1], a[2]); this.ctx.fillStyle = "#222"; this.ctx.font = a[3] + "px monospace"; this.ctx.fillText(String(a[0]), cx, cy); },
+    broadcast(a) { this.world.nextBroadcasts.add(a[0]); },
+    received(a) { return this.world.broadcasts.has(a[0]); },
+    sound_load() { return ++this.world.soundCount; },
+    play_sound() { this.beep(660, 100); },
+    play_tone(a) { this.beep(a[0], a[1]); },
+    print(a) { this.world.console.push(String(a[0])); },
+  };
+
+  root.SinPreview = SinPreview;
+})(typeof window !== "undefined" ? window : this);

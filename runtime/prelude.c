@@ -70,3 +70,10 @@ long long key_left(void)       { return RT_KEY_LEFT; }
 long long key_right(void)      { return RT_KEY_RIGHT; }
 long long key_up(void)         { return RT_KEY_UP; }
 long long key_down_arrow(void) { return RT_KEY_DOWN; }
+
+long long sound_load(const char* path) { return (long long)rt_sound_load(path); }
+void play_sound(long long snd) { rt_sound_play((rt_sound)snd); }
+void play_tone(long long freq, long long ms) { rt_play_tone((int)freq, (int)ms); }
+
+void broadcast(const char* message) { rt_broadcast(message); }
+bool received(const char* message) { return rt_received(message); }

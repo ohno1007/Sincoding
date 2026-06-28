@@ -7,14 +7,39 @@
   "use strict";
 
   // ---------------- 项目 / 精灵 ----------------
+  // 积木构造小助手
+  const I = (v) => ({ block: "int", value: v });
+  const F = (v) => ({ block: "float", value: v });
+  const S = (v) => ({ block: "string", value: v });
+  const Vr = (n) => ({ block: "var", name: n });
+  const C = (callee, ...args) => ({ block: "call", callee, args });
+  const Bn = (op, lhs, rhs) => ({ block: "binary", op, lhs, rhs });
+  const Ex = (expr) => ({ block: "expr", expr });
+
   function sampleMain() {
     return { block: "fn", name: "main", params: [], ret: "int",
       body: [{ block: "return", value: { block: "int", value: 0 } }] };
   }
-  function sampleUpdate() {
-    return { block: "fn", name: "update", params: [], ret: "void",
-      body: [{ block: "expr", expr: { block: "call", callee: "print",
-        args: [{ block: "int", value: 1 }] } }] };
+  // 一个可在预览里玩的小程序：方向键移动精灵
+  function sampleGame() {
+    return { block: "fn", name: "main", params: [], ret: "int", body: [
+      Ex(C("stage_init", I(480), I(360))),
+      { block: "let", name: "hero", type: "int", len: 0, value: C("sprite_new", F(0), F(0), F(40)) },
+      { block: "let", name: "x", type: "float", len: 0, value: F(0) },
+      { block: "while", cond: C("stage_running"), body: [
+        { block: "if", cond: C("key_down", C("key_left")), then: [
+          { block: "assign", name: "x", value: Bn("-", Vr("x"), F(6)) } ] },
+        { block: "if", cond: C("key_down", C("key_right")), then: [
+          { block: "assign", name: "x", value: Bn("+", Vr("x"), F(6)) } ] },
+        Ex(C("sprite_move_to", Vr("hero"), Vr("x"), F(0))),
+        Ex(C("frame_begin")),
+        Ex(C("sprite_draw", Vr("hero"))),
+        Ex(C("draw_text", S("← → 移动我"), F(-200), F(150), I(20))),
+        Ex(C("frame_end")),
+      ] },
+      Ex(C("stage_close")),
+      { block: "return", value: I(0) },
+    ] };
   }
   function placeFns(program) {
     program.forEach((fn, i) => {
@@ -26,7 +51,7 @@
       ? window.SIN_BLOCKS.program : [sampleMain()];
     const sprites = [
       { name: "精灵1", icon: "🐱", program: p1, costumes: [] },
-      { name: "精灵2", icon: "🎈", program: [sampleUpdate()], costumes: [] },
+      { name: "精灵2", icon: "🎮", program: [sampleGame()], costumes: [] },
     ];
     sprites.forEach((s) => placeFns(s.program));
     return { sprites, cur: 0 };
@@ -80,6 +105,28 @@
     if (document.activeElement === textOut) return; // 用户正在编辑文本，别打断
     try { textOut.value = window.BlockModel.modelToSource(sprite().program); }
     catch (err) { textOut.value = "// 序列化错误: " + err.message; }
+    schedulePreview();
+  }
+
+  // ---------------- 实时预览（解释器跑积木） ----------------
+  let preview = null, previewTimer = null;
+  function setPvStatus(t, cls) {
+    const e = document.getElementById("pv-status"); if (e) { e.textContent = t; e.className = cls || ""; }
+  }
+  function runPreview() {
+    if (!preview) return;
+    try { preview.run(sprite().program, setPvStatus); }
+    catch (e) { setPvStatus("预览错误", "warn"); }
+  }
+  function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(runPreview, 450); }
+  function setupPreview() {
+    const c = document.getElementById("preview-canvas");
+    if (!c || !window.SinPreview) return;
+    preview = new window.SinPreview(c);
+    const run = document.getElementById("pv-run"), stop = document.getElementById("pv-stop");
+    if (run) run.addEventListener("click", runPreview);
+    if (stop) stop.addEventListener("click", () => { preview.stop(); setPvStatus("已停止", ""); });
+    c.addEventListener("pointerdown", () => c.focus());
   }
 
   // ---------------- DOM 工具 ----------------
@@ -377,6 +424,7 @@
     renderCanvas(); // 不回写文本，避免打断输入
     const n = (res.diags || []).length;
     setTextStatus(n ? (n + " 个问题（部分有效）") : "已同步 ✓", n ? "warn" : "ok");
+    schedulePreview(); // 文本编辑也实时刷新预览
   }
   textOut.addEventListener("input", () => {
     clearTimeout(textTimer);
@@ -477,6 +525,11 @@
     for: () => ({ block: "for", var: "i", start: { block: "int", value: 0 }, end: { block: "int", value: 10 }, body: [] }),
     return: () => ({ block: "return", value: { block: "int", value: 0 } }),
     print: () => ({ block: "expr", expr: { block: "call", callee: "print", args: [{ block: "int", value: 0 }] } }),
+    // 事件 / 声音
+    if_key: () => ({ block: "if", cond: C("key_down", C("key_left")), then: [] }),
+    broadcast: () => Ex(C("broadcast", S("go"))),
+    if_received: () => ({ block: "if", cond: C("received", S("go")), then: [] }),
+    play_tone: () => Ex(C("play_tone", I(440), I(200))),
   };
   function addStmt(kind) {
     if (!selected || !selected.body) return;
@@ -515,6 +568,11 @@
     pal.append(el("h2", null, "外观"));
     item("返回 …", "#9966FF", () => addStmt("return"));
     item("print( … )", "#4C97FF", () => addStmt("print"));
+    pal.append(el("h2", null, "事件 / 声音"));
+    item("当按← 如果", "#FFBF00", () => addStmt("if_key"));
+    item("广播 “go”", "#FFBF00", () => addStmt("broadcast"));
+    item("如果收到 “go”", "#FFBF00", () => addStmt("if_received"));
+    item("播放音调", "#CF63CF", () => addStmt("play_tone"), "bell");
     pal.append(el("h2", null, "提示"));
     const tip = el("div", null, "下方切换精灵=切换积木页。点脚本选中再加积木；数字/变量可点改，文本实时更新。");
     tip.style.cssText = "font-size:12px;color:#9aa3b5;padding:2px 4px;line-height:1.6";
@@ -592,6 +650,7 @@
   buildPalette();
   setupTabs();
   setupCostume();
+  setupPreview();
   document.getElementById("add-sprite").addEventListener("click", addSprite);
   applyView();
   renderSpriteBar();

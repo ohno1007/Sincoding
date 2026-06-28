@@ -15,6 +15,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "raylib.h"
@@ -239,6 +240,23 @@ rt_sound rt_sound_load(const char* path) {
 void rt_sound_play(rt_sound snd) {
     if (snd >= 0 && snd < g_sound_count && g_sound_loaded[snd])
         PlaySound(g_sounds[snd]);
+}
+
+void rt_play_tone(int freq, int ms) {
+    // 生成一段正弦波蜂鸣（无音频设备时静默）
+    if (!g_audio_inited || freq <= 0 || ms <= 0) return;
+    int rate = 22050;
+    unsigned int n = (unsigned int)(rate * ms / 1000);
+    if (n == 0 || n > 220500) return;
+    short* data = (short*)RL_MALLOC(n * sizeof(short));
+    if (!data) return;
+    for (unsigned int i = 0; i < n; i++)
+        data[i] = (short)(6000.0f * sinf(2.0f * RT_PI * freq * i / rate));
+    Wave w = { n, (unsigned int)rate, 16, 1, data };
+    Sound s = LoadSoundFromWave(w);
+    PlaySound(s);
+    UnloadSound(s);
+    RL_FREE(data);
 }
 
 // ---------- 广播 / 事件 ----------
