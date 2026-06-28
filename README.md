@@ -19,7 +19,7 @@
 | 1 | 语言 → C 转译器（Lexer/Parser/类型检查/代码生成） | ✅ 已完成，斐波那契等用例可编译运行 |
 | 2 | runtime.c 基于 raylib（舞台/精灵/输入/声音） | ✅ 运行时 + 桥接层落地，方块角色已渲染 |
 | 3 | 积木编辑器接 AST（积木 ⇄ 文本双向同步） | 🚧 单页 IDE：无限画布 / 多精灵·多页积木 / 编辑写回 / **积木拖拽重排** / 造型画板 / **舞台（造型即纹理）**|
-| 4 | CMake 多平台（Web → Windows → Android） | 🚧 **Web(wasm) 已打通**（浏览器中运行成品）；Windows/Android 待做 |
+| 4 | CMake 多平台（Web → Windows → Android） | 🚧 **Web(wasm) + Windows(.exe) 已打通**（均实测运行）；Android 待做 |
 | 5 | JSON 桥接外部 ELF（静态 + 动态） | ✅ 静态链接 + 动态 dlopen/dlsym 均打通（含三层类型映射） |
 
 核心设计原则：**AST 是唯一真相源**。积木是 AST 的可视化渲染，文本是 AST 的序列化。
@@ -43,6 +43,10 @@
 阶段 4：同一份 `game.sin` 转 C 后经 emscripten 编成 **WebAssembly**，在浏览器中由 raylib 渲染（最像 Scratch 的发布方式）：
 
 ![阶段4 Web成品](docs/images/stage4_web.png)
+
+阶段 4：同一份 `game.sin` 经 MinGW-w64 交叉编译出单文件 **Windows `.exe`**（下图为 Wine 中实跑，顶部黑条是 Wine 标题栏）：
+
+![阶段4 Windows成品](docs/images/stage4_windows.png)
 
 ---
 
@@ -130,7 +134,7 @@ compiler/        语言 → C 转译器（C++17，手写递归下降）
 runtime/         运行时：runtime.c（Scratch 风格，封装 raylib）
                  + prelude.c/.h（语言 ABI 桥接层，extern fn 的实现）
 editor/          积木前端：单页 IDE（index.html，多精灵/多页/造型画板）
-templates/web/   Web(wasm) 构建模板：emscripten shell.html + CMakeLists
+templates/       平台构建模板：web/（emscripten）、windows/（MinGW 交叉）
 tools/           build_native.sh / build_web.sh / render_blocks.sh / 各类验证脚本
 examples/        示例 .sin 程序（hello / fib / types / game）
 tests/           端到端测试与用例
@@ -160,6 +164,15 @@ python3 -m http.server 8000 --directory out_web   # 浏览器访问 http://local
 
 由 `templates/web/`（emscripten shell + CMakeLists）经 `emcmake cmake` 构建，
 主循环用 `-sASYNCIFY` 适配浏览器。
+
+## 编成 Windows .exe（MinGW 交叉编译）
+
+```bash
+# 需要 MinGW-w64 + raylib 的 Windows 静态库（/usr/local/lib/win/libraylib.a）
+tools/build_windows.sh examples/game.sin out/game.exe   # 产出单文件 PE32+ exe
+```
+
+由 `templates/windows/`（MinGW 工具链文件 + CMakeLists）交叉编译，`-static` 链接出免依赖单文件。
 
 ## 桥接外部 ELF（JSON 接口定义）
 

@@ -225,6 +225,20 @@ else
     echo "○ 跳过（未检测到 emscripten / raylib-web / playwright）"
 fi
 
+# ---- 阶段 4：Windows .exe（MinGW 交叉编译） ----
+echo
+echo "=== 阶段 4：Sincoding → Windows .exe（MinGW 交叉编译） ==="
+if command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1 && [[ -f /usr/local/lib/win/libraylib.a ]]; then
+    if "$ROOT/tools/build_windows.sh" "$ROOT/examples/game.sin" "$WORK/game.exe" >/dev/null 2>&1; then
+        ft="$(file "$WORK/game.exe")"
+        if [[ "$ft" == *"PE32+"* && "$ft" == *"Windows"* ]]; then
+            echo "✓ windows: 交叉编译出单文件 PE32+ exe"; ((PASS++))
+        else echo "✗ windows: 产物非 PE32+（$ft）"; ((FAIL++)); fi
+    else echo "✗ windows: 构建失败"; ((FAIL++)); fi
+else
+    echo "○ 跳过（未检测到 MinGW / raylib-win）"
+fi
+
 echo
 echo "通过 $PASS，失败 $FAIL"
 [[ $FAIL -eq 0 ]]
