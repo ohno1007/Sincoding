@@ -317,6 +317,40 @@ else
     echo "○ 跳过（未检测到 NDK / raylib-android）"
 fi
 
+# ---- 完整项目：共享状态游戏 guardian（编译 + 无头跑 + 计分逻辑） ----
+echo
+echo "=== 完整项目：guardian.sin（共享结构体/全局/数组 → 转 C → 跑） ==="
+GUARD="$WORK/guardian"
+if "$ROOT/tools/build_native.sh" "$ROOT/examples/guardian.sin" "$GUARD" >/dev/null 2>&1; then
+    if out="$(SIN_MAX_FRAMES=120 xvfb-run -a -s "-screen 0 800x600x24" "$GUARD" 2>/dev/null | tail -1)"; then
+        if [[ "$out" =~ ^[0-9]+$ ]]; then
+            echo "✓ guardian: 完整游戏跑通（退出分数=$out，共享 GameState/全局数组生效）"; ((PASS++))
+        else echo "✗ guardian: 输出异常（$out）"; ((FAIL++)); fi
+    else echo "✗ guardian: 运行失败"; ((FAIL++)); fi
+else echo "✗ guardian: 构建失败"; ((FAIL++)); fi
+
+# ---- Android APK 打包（aapt2 链接 + 签名，需 Android SDK build-tools） ----
+echo
+echo "=== Android APK：guardian.sin → 签名 APK（需 SDK build-tools） ==="
+APK_SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/tmp/android-sdk}}"
+APK_BT="$APK_SDK/build-tools/${ANDROID_BUILD_TOOLS:-34.0.0}"
+if [[ -x "$NDK_CLANG" ]] && [[ -f /usr/local/lib/android/arm64-v8a/libraylib.a ]] && \
+   [[ -x "$APK_BT/aapt2" ]] && [[ -x "$APK_BT/apksigner" ]] && \
+   [[ -f "$APK_SDK/platforms/${ANDROID_PLATFORM:-android-29}/android.jar" ]]; then
+    APK="$WORK/guardian.apk"
+    if ANDROID_NDK=/usr/lib/android-ndk ANDROID_SDK_ROOT="$APK_SDK" \
+         "$ROOT/tools/build_apk.sh" "$ROOT/examples/guardian.sin" "$APK" "Guardian" >/dev/null 2>&1; then
+        # 解析二进制 Manifest + 校验签名 + 确认含原生库
+        if "$APK_BT/aapt2" dump badging "$APK" 2>/dev/null | grep -q "native-code: 'arm64-v8a'" && \
+           "$APK_BT/apksigner" verify "$APK" >/dev/null 2>&1 && \
+           unzip -l "$APK" 2>/dev/null | grep -q "lib/arm64-v8a/libsincoding.so"; then
+            echo "✓ apk: 打出可安装的签名 APK（NativeActivity + arm64 原生库，签名校验通过）"; ((PASS++))
+        else echo "✗ apk: 产物校验未通过"; ((FAIL++)); fi
+    else echo "✗ apk: 打包失败"; ((FAIL++)); fi
+else
+    echo "○ 跳过（未检测到 NDK / raylib-android / SDK build-tools）"
+fi
+
 echo
 echo "通过 $PASS，失败 $FAIL"
 [[ $FAIL -eq 0 ]]

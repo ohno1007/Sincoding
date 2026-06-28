@@ -22,7 +22,7 @@
 | 4 | CMake 多平台（Web → Windows → Android） | ✅ **Web(wasm) / Windows(.exe) / Android(.so) 三平台均打通**（iOS 按设计放弃） |
 | 5 | JSON 桥接外部 ELF（静态 + 动态） | ✅ 静态链接 + 动态 dlopen/dlsym 均打通（含三层类型映射） |
 
-> 设计文档的 6 个阶段（0–5）已全部落地，并各有可复现的验证（`tests/run_tests.sh`，共 24 项）。
+> 设计文档的 6 个阶段（0–5）已全部落地，并各有可复现的验证（`tests/run_tests.sh`，共 45 项）。
 
 核心设计原则：**AST 是唯一真相源**。积木是 AST 的可视化渲染，文本是 AST 的序列化。
 
@@ -41,6 +41,11 @@
 **实时编辑预览（类 Vue）+ 多精灵并行 + 语法高亮 + 一键导出**：右下角内置**积木解释器**，把**所有精灵并行**跑在同一舞台上（共享世界、协调清屏），编辑积木/文本即重跑；支持键盘事件、广播、声音（Web Audio）。文本框带**语法高亮**；右上角"**导出 .sin**"一键产出可独立编译的源码（自动补全运行时 `extern` 声明）。下图：左积木、右上高亮源码、右下 **2 个精灵并行运行**（键控方块已右移 + 自动弹球）：
 
 ![实时预览 / 并行 / 高亮 / 导出](docs/images/ide_preview.png)
+
+**项目级共享状态**：结构体 / 全局变量 / 数组属于**整个项目**——所有精灵共享同一组。
+在任一精灵的文本里加一个全局，切到别的精灵也能看到、读写的是同一份数据，从而能用多精灵
+协作搭一个完整项目。预览解释器把这些共享全局求值进一个公共作用域，各精灵 actor 的环境栈底
+都指向它，因此一个精灵对共享数组/结构体的修改对其它精灵立即可见。
 
 精灵造型画板（画笔 / 橡皮 / 调色板 / 多造型）。底部精灵栏支持**多精灵**，每个精灵是独立的**一页积木**；积木可**拖拽重排**：
 
@@ -201,19 +206,35 @@ tools/build_windows.sh examples/game.sin out/game.exe   # 产出单文件 PE32+ 
 
 由 `templates/windows/`（MinGW 工具链文件 + CMakeLists）交叉编译，`-static` 链接出免依赖单文件。
 
-## 打包 Android（NDK + Gradle 壳）
+## 打包 Android（一键出可安装 APK）
 
 ```bash
-# 1) NDK 交叉编译原生库（需 Android NDK + raylib 的 Android 静态库）
-ANDROID_NDK=/usr/lib/android-ndk \
-  tools/build_android.sh examples/game.sin templates/android/jniLibs/arm64-v8a/libsincoding.so
-# 产物为 arm64 ELF 共享库，导出 ANativeActivity_onCreate（系统入口）→ 调用程序 main
-
-# 2) 套 APK 壳（需 Android SDK + Gradle，模板见 templates/android/）
+# 需要 Android NDK + raylib(Android) 静态库 + SDK build-tools(aapt2/zipalign/apksigner) + 平台 android.jar
+ANDROID_NDK=/usr/lib/android-ndk ANDROID_SDK_ROOT=/path/to/android-sdk \
+  tools/build_apk.sh examples/guardian.sin dist/guardian.apk "守护者"
+adb install dist/guardian.apk      # 直接装到手机
 ```
 
-native 库直接以 NDK clang 链接 raylib(Android) 产出，可验证为 AArch64 的
-NativeActivity `.so`；外层 APK 由 `templates/android/`（Manifest + Gradle）打包。
+`tools/build_apk.sh` 全程不依赖 Gradle：`sinc` 转 C → NDK 交叉编 `libsincoding.so`
+→ `aapt2 link` 产出带**二进制 Manifest** 的基础 APK → 塞入 `lib/<abi>/` → `zipalign`
+→ `apksigner`（调试 keystore 按需自动生成）签名。因 `NativeActivity` + `hasCode=false`
+**无需 dex**。产物经 v2/v3 签名校验通过，`aapt2 dump badging` 可见 `native-code: arm64-v8a`。
+
+也可只产原生库再走 Gradle 壳（见 `templates/android/`）：
+
+```bash
+ANDROID_NDK=/usr/lib/android-ndk \
+  tools/build_android.sh examples/game.sin templates/android/jniLibs/arm64-v8a/libsincoding.so
+```
+
+## 完整项目示例：共享状态小游戏「家园守护者」
+
+`examples/guardian.sin` 是一个用**项目级共享状态**组织的完整游戏：一个全局结构体
+`GameState{score,lives,level}` + 多条全局并行数组（下落物坐标/速度/种类）+ 全局玩家坐标，
+被同一份逻辑读写。方向键移动挡板接金币（+分）、躲炸弹（-命），每 5 分升级加速。
+它就是上面打成 APK 的那个游戏（无头跑 90 帧所得，`Score`/`Lives`/`Lv` 实时更新）：
+
+![守护者小游戏](docs/images/game_guardian.png)
 
 ## 桥接外部 ELF（JSON 接口定义）
 

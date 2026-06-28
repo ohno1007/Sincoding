@@ -54,6 +54,10 @@ void play_tone(long long freq, long long ms);
 void broadcast(const char* message);
 bool received(const char* message);
 
+// 数值转换（int ↔ float）
+double to_float(long long n);
+long long to_int(double f);
+
 #ifdef __cplusplus
 }
 #endif

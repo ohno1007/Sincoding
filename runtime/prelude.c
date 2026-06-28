@@ -77,3 +77,6 @@ void play_tone(long long freq, long long ms) { rt_play_tone((int)freq, (int)ms);
 
 void broadcast(const char* message) { rt_broadcast(message); }
 bool received(const char* message) { return rt_received(message); }
+
+double to_float(long long n) { return (double)n; }
+long long to_int(double f) { return (long long)f; }

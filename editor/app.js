@@ -70,12 +70,13 @@
     const p1 = (window.SIN_BLOCKS && window.SIN_BLOCKS.program)
       ? window.SIN_BLOCKS.program : [sampleMain()];
     const sprites = [
-      { name: "精灵1", icon: "🐱", program: p1, costumes: [], structs: [], globals: [] },
-      { name: "精灵2", icon: "🎮", program: [sampleGame()], costumes: [], structs: [], globals: [] },
-      { name: "弹球", icon: "⚽", program: [sampleBounce()], costumes: [], structs: [], globals: [] },
+      { name: "精灵1", icon: "🐱", program: p1, costumes: [] },
+      { name: "精灵2", icon: "🎮", program: [sampleGame()], costumes: [] },
+      { name: "弹球", icon: "⚽", program: [sampleBounce()], costumes: [] },
     ];
     sprites.forEach((s) => placeFns(s.program));
-    return { sprites, cur: 0 };
+    // structs / globals 为「项目级共享状态」：所有精灵共用同一组结构体/全局变量
+    return { sprites, cur: 0, structs: [], globals: [] };
   }
 
   const project = window.SIN_PROJECT || defaultProject();
@@ -124,8 +125,8 @@
   const textOut = document.getElementById("text-out");
   const textHl = document.querySelector("#text-hl code");
   function fullModel() {
-    const s = sprite();
-    return { structs: s.structs || [], globals: s.globals || [], program: s.program };
+    // structs / globals 来自项目级共享状态，program 来自当前精灵
+    return { structs: project.structs || [], globals: project.globals || [], program: sprite().program };
   }
   function setTextValue(v) { textOut.value = v; syncHighlight(); }
   function refreshText() {
@@ -166,7 +167,9 @@
   }
   function runPreview() {
     if (!preview) return;
-    try { preview.runProject(project.sprites.map((s) => s.program), setPvStatus); } // 多精灵并行
+    // 多精灵并行 + 项目级共享状态（结构体/全局变量/数组）
+    try { preview.runProject(project.sprites.map((s) => s.program), setPvStatus,
+      { globals: project.globals || [], structs: project.structs || [] }); }
     catch (e) { setPvStatus("预览错误", "warn"); }
   }
   function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(runPreview, 450); }
@@ -471,8 +474,9 @@
     sprite().program.forEach((f) => { oldPos[f.name] = { x: f._x, y: f._y }; });
     prog.forEach((f) => { if (oldPos[f.name]) { f._x = oldPos[f.name].x; f._y = oldPos[f.name].y; } });
     placeFns(prog);
-    sprite().structs = blk.structs || [];
-    sprite().globals = blk.globals || [];
+    // 结构体/全局写回到项目级共享状态（编辑任一精灵的文本都更新共享状态）
+    project.structs = blk.structs || [];
+    project.globals = blk.globals || [];
     sprite().program = prog;
     selected = prog[0] || null;
     renderCanvas(); // 不回写文本，避免打断输入
@@ -513,6 +517,8 @@
     ["play_tone", "extern fn play_tone(freq: int, ms: int)"],
     ["broadcast", "extern fn broadcast(message: string)"],
     ["received", "extern fn received(message: string) -> bool"],
+    ["to_float", "extern fn to_float(n: int) -> float"],
+    ["to_int", "extern fn to_int(f: float) -> int"],
   ];
   function exportSource() {
     const model = fullModel();

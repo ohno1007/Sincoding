@@ -344,7 +344,8 @@ Type TypeChecker::checkExpr(Expr& e) {
             Type it = checkExpr(*ix.idx);
             if (it != Type::Int && it != Type::Unknown)
                 error(ix.line, "数组下标必须是 int，而非 " + std::string(typeName(it)));
-            ix.type = at;       // 元素类型
+            ix.type = at;                     // 元素类型
+            ix.structName = ix.arr->structName; // 结构体数组：元素携带结构体名
             ix.arrayLen = 0;
             return at;
         }

@@ -18,6 +18,12 @@ build/
 # Android 生成的原生库
 templates/android/jniLibs/
 
+# Android 签名 keystore（凭据，勿提交）与打包产物
+tools/debug.keystore
+*.keystore
+*.apk
+dist/
+
 # Web demo 成品（提交，便于直接打开）
 !web-demo/index.wasm
 !editor/sinc.wasm

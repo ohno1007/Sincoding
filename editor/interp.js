@@ -41,10 +41,15 @@
 
     // ---- 运行 ----
     run(program, onStatus) { this.runProject([program], onStatus); }
+    runFull(model, onStatus) {
+      this.runProject([model.program], onStatus, { globals: model.globals, structs: model.structs });
+    }
 
     // 多精灵并行：每个精灵程序是一个 actor，共享同一个舞台/世界；
     // 各自的 while stage_running() 主循环每帧执行一次，协调清屏（每帧只清一次）。
-    runProject(programs, onStatus) {
+    // shared = { globals: [...], structs: [...] }：项目级共享状态——所有精灵共用
+    // 同一组结构体定义与全局变量（数组/结构体/标量），实现跨精灵的数据共享。
+    runProject(programs, onStatus, shared) {
       this.stop();
       this.onStatus = onStatus || (() => {});
       const w = this.canvas.width, h = this.canvas.height;
@@ -54,6 +59,15 @@
         keys: this.keys, broadcasts: new Set(), nextBroadcasts: new Set(),
         soundCount: 0, console: [],
       };
+      // 共享全局作用域：所有精灵 actor 的 env 栈底都是同一个 Map，
+      // 因此一个精灵对全局数组/结构体/变量的修改对其它精灵立即可见。
+      this.structDefs = {};
+      (shared && shared.structs || []).forEach((s) => { this.structDefs[s.name] = s; });
+      this.globalScope = new Map();
+      this.fns = {};
+      (shared && shared.globals || []).forEach((g) => {
+        this.globalScope.set(g.name, g.value !== undefined ? this.eval(g.value, [this.globalScope]) : this.defaultVal(g));
+      });
       this.actors = [];
       let hasMain = false;
       for (const program of (programs || [])) {
@@ -62,7 +76,7 @@
         const main = fns["main"];
         if (!main) continue;
         hasMain = true;
-        const env = [new Map()];
+        const env = [this.globalScope, new Map()];
         const body = main.body || [];
         const loopIdx = body.findIndex((s) => s.block === "while" && s.cond &&
           s.cond.block === "call" && s.cond.callee === "stage_running");
@@ -258,6 +272,8 @@
     sound_load() { return ++this.world.soundCount; },
     play_sound() { this.beep(660, 100); },
     play_tone(a) { this.beep(a[0], a[1]); },
+    to_float(a) { return a[0]; },
+    to_int(a) { return Math.trunc(a[0]); },
     print(a) { this.world.console.push(String(a[0])); },
   };
 

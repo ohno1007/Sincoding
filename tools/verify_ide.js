@@ -81,12 +81,19 @@ function freePort() {
     const reverse = await page.evaluate(() =>
       [...document.querySelectorAll("#canvas .script .field")].some((f) => f.textContent === "demo"));
 
+    // 项目级共享状态：当前在精灵1（上面反向同步已把它改成 demo 弃用程序），
+    // 在其文本里加一个全局变量；切到精灵2（游戏）后，该全局应同样出现——
+    // 证明结构体/全局变量为所有精灵共享（不会动到精灵2自身的游戏程序）。
+    await page.fill("#text-out", "let shared_hp: int = 99\n\nfn demo() -> int {\n  return shared_hp\n}\n");
+    await page.waitForTimeout(600);
+
     // 多精灵 / 多页积木：切到第二个精灵（游戏）→ 文本页应切换
     const s1 = await val();
     await page.click("#sprite-list .sprite-card:nth-child(2)");
-    await page.waitForTimeout(50);
+    await page.waitForTimeout(80);
     const s2 = await val();
     const spriteSwitch = s2 !== s1 && s2.includes("sprite_new");
+    const sharedState = s2.includes("shared_hp") && s2.includes("99");
 
     // 实时预览：切到游戏精灵后，解释器应在预览画布跑出非空画面
     await page.waitForTimeout(1000);
@@ -133,8 +140,8 @@ function freePort() {
     const stageOk = stage.count >= 2 && stage.textured >= 1;
     if (shots) await page.screenshot({ path: shots + "/ide_stage.png" });
 
-    result = { writeback, reorder, palette, reverse, spriteSwitch, preview, parallel, exportOk, highlighted, stage, paintedPixels: painted, errors };
-    result.ok = writeback && reorder && palette && reverse && spriteSwitch && preview && parallel &&
+    result = { writeback, reorder, palette, reverse, spriteSwitch, sharedState, preview, parallel, exportOk, highlighted, stage, paintedPixels: painted, errors };
+    result.ok = writeback && reorder && palette && reverse && spriteSwitch && sharedState && preview && parallel &&
       exportOk && highlighted && stageOk && painted > 100 && errors.length === 0;
   } finally {
     await browser.close();
