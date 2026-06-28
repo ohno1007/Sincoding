@@ -825,13 +825,42 @@
     if: () => ({ block: "if", cond: { block: "bool", value: true }, then: [] }),
     while: () => ({ block: "while", cond: { block: "bool", value: true }, body: [] }),
     for: () => ({ block: "for", var: "i", start: { block: "int", value: 0 }, end: { block: "int", value: 10 }, body: [] }),
+    if_else: () => ({ block: "if", cond: { block: "bool", value: true }, then: [], else: [] }),
     return: () => ({ block: "return", value: { block: "int", value: 0 } }),
     print: () => ({ block: "expr", expr: { block: "call", callee: "print", args: [{ block: "int", value: 0 }] } }),
-    // 事件 / 声音
+    // 运算 / 数据
+    incr: () => ({ block: "assign", name: "x", value: Bn("+", Vr("x"), I(1)) }),
+    decr: () => ({ block: "assign", name: "x", value: Bn("-", Vr("x"), I(1)) }),
+    set_op: () => ({ block: "assign", name: "x", value: Bn("+", Vr("x"), I(1)) }),
+    to_int: () => ({ block: "let", name: "n", type: "int", len: 0, value: C("to_int", F(0)) }),
+    to_float: () => ({ block: "let", name: "f", type: "float", len: 0, value: C("to_float", I(0)) }),
+    // 运动（精灵）
+    sprite_new: () => ({ block: "let", name: "s", type: "int", len: 0, value: C("sprite_new", F(0), F(0), F(40)) }),
+    sprite_move: () => Ex(C("sprite_move_to", Vr("s"), F(0), F(0))),
+    sprite_x: () => ({ block: "let", name: "px", type: "float", len: 0, value: C("sprite_x", Vr("s")) }),
+    sprite_y: () => ({ block: "let", name: "py", type: "float", len: 0, value: C("sprite_y", Vr("s")) }),
+    // 外观
+    sprite_load: () => ({ block: "let", name: "s", type: "int", len: 0, value: C("sprite_load", S("ball.png")) }),
+    sprite_draw: () => Ex(C("sprite_draw", Vr("s"))),
+    say: () => Ex(C("say", Vr("s"), S("你好"))),
+    draw_text: () => Ex(C("draw_text", S("文字"), F(0), F(0), I(24))),
+    draw_number: () => Ex(C("draw_number", Vr("x"), F(0), F(0), I(24))),
+    // 舞台
+    stage_init: () => Ex(C("stage_init", I(800), I(600))),
+    game_loop: () => ({ block: "while", cond: C("stage_running"),
+      body: [Ex(C("frame_begin")), Ex(C("frame_end"))] }),
+    frame_begin: () => Ex(C("frame_begin")),
+    frame_end: () => Ex(C("frame_end")),
+    stage_close: () => Ex(C("stage_close")),
+    // 事件 / 输入 / 声音
     if_key: () => ({ block: "if", cond: C("key_down", C("key_left")), then: [] }),
+    if_key_right: () => ({ block: "if", cond: C("key_down", C("key_right")), then: [] }),
+    if_key_up: () => ({ block: "if", cond: C("key_down", C("key_up")), then: [] }),
+    if_key_down: () => ({ block: "if", cond: C("key_down", C("key_down_arrow")), then: [] }),
     broadcast: () => Ex(C("broadcast", S("go"))),
     if_received: () => ({ block: "if", cond: C("received", S("go")), then: [] }),
     play_tone: () => Ex(C("play_tone", I(440), I(200))),
+    play_sound: () => Ex(C("play_sound", I(0))),
   };
   function addStmt(kind) {
     if (!selected || !selected.body) return;
@@ -863,18 +892,45 @@
     item("设 字符串", "#FF8C1A", () => addStmt("let_str"));
     item("设 数组", "#FF8C1A", () => addStmt("let_arr"));
     item("数组赋值 a[i]=v", "#FF8C1A", () => addStmt("set_idx"));
+    pal.append(el("h2", null, "运算"));
+    item("变量 +1", "#59C059", () => addStmt("incr"));
+    item("变量 −1", "#59C059", () => addStmt("decr"));
+    item("变量 ← 表达式", "#59C059", () => addStmt("set_op"));
+    item("取整 to_int", "#59C059", () => addStmt("to_int"));
+    item("转浮点 to_float", "#59C059", () => addStmt("to_float"));
     pal.append(el("h2", null, "控制"));
     item("如果 …", "#FFAB19", () => addStmt("if"));
+    item("如果 … 否则 …", "#FFAB19", () => addStmt("if_else"));
     item("重复直到 …", "#FFAB19", () => addStmt("while"));
     item("for i in a..b", "#FFAB19", () => addStmt("for"));
-    pal.append(el("h2", null, "外观"));
     item("返回 …", "#9966FF", () => addStmt("return"));
     item("print( … )", "#4C97FF", () => addStmt("print"));
+    pal.append(el("h2", null, "舞台"));
+    item("初始化舞台", "#FFAB19", () => addStmt("stage_init"), "play");
+    item("游戏主循环", "#FFAB19", () => addStmt("game_loop"), "play");
+    item("开始绘制 frame", "#FFAB19", () => addStmt("frame_begin"));
+    item("结束绘制 frame", "#FFAB19", () => addStmt("frame_end"));
+    item("关闭舞台", "#FFAB19", () => addStmt("stage_close"), "stop");
+    pal.append(el("h2", null, "运动（精灵）"));
+    item("新建精灵", "#4C97FF", () => addStmt("sprite_new"));
+    item("移动精灵到 x y", "#4C97FF", () => addStmt("sprite_move"), "move");
+    item("取精灵 x", "#4C97FF", () => addStmt("sprite_x"));
+    item("取精灵 y", "#4C97FF", () => addStmt("sprite_y"));
+    pal.append(el("h2", null, "外观"));
+    item("载入造型", "#9966FF", () => addStmt("sprite_load"), "palette");
+    item("画出精灵", "#9966FF", () => addStmt("sprite_draw"));
+    item("说 …", "#9966FF", () => addStmt("say"));
+    item("画文字", "#9966FF", () => addStmt("draw_text"));
+    item("画数字", "#9966FF", () => addStmt("draw_number"));
     pal.append(el("h2", null, "事件 / 声音"));
     item("当按← 如果", "#FFBF00", () => addStmt("if_key"));
+    item("当按→ 如果", "#FFBF00", () => addStmt("if_key_right"));
+    item("当按↑ 如果", "#FFBF00", () => addStmt("if_key_up"));
+    item("当按↓ 如果", "#FFBF00", () => addStmt("if_key_down"));
     item("广播 “go”", "#FFBF00", () => addStmt("broadcast"));
     item("如果收到 “go”", "#FFBF00", () => addStmt("if_received"));
     item("播放音调", "#CF63CF", () => addStmt("play_tone"), "bell");
+    item("播放声音", "#CF63CF", () => addStmt("play_sound"), "bell");
     pal.append(el("h2", null, "提示"));
     const tip = el("div", null, "下方切换精灵=切换积木页。点脚本选中再加积木；数字/变量可点改，文本实时更新。");
     tip.style.cssText = "font-size:12px;color:#9aa3b5;padding:2px 4px;line-height:1.6";

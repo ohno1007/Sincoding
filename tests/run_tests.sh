@@ -354,6 +354,22 @@ else
 fi
 
 # ---- 发布流水线：发布模态框 → 本地构建服务 → 产物（Chromium 驱动，linux 最快） ----
+# ---- 调色板积木：每个新增积木产出的文本都能被规范引擎解析+编译 ----
+echo
+echo "=== 调色板积木：序列化 → sinc 解析+生成 C → gcc 编译 ==="
+if command -v node >/dev/null 2>&1; then
+    PB="$WORK/palette_blocks.sin"
+    if node "$ROOT/tools/verify_palette_blocks.js" "$PB" >/dev/null 2>&1 \
+       && "$SINC" "$PB" -o "$WORK/palette_blocks.c" >/dev/null 2>&1 \
+       && gcc -c "$WORK/palette_blocks.c" -o "$WORK/palette_blocks.o" >/dev/null 2>&1; then
+        echo "✓ palette: 全部积木形状序列化后通过 sinc + gcc 编译"; ((PASS++))
+    else
+        echo "✗ palette: 积木序列化/编译失败"; ((FAIL++))
+    fi
+else
+    echo "○ 跳过（缺 node）"
+fi
+
 echo
 echo "=== 发布：编辑器「发布」模态框 → ide_server → 编译产物 ==="
 if command -v node >/dev/null 2>&1 && [[ -f /usr/local/lib/libraylib.a ]]; then
