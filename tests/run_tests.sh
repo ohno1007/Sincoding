@@ -133,6 +133,20 @@ else
     echo "✗ hover: 类型不符（$("$SINC" "$HOVSRC" --query hover 3 12 2>/dev/null)）"; ((FAIL++))
 fi
 
+# references：两函数同名变量不互相干扰
+REFSRC="$WORK/refs.sin"
+printf '%s\n' 'fn f() -> int {' '    let x = 1' '    return x' '}' 'fn g() -> int {' '    let x = 2' '    return x' '}' 'fn main() -> int { return f() + g() }' > "$REFSRC"
+nrefs="$("$SINC" "$REFSRC" --query refs 2 9 2>/dev/null | grep -o '"line"' | wc -l)"
+if [[ "$nrefs" == "2" ]]; then
+    echo "✓ refs: f 的 x 仅 2 处引用（不含 g 的 x，作用域正确）"; ((PASS++))
+else echo "✗ refs: 引用数=$nrefs（期望 2）"; ((FAIL++)); fi
+
+# rename：局部变量改名不跨函数
+if "$SINC" "$REFSRC" --query rename 2 9 y 2>/dev/null | grep -q 'let y' && \
+   "$SINC" "$REFSRC" --query rename 2 9 y 2>/dev/null | grep -q 'let x'; then
+    echo "✓ rename: f 的 x→y，g 的 x 保留（作用域正确）"; ((PASS++))
+else echo "✗ rename: 作用域错误"; ((FAIL++)); fi
+
 # ---- 积木视图渲染（需要 node + playwright，缺失则跳过） ----
 echo
 echo "=== 积木视图渲染（Chromium 截图验证） ==="

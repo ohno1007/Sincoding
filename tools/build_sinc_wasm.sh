@@ -20,7 +20,7 @@ emcc -std=c++17 -O2 \
     "$ROOT/compiler/src/query.cpp" \
     "$ROOT/compiler/src/wasm_api.cpp" \
     -sMODULARIZE=1 -sEXPORT_NAME=SincModule \
-    -sEXPORTED_FUNCTIONS='["_sin_to_blocks","_sin_hover","_malloc","_free"]' \
+    -sEXPORTED_FUNCTIONS='["_sin_to_blocks","_sin_hover","_sin_references","_sin_rename","_malloc","_free"]' \
     -sEXPORTED_RUNTIME_METHODS='["ccall","cwrap","UTF8ToString"]' \
     -sALLOW_MEMORY_GROWTH=1 \
     -o "$OUT"

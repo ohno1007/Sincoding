@@ -80,4 +80,30 @@ const char* sin_hover(const char* src, int line, int col) {
     return result.c_str();
 }
 
+// IDE 查找引用：返回 (line,col) 处标识符的所有引用位置 JSON。
+const char* sin_references(const char* src, int line, int col) {
+    static std::string result;
+    std::string source = src ? src : "";
+    Lexer lexer(source);
+    Parser parser(lexer.tokenize());
+    Program prog = parser.parseProgram();
+    TypeChecker checker;
+    checker.check(prog);
+    result = queryReferences(prog, line, col);
+    return result.c_str();
+}
+
+// IDE 重命名：把 (line,col) 处标识符改名为 newName，返回 {ok,source,note}。
+const char* sin_rename(const char* src, int line, int col, const char* newName) {
+    static std::string result;
+    std::string source = src ? src : "";
+    Lexer lexer(source);
+    Parser parser(lexer.tokenize());
+    Program prog = parser.parseProgram();
+    TypeChecker checker;
+    checker.check(prog);
+    result = applyRename(prog, line, col, newName ? newName : "");
+    return result.c_str();
+}
+
 } // extern "C"

@@ -106,6 +106,7 @@ enum class StmtKind { Let, Assign, If, While, For, Return, ExprStmt, Block };
 struct Stmt {
     StmtKind kind;
     int line = 0;
+    int col = 0;                // 主标识符起始列（let/assign/for 的变量名，IDE 定位用）
     virtual ~Stmt() = default;
 protected:
     explicit Stmt(StmtKind k) : kind(k) {}
@@ -173,6 +174,7 @@ struct Param {
     int len = 0;            // >0 表示定长数组参数 T[N]（按值传递，C 侧结构体包裹）
     std::string structName; // type==Struct 时
     int line;
+    int col = 0;            // 参数名起始列
 };
 
 struct FnDecl {
@@ -184,6 +186,7 @@ struct FnDecl {
     BlockPtr body;          // extern 函数为空（无函数体）
     bool isExtern = false;  // 由 'extern fn' 声明，链接到外部/运行时实现
     int line = 0;
+    int col = 0;            // 函数名起始列
 };
 using FnPtr = std::unique_ptr<FnDecl>;
 
@@ -195,11 +198,13 @@ struct StructField {
     int len = 0;             // >0 表示数组字段 T[N]（元素为标量）
     std::string structName;  // type==Struct 时的结构体名
     int line;
+    int col = 0;             // 字段名起始列
 };
 struct StructDecl {
     std::string name;
     std::vector<StructField> fields;
     int line = 0;
+    int col = 0;             // 结构体名起始列
 };
 using StructPtr = std::unique_ptr<StructDecl>;
 

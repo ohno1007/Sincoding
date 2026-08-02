@@ -49,15 +49,17 @@ int main(int argc, char** argv) {
     bool dumpTokens = false;
     std::string queryKind;  // 非空表示 IDE 查询模式
     int qLine = 0, qCol = 0;
+    std::string qNewName;
     for (int i = 2; i < argc; i++) {
         std::string a = argv[i];
         if (a == "-o" && i + 1 < argc) output = argv[++i];
         else if (a == "--emit" && i + 1 < argc) emit = argv[++i];
         else if (a == "--tokens") dumpTokens = true;
-        else if (a == "--query" && i + 3 < argc) {  // --query <hover> <line> <col>
+        else if (a == "--query" && i + 3 < argc) {  // --query <hover|refs|rename> <line> <col> [newName]
             queryKind = argv[++i];
             qLine = std::atoi(argv[++i]);
             qCol = std::atoi(argv[++i]);
+            if (queryKind == "rename" && i + 1 < argc) qNewName = argv[++i];
         }
         else { std::cerr << "未知参数: " << a << "\n"; return 2; }
     }
@@ -92,6 +94,8 @@ int main(int argc, char** argv) {
     // IDE 查询模式：尽力而为（即使有类型错误也返回可用结果）
     if (!queryKind.empty()) {
         if (queryKind == "hover") std::cout << queryHover(prog, qLine, qCol) << "\n";
+        else if (queryKind == "refs") std::cout << queryReferences(prog, qLine, qCol) << "\n";
+        else if (queryKind == "rename") std::cout << applyRename(prog, qLine, qCol, qNewName) << "\n";
         else { std::cerr << "未知查询类型: " << queryKind << "\n"; return 2; }
         return 0;
     }

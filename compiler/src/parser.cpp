@@ -100,12 +100,12 @@ StructPtr Parser::parseStruct() {
     auto s = std::make_unique<StructDecl>();
     s->line = cur().line;
     expect(TokKind::KwStruct, "'struct'");
-    s->name = expect(TokKind::Ident, "结构体名").text;
+    { const Token& nt = expect(TokKind::Ident, "结构体名"); s->name = nt.text; s->col = nt.col; }
     expect(TokKind::LBrace, "'{'");
     while (!check(TokKind::RBrace) && !check(TokKind::End)) {
         StructField f;
         f.line = cur().line;
-        f.name = expect(TokKind::Ident, "字段名").text;
+        { const Token& ft = expect(TokKind::Ident, "字段名"); f.name = ft.text; f.col = ft.col; }
         expect(TokKind::Colon, "':'");
         f.type = parseType(f.structName);  // 字段类型：标量 / 结构体 / 数组
         f.len = parseArraySuffix();        // 可选 [N]（标量数组字段）
@@ -123,6 +123,7 @@ FnPtr Parser::parseFn() {
     expect(TokKind::KwFn, "'fn'");
     const Token& name = expect(TokKind::Ident, "函数名");
     fn->name = name.text;
+    fn->col = name.col;
     expect(TokKind::LParen, "'('");
     if (!check(TokKind::RParen)) {
         do {
@@ -130,6 +131,7 @@ FnPtr Parser::parseFn() {
             Param param;
             param.name = p.text;
             param.line = p.line;
+            param.col = p.col;
             expect(TokKind::Colon, "':'");
             param.type = parseType(param.structName);
             param.len = parseArraySuffix();   // 支持数组参数 T[N]
@@ -178,7 +180,7 @@ StmtPtr Parser::parseLet() {
     auto s = std::make_unique<LetStmt>();
     s->line = cur().line;
     expect(TokKind::KwLet, "'let'");
-    s->name = expect(TokKind::Ident, "变量名").text;
+    { const Token& nt = expect(TokKind::Ident, "变量名"); s->name = nt.text; s->col = nt.col; }
     if (match(TokKind::Colon)) {
         s->declared = parseType(s->structName);
         s->declaredLen = parseArraySuffix(); // 数组类型 T[N]
@@ -226,7 +228,7 @@ StmtPtr Parser::parseFor() {
     auto s = std::make_unique<ForStmt>();
     s->line = cur().line;
     expect(TokKind::KwFor, "'for'");
-    s->var = expect(TokKind::Ident, "循环变量名").text;
+    { const Token& vt = expect(TokKind::Ident, "循环变量名"); s->var = vt.text; s->col = vt.col; }
     // 'in' 不是关键字，用标识符 "in" 表示
     if (check(TokKind::Ident) && cur().text == "in") advance();
     else error(cur(), "for 循环需要 'in'（形如 for i in 0..n）");
@@ -256,7 +258,7 @@ StmtPtr Parser::parseExprOrAssign() {
         peek(2).kind == TokKind::Ident && peek(3).kind == TokKind::Assign) {
         auto s = std::make_unique<AssignStmt>();
         s->line = line;
-        s->name = advance().text; // ident
+        { const Token& nt = advance(); s->name = nt.text; s->col = nt.col; } // ident
         advance();                // '.'
         s->field = advance().text;
         advance();                // '='
@@ -266,20 +268,20 @@ StmtPtr Parser::parseExprOrAssign() {
     }
     // 元素赋值或下标表达式：Ident '[' expr ']' ...
     if (check(TokKind::Ident) && peek(1).kind == TokKind::LBracket) {
-        std::string name = advance().text; // ident
+        const Token& nt = advance(); std::string name = nt.text; int ncol = nt.col; // ident
         advance();                          // '['
         ExprPtr idx = parseExpr();
         expect(TokKind::RBracket, "']'");
         if (check(TokKind::Assign)) {        // name[idx] = value
             advance();
             auto s = std::make_unique<AssignStmt>();
-            s->line = line; s->name = name; s->index = std::move(idx);
+            s->line = line; s->col = ncol; s->name = name; s->index = std::move(idx);
             s->value = parseExpr();
             match(TokKind::Semicolon);
             return s;
         }
         // 否则当作表达式语句 name[idx]
-        auto v = std::make_unique<Var>(); v->name = name; v->line = line;
+        auto v = std::make_unique<Var>(); v->name = name; v->line = line; v->col = ncol;
         auto ix = std::make_unique<IndexExpr>();
         ix->line = line; ix->arr = std::move(v); ix->idx = std::move(idx);
         auto es = std::make_unique<ExprStmt>(); es->line = line; es->expr = std::move(ix);
@@ -290,7 +292,7 @@ StmtPtr Parser::parseExprOrAssign() {
     if (check(TokKind::Ident) && peek(1).kind == TokKind::Assign) {
         auto s = std::make_unique<AssignStmt>();
         s->line = line;
-        s->name = advance().text; // ident
+        { const Token& nt = advance(); s->name = nt.text; s->col = nt.col; } // ident
         advance();                // '='
         s->value = parseExpr();
         match(TokKind::Semicolon);
