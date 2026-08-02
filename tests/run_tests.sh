@@ -327,6 +327,12 @@ if command -v emcmake >/dev/null 2>&1 && [[ -f /usr/local/lib/web/libraylib.a ]]
     else
         echo "✗ web-catch: $out"; ((FAIL++))
     fi
+    # guardian（结构体数组 + 造型 PNG）编成 wasm 网页版，验证 assets 预载
+    if out="$("$ROOT/tools/test_web.sh" "$ROOT/examples/guardian.sin" "$ROOT/examples/assets/guardian" 2>&1)"; then
+        echo "✓ web-guardian: 带造型资源的游戏 wasm 网页版渲染（$out）"; ((PASS++))
+    else
+        echo "✗ web-guardian: $out"; ((FAIL++))
+    fi
 else
     echo "○ 跳过（未检测到 emscripten / raylib-web / playwright）"
 fi

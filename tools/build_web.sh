@@ -28,7 +28,8 @@ echo "[1/3] 转译 $SRC → C"
 
 echo "[2/3] emcmake 配置 + 构建（wasm）"
 ASSETS_ARG=()
-if [[ -n "$ASSETS" && -d "$ASSETS" ]]; then ASSETS_ARG=(-DSIN_ASSETS_DIR="$ASSETS"); fi
+# 转绝对路径：emscripten file_packager 在临时 build 目录运行，相对路径会找不到
+if [[ -n "$ASSETS" && -d "$ASSETS" ]]; then ASSETS_ARG=(-DSIN_ASSETS_DIR="$(cd "$ASSETS" && pwd)"); fi
 emcmake cmake -S "$ROOT/templates/web" -B "$BUILD" \
     -DSIN_PROGRAM_C="$GEN" \
     -DSIN_RUNTIME_DIR="$ROOT/runtime" \

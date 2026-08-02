@@ -5,12 +5,13 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="${1:-$ROOT/examples/game.sin}"   # 可指定要构建的 .sin（默认 game）
+ASSETS="${2:-}"                        # 可选：造型资源目录（随 wasm 预载打包）
 WORK="$(mktemp -d)"
 SRV=""
 cleanup() { [[ -n "$SRV" ]] && kill "$SRV" 2>/dev/null; rm -rf "$WORK"; }
 trap cleanup EXIT
 
-if ! "$ROOT/tools/build_web.sh" "$SRC" "$WORK/web" >"$WORK/build.log" 2>&1; then
+if ! "$ROOT/tools/build_web.sh" "$SRC" "$WORK/web" "$ASSETS" >"$WORK/build.log" 2>&1; then
     echo "web 构建失败"; tail -5 "$WORK/build.log"; exit 1
 fi
 
