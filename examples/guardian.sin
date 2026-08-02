@@ -1,0 +1,165 @@
+// guardian.sin —— 完整小游戏「家园守护者」（造型版）
+//
+// 用「项目级共享状态」组织的完整项目：游戏状态、所有下落物、玩家都是**全局**的——
+// 编辑器里多个精灵共享同一组结构体 / 全局变量 / 数组，这里以单一可编译程序落地。
+//
+// 角色外观用**造型 PNG**（sprite_load 当纹理）：金币 coin.png、炸弹 bomb.png、
+// 挡板 paddle.png（由 tools/make_costumes.py 生成；APK 打包时随 assets 一并入包）。
+//
+// 玩法：方向键左右移动底部挡板。接住金币（+1 分），躲开炸弹（-1 命）。
+// 每得 5 分升一级，下落变快。命数耗尽则游戏结束。
+//
+// 综合用到：结构体（GameState）、全局结构体变量、全局定长数组（多个下落物的
+// 并行坐标 / 种类 / 句柄）、全局标量、for 循环、int↔float 转换、键盘输入、计分。
+
+extern fn stage_init(w: int, h: int)
+extern fn stage_running() -> bool
+extern fn frame_begin()
+extern fn frame_end()
+extern fn stage_close()
+
+extern fn sprite_load(path: string) -> int
+extern fn sprite_move_to(s: int, x: float, y: float)
+extern fn sprite_draw(s: int)
+
+extern fn key_down(key: int) -> bool
+extern fn key_left() -> int
+extern fn key_right() -> int
+
+extern fn draw_text(text: string, x: float, y: float, size: int)
+extern fn draw_number(n: int, x: float, y: float, size: int)
+extern fn play_tone(freq: int, ms: int)
+
+extern fn to_float(n: int) -> float
+extern fn to_int(f: float) -> int
+
+// —— 项目级共享状态：结构体 + 全局变量 + 全局数组 ——
+
+struct GameState {
+    score: int,
+    lives: int,
+    level: int
+}
+
+let game: GameState           // 全局共享的游戏状态（所有逻辑读写同一份）
+
+let N = 6
+let ix: float[6]              // 下落物 x（全局共享数组）
+let iy: float[6]              // 下落物 y
+let ikind: int[6]            // 0 = 金币(+分), 1 = 炸弹(-命)；造型在创建时绑定，固定不变
+let handles: int[6]         // 精灵句柄（载入了对应造型纹理）
+
+let px = 0.0                 // 玩家挡板 x（全局共享变量）
+let paddle = 0
+
+fn abs_f(v: float) -> float {
+    if v < 0.0 {
+        return 0.0 - v
+    }
+    return v
+}
+
+// 用得分派生一个伪随机落点，避免依赖随机数运行时
+fn spawn_x(seed: int) -> float {
+    let m = seed * 53 + 17
+    let col = m - (m / 7) * 7        // 0..6
+    return to_float(col) * 70.0 - 210.0
+}
+
+// 重置某个下落物到顶部（造型/种类固定，只重置位置）
+fn respawn(i: int) {
+    ix[i] = spawn_x(game.score + i * 3 + game.level)
+    iy[i] = 280.0 + to_float(i) * 40.0
+}
+
+fn main() -> int {
+    stage_init(800, 600)
+
+    // 初始化共享状态
+    game.score = 0
+    game.lives = 3
+    game.level = 1
+
+    // 创建下落物：每第三个是炸弹，其余是金币；按种类载入对应造型纹理
+    for i in 0..N {
+        let r = i - (i / 3) * 3
+        if r == 2 {
+            ikind[i] = 1
+            handles[i] = sprite_load("bomb.png")    // 炸弹造型
+        }
+        if r != 2 {
+            ikind[i] = 0
+            handles[i] = sprite_load("coin.png")    // 金币造型
+        }
+        respawn(i)
+        iy[i] = to_float(i) * 90.0 - 100.0          // 错开初始高度
+    }
+
+    paddle = sprite_load("paddle.png")              // 挡板造型
+    px = 0.0
+
+    while stage_running() {
+        // —— 输入 ——
+        if key_down(key_left()) {
+            px = px - 15.0
+        }
+        if key_down(key_right()) {
+            px = px + 15.0
+        }
+        if px < -360.0 {
+            px = -360.0
+        }
+        if px > 360.0 {
+            px = 360.0
+        }
+        sprite_move_to(paddle, px, -250.0)
+
+        let fall = 4.0 + to_float(game.level) * 1.5
+
+        // —— 更新所有下落物（共享数组） ——
+        for i in 0..N {
+            iy[i] = iy[i] - fall
+            if iy[i] < -240.0 {
+                // 触底：判定是否被挡板接住
+                if abs_f(ix[i] - px) < 60.0 {
+                    if ikind[i] == 0 {
+                        game.score = game.score + 1     // 接到金币
+                        play_tone(880, 40)
+                        if game.score - (game.score / 5) * 5 == 0 {
+                            game.level = game.level + 1  // 每 5 分升级
+                        }
+                    }
+                    if ikind[i] == 1 {
+                        game.lives = game.lives - 1     // 接到炸弹，扣命
+                        play_tone(160, 90)
+                    }
+                }
+                respawn(i)
+            }
+            sprite_move_to(handles[i], ix[i], iy[i])
+        }
+
+        // —— 渲染 ——
+        frame_begin()
+        for i in 0..N {
+            sprite_draw(handles[i])
+        }
+        sprite_draw(paddle)
+        draw_text("Score:", -380.0, 270.0, 26)
+        draw_number(game.score, -250.0, 270.0, 26)
+        draw_text("Lives:", -380.0, 235.0, 26)
+        draw_number(game.lives, -250.0, 235.0, 26)
+        draw_text("Lv:", 250.0, 270.0, 26)
+        draw_number(game.level, 320.0, 270.0, 26)
+        frame_end()
+
+        // —— 结束判定 ——
+        if game.lives <= 0 {
+            stage_close()
+        }
+    }
+
+    stage_close()
+    print(game.score)
+    return 0
+}

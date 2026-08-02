@@ -1,0 +1,35 @@
+// build.gradle — Android APK 壳（app 模块）
+// 把预编译的原生库 jniLibs/<abi>/libsincoding.so 打包成 APK。
+// 该 .so 由 tools/build_android.sh 用 NDK 交叉编译产出。
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'org.sincoding.game'
+    compileSdk 33
+
+    defaultConfig {
+        applicationId 'org.sincoding.game'
+        minSdk 24
+        targetSdk 33
+        versionCode 1
+        versionName '1.0'
+        ndk {
+            // 多架构：按需增加 'armeabi-v7a' / 'x86_64'
+            abiFilters 'arm64-v8a'
+        }
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            // 预编译的 .so 放入此目录：jniLibs/arm64-v8a/libsincoding.so
+            jniLibs.srcDirs = ['jniLibs']
+        }
+    }
+
+    buildTypes {
+        release { minifyEnabled false }
+    }
+}

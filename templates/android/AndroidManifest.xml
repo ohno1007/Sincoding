@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AndroidManifest.xml — 用 NativeActivity 加载 libsincoding.so（raylib 原生入口） -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.sincoding.game">
+
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="33" />
+    <uses-feature android:glEsVersion="0x00020000" android:required="true" />
+
+    <application android:label="Sincoding" android:hasCode="false" android:allowBackup="false">
+        <activity
+            android:name="android.app.NativeActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:screenOrientation="landscape"
+            android:exported="true">
+            <!-- 加载 libsincoding.so（即 sinc 程序 + runtime + raylib） -->
+            <meta-data android:name="android.app.lib_name" android:value="sincoding" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

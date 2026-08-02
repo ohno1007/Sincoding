@@ -1,0 +1,6 @@
+fn main() -> int {
+    for i in 0..true {   // for 结束值必须是 int
+        print(i)
+    }
+    return 0
+}

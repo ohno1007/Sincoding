@@ -1,0 +1,8 @@
+// use_motor.sin — 调用外部 motor 模块（set_speed/get_speed/scale 由桥接生成）
+// 构建时会自动拼接 motor.gen.sin（extern fn 声明），故此处无需再写。
+fn main() -> int {
+    set_speed(120)
+    print(get_speed())       // 120
+    print(scale(10.0))       // 15
+    return 0
+}

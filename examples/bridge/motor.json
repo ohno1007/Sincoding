@@ -1,0 +1,11 @@
+{
+  "module": "motor",
+  "link": "static",
+  "header": "motor.h",
+  "library": "motor",
+  "functions": [
+    { "name": "set_speed", "symbol": "motor_set_speed", "params": [{ "name": "v", "type": "int" }], "ret": "void" },
+    { "name": "get_speed", "symbol": "motor_get_speed", "params": [], "ret": "int" },
+    { "name": "scale",     "symbol": "motor_scale",     "params": [{ "name": "x", "type": "float" }], "ret": "float" }
+  ]
+}

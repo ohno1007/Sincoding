@@ -1,0 +1,4 @@
+fn main() -> int {
+    let x = "a" + "b"   // 字符串不支持算术
+    return 0
+}

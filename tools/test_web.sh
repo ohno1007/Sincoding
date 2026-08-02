@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# test_web.sh — 端到端验证 Web(wasm) 成品：构建 → 本地 HTTP 服务 → Chromium 渲染截图
+# 通过则退出 0。需要 emscripten + node/playwright + python3。
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="${1:-$ROOT/examples/game.sin}"   # 可指定要构建的 .sin（默认 game）
+WORK="$(mktemp -d)"
+SRV=""
+cleanup() { [[ -n "$SRV" ]] && kill "$SRV" 2>/dev/null; rm -rf "$WORK"; }
+trap cleanup EXIT
+
+if ! "$ROOT/tools/build_web.sh" "$SRC" "$WORK/web" >"$WORK/build.log" 2>&1; then
+    echo "web 构建失败"; tail -5 "$WORK/build.log"; exit 1
+fi
+
+# 选一个空闲端口，避免跨次运行端口冲突
+PORT="${SIN_WEB_PORT:-$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')}"
+# 直接以 python 为 SRV（--directory 避免子 shell，使 trap 能确实回收）
+python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$WORK/web" >/dev/null 2>&1 &
+SRV=$!
+sleep 1
+
+out="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_web.js" \
+        "http://127.0.0.1:$PORT/index.html" "$WORK/shot.png" 2>&1)" || {
+    echo "wasm 运行失败: $out"; exit 1; }
+
+nonbg="$(python3 "$ROOT/tools/png_nonbg.py" "$WORK/shot.png" 2>/dev/null || echo 0)"
+echo "$out · nonbg=$nonbg"
+echo "$out" | grep -q '"errors":\[\]' || { echo "存在 JS 报错"; exit 1; }
+[[ "$nonbg" -gt 100 ]] || { echo "画面疑似空白"; exit 1; }
+exit 0

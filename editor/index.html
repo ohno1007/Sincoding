@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sincoding 积木编辑器</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header>
+  <span class="logo">
+    <span data-icon="puzzle" data-icon-size="22"></span>
+    <h1>Sincoding</h1>
+  </span>
+  <div class="tabs">
+    <button data-view="blocks-view" class="active"><span class="ic" data-icon="code"></span>积木 / 代码</button>
+    <button data-view="costume-view"><span class="ic" data-icon="palette"></span>精灵造型</button>
+    <button data-view="stage-view"><span class="ic" data-icon="play"></span>舞台</button>
+  </div>
+  <div class="hdr-actions">
+    <button id="btn-open-proj" title="打开 .sinproj 项目，继续编辑"><span data-icon="folder" data-icon-size="15"></span>打开项目</button>
+    <button id="btn-save-proj" title="保存为 .sinproj 项目文件（含全部精灵/造型/积木）"><span data-icon="save" data-icon-size="15"></span>保存项目</button>
+    <button id="btn-publish" class="primary" title="一键编译发布到 Linux / Windows / Android / Web"><span data-icon="rocket" data-icon-size="15"></span>发布</button>
+  </div>
+  <input id="open-proj-input" type="file" accept=".sinproj,application/json" hidden>
+</header>
+
+<!-- 发布模态框：填项目信息 + 选平台，一键编译发布 -->
+<div id="publish-modal" class="modal-overlay" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <span data-icon="rocket" data-icon-size="18"></span>
+      <h2>发布项目</h2>
+      <button id="publish-close" class="modal-x" title="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="fld"><span>项目名称</span>
+        <input id="pub-name" type="text" placeholder="My Game" value="Guardian"></label>
+      <label class="fld"><span>包名 / 标识</span>
+        <input id="pub-pkg" type="text" placeholder="org.sincoding.game" value="org.sincoding.game"></label>
+      <div class="fld">
+        <span>图标 / Logo（可选，PNG）</span>
+        <div class="logo-row">
+          <button id="pub-logo-btn" type="button"><span data-icon="image" data-icon-size="14"></span>选择图片</button>
+          <img id="pub-logo-preview" alt="" hidden>
+          <span id="pub-logo-name" class="hint">未选择（用默认图标）</span>
+          <input id="pub-logo-input" type="file" accept="image/png,image/*" hidden>
+        </div>
+      </div>
+      <div class="fld">
+        <span>目标平台</span>
+        <div class="platforms">
+          <label class="plat-reco"><input type="checkbox" class="pub-plat" value="html" checked> 单文件 HTML <em>免依赖·双击即玩</em></label>
+          <label><input type="checkbox" class="pub-plat" value="web"> Web (wasm)</label>
+          <label><input type="checkbox" class="pub-plat" value="linux"> Linux</label>
+          <label><input type="checkbox" class="pub-plat" value="windows"> Windows (.exe)</label>
+          <label><input type="checkbox" class="pub-plat" value="android"> Android (.apk)</label>
+        </div>
+        <span class="hint">「单文件 HTML」完全在本机生成、不需任何编译工具链——桌面版直接可用；其余平台需配合 <code>tools/ide_server.py</code>。</span>
+      </div>
+      <div id="pub-results" class="pub-results" hidden></div>
+    </div>
+    <div class="modal-foot">
+      <span id="pub-status" class="hint"></span>
+      <button id="publish-cancel" class="ghost">取消</button>
+      <button id="publish-go" class="primary"><span data-icon="rocket" data-icon-size="14"></span>开始编译</button>
+    </div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="palette"></div>
+
+  <div id="work">
+    <!-- 视图1：无限积木画布 + 实时文本 + 精灵列表 -->
+    <div id="blocks-view" class="view active">
+      <div id="blocks-top">
+        <div id="canvas-wrap">
+          <div id="canvas"></div>
+          <div id="zoom-hint"><span data-icon="move" data-icon-size="14"></span><span class="zt"></span></div>
+          <div id="page-tag"></div>
+        </div>
+        <div id="text-pane">
+          <div id="text-edit">
+            <pre id="text-hl" aria-hidden="true"><code></code></pre>
+            <textarea id="text-out" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+            <span id="text-status"></span>
+          </div>
+          <div id="diag-list" hidden></div>
+          <div id="preview-dock">
+            <div class="pv-bar">
+              <button class="pv-tab active" data-dock="preview"><span data-icon="play" data-icon-size="13"></span>预览</button>
+              <button class="pv-tab" data-dock="console"><span data-icon="code" data-icon-size="13"></span>控制台</button>
+              <button id="pv-run" title="重新运行" data-icon="play" data-icon-size="14"></button>
+              <button id="pv-stop" title="停止" data-icon="stop" data-icon-size="14"></button>
+              <span id="pv-status"></span>
+            </div>
+            <div id="dock-body">
+              <canvas id="preview-canvas" width="480" height="360" tabindex="0"></canvas>
+              <div id="dock-console" hidden>
+                <div class="dock-con-bar">
+                  <button id="dock-print-info">打印积木信息</button>
+                  <button id="dock-con-clear">清空</button>
+                </div>
+                <div id="dock-con-out" class="con-sink"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="sprite-bar">
+        <div class="sb-label">精灵</div>
+        <div id="sprite-list"></div>
+        <button id="add-sprite" data-icon="plus" data-icon-size="16" title="新建精灵"></button>
+      </div>
+    </div>
+
+    <!-- 视图2：精灵造型画板 -->
+    <div id="costume-view" class="view">
+      <div id="costume-list"></div>
+      <div id="paint-area">
+        <div id="toolbar">
+          <button id="tool-pencil" class="active" data-icon="pencil">画笔</button>
+          <button id="tool-eraser" data-icon="eraser">橡皮</button>
+          <span class="sep"></span>
+          <label>笔刷 <input id="brush-size" type="range" min="1" max="40" value="8"></label>
+          <span class="sep"></span>
+          <div id="swatches" style="display:flex;gap:6px;align-items:center"></div>
+          <span class="sep"></span>
+          <button id="btn-clear" data-icon="trash">清空</button>
+          <button id="btn-export" data-icon="download">导出 PNG</button>
+        </div>
+        <canvas id="paint-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- 视图3：舞台（精灵以其造型为纹理） -->
+    <div id="stage-view" class="view">
+      <div id="stage-wrap">
+        <div id="stage"></div>
+        <div id="stage-hint">精灵以「造型」为外观/纹理 · 拖动可摆位</div>
+      </div>
+      <div id="console-panel">
+        <div class="con-bar">
+          <span data-icon="code" data-icon-size="14"></span>控制台
+          <button id="con-print-info" title="打印当前精灵的积木信息到控制台">打印积木信息</button>
+          <button id="con-clear" title="清空控制台">清空</button>
+        </div>
+        <div id="console-out" class="con-sink"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 代码补全下拉（定位到光标处） -->
+<div id="ac-pop" hidden></div>
+
+<script src="./sinc.js"></script>
+<script src="./icons.js"></script>
+<script src="./interp.js"></script>
+<script src="./blockmodel.js"></script>
+<script src="./paint.js"></script>
+<script src="./blocks_data.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

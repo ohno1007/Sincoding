@@ -1,0 +1,19 @@
+// globals_for.sin — 全局变量 + for 循环
+let high_score = 0      // 全局变量
+
+fn bump(n: int) -> int {
+    high_score = high_score + n
+    return high_score
+}
+
+fn main() -> int {
+    let total = 0
+    for i in 0..5 {
+        total = total + i      // 0+1+2+3+4
+    }
+    print(total)               // 10
+    print(bump(7))             // 7
+    print(bump(3))             // 10
+    print(high_score)          // 10
+    return 0
+}
