@@ -1,4 +1,4 @@
 fn main() -> int {
-    let x = "a" + "b"   // 字符串不支持算术
+    let x = "a" - "b"   // string 只支持 + 拼接，- 仍非法
     return 0
 }

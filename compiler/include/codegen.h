@@ -18,6 +18,7 @@ private:
     void emitStmt(const Stmt& s);
     void emitExpr(const Expr& e);
     void emitPrint(const Call& c);
+    void emitStr(const Call& c);   // 内建 str(x)：标量 → 字符串
     void indent();
 
     std::ostringstream out_;

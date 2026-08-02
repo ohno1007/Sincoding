@@ -417,10 +417,7 @@ Type TypeChecker::checkExpr(Expr& e) {
                 if (lt != Type::Unknown && rt != Type::Unknown && lt != rt)
                     error(b.line, "比较运算 '" + op + "' 两侧类型不一致: " +
                                       typeName(lt) + " 与 " + typeName(rt));
-                // 字符串仅支持相等/不等比较（== / !=），不支持大小比较
-                if ((lt == Type::String || rt == Type::String) &&
-                    op != "==" && op != "!=")
-                    error(b.line, "string 仅支持 == / != 比较，不支持 '" + op + "'");
+                // 字符串支持全部比较：== != 走 strcmp==0，< <= > >= 走 strcmp 符号
                 b.type = Type::Bool;
             } else { // + - * / %
                 if (lt != Type::Unknown && rt != Type::Unknown && lt != rt)
@@ -428,8 +425,11 @@ Type TypeChecker::checkExpr(Expr& e) {
                                       typeName(lt) + " 与 " + typeName(rt));
                 if (lt == Type::Bool || rt == Type::Bool)
                     error(b.line, "算术运算 '" + op + "' 不能用于 bool");
-                if (lt == Type::String || rt == Type::String)
-                    error(b.line, "算术运算 '" + op + "' 不能用于 string（暂不支持拼接）");
+                if (lt == Type::String || rt == Type::String) {
+                    // 字符串仅支持 '+' 拼接（结果仍是 string），不支持 - * / %
+                    if (op != "+")
+                        error(b.line, "string 只支持 '+' 拼接，不支持 '" + op + "'");
+                }
                 if (op == "%" && (lt == Type::Float || rt == Type::Float))
                     error(b.line, "'%' 不能用于 float");
                 b.type = (lt != Type::Unknown) ? lt : rt;
@@ -453,6 +453,18 @@ Type TypeChecker::checkExpr(Expr& e) {
                 }
                 c.type = Type::Void;
                 return Type::Void;
+            }
+            // 内建 str：把标量转成字符串（int/float/bool/string → string）
+            if (c.callee == "str") {
+                if (c.args.size() != 1) {
+                    error(c.line, "str 需要恰好 1 个参数");
+                } else {
+                    Type at = checkExpr(*c.args[0]);
+                    if (c.args[0]->arrayLen != 0 || at == Type::Struct || at == Type::Void)
+                        error(c.line, "str 只能转换标量 int/float/bool/string");
+                }
+                c.type = Type::String;
+                return Type::String;
             }
             auto it = fns_.find(c.callee);
             if (it == fns_.end()) {

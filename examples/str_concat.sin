@@ -1,0 +1,16 @@
+// str_concat.sin — 字符串拼接 + str() 数字转字符串 + 大小比较
+// 现在能拼出 "Score: 42" 这类文本了（游戏计分板、标签的刚需）。
+
+fn label(name: string, n: int) -> string {
+    return name + ": " + str(n)          // 链式拼接 + str
+}
+
+fn main() -> int {
+    print(label("Score", 42))            // Score: 42
+    print("pi=" + str(3.14))             // pi=3.14
+    print("flag=" + str(true))           // flag=true
+    let a = "apple"
+    let b = "banana"
+    if a < b { print("less") }           // less（strcmp 大小比较）
+    return 0
+}

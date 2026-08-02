@@ -60,6 +60,74 @@ void collectStmt(const Stmt& s, std::vector<ArrType>& out, std::set<std::string>
 
 } // namespace
 
+// ---------- 预扫描：程序是否用到字符串运行时（'+' 拼接 / str() 转换）----------
+namespace {
+bool exprUsesStrRt(const Expr& e);
+template <typename Vec> bool anyUsesStrRt(const Vec& v) {
+    for (auto& e : v) if (exprUsesStrRt(*e)) return true;
+    return false;
+}
+bool exprUsesStrRt(const Expr& e) {
+    switch (e.kind) {
+        case ExprKind::Binary: {
+            auto& b = static_cast<const Binary&>(e);
+            if (b.op == "+" && b.lhs->type == Type::String) return true;
+            return exprUsesStrRt(*b.lhs) || exprUsesStrRt(*b.rhs);
+        }
+        case ExprKind::Call: {
+            auto& c = static_cast<const Call&>(e);
+            if (c.callee == "str") return true;
+            return anyUsesStrRt(c.args);
+        }
+        case ExprKind::Unary:  return exprUsesStrRt(*static_cast<const Unary&>(e).operand);
+        case ExprKind::Index: {
+            auto& x = static_cast<const IndexExpr&>(e);
+            return exprUsesStrRt(*x.arr) || exprUsesStrRt(*x.idx);
+        }
+        case ExprKind::ArrayLit: return anyUsesStrRt(static_cast<const ArrayLit&>(e).elems);
+        case ExprKind::Field:    return exprUsesStrRt(*static_cast<const FieldAccess&>(e).obj);
+        case ExprKind::StructLit:
+            for (auto& fi : static_cast<const StructLit&>(e).fields)
+                if (exprUsesStrRt(*fi.value)) return true;
+            return false;
+        default: return false;
+    }
+}
+bool stmtUsesStrRt(const Stmt& s);
+bool blockUsesStrRt(const Block& b) {
+    for (auto& s : b.stmts) if (stmtUsesStrRt(*s)) return true;
+    return false;
+}
+bool stmtUsesStrRt(const Stmt& s) {
+    switch (s.kind) {
+        case StmtKind::Let: { auto& l = static_cast<const LetStmt&>(s); return l.init && exprUsesStrRt(*l.init); }
+        case StmtKind::Assign: {
+            auto& a = static_cast<const AssignStmt&>(s);
+            return (a.index && exprUsesStrRt(*a.index)) || exprUsesStrRt(*a.value);
+        }
+        case StmtKind::If: {
+            auto& i = static_cast<const IfStmt&>(s);
+            return exprUsesStrRt(*i.cond) || blockUsesStrRt(*i.thenBlock) ||
+                   (i.elseBlock && blockUsesStrRt(*i.elseBlock));
+        }
+        case StmtKind::While: { auto& w = static_cast<const WhileStmt&>(s); return exprUsesStrRt(*w.cond) || blockUsesStrRt(*w.body); }
+        case StmtKind::For: {
+            auto& f = static_cast<const ForStmt&>(s);
+            return exprUsesStrRt(*f.start) || exprUsesStrRt(*f.end) || blockUsesStrRt(*f.body);
+        }
+        case StmtKind::Return: { auto& r = static_cast<const ReturnStmt&>(s); return r.value && exprUsesStrRt(*r.value); }
+        case StmtKind::ExprStmt: return exprUsesStrRt(*static_cast<const ExprStmt&>(s).expr);
+        case StmtKind::Block: return blockUsesStrRt(static_cast<const Block&>(s));
+    }
+    return false;
+}
+bool progUsesStrRt(const Program& p) {
+    for (auto& g : p.globals) if (stmtUsesStrRt(*g)) return true;
+    for (auto& fn : p.fns) if (fn->body && blockUsesStrRt(*fn->body)) return true;
+    return false;
+}
+} // namespace
+
 void CodeGen::indent() {
     for (int i = 0; i < depth_; i++) out_ << "    ";
 }
@@ -71,6 +139,34 @@ std::string CodeGen::generate(const Program& prog) {
     out_ << "#include <stdio.h>\n";
     out_ << "#include <stdbool.h>\n";
     out_ << "#include <string.h>\n\n";
+
+    // 字符串运行时（仅在用到 '+' 拼接 / str() 时注入）：环形 arena，结果活到 arena 绕回
+    if (progUsesStrRt(prog)) {
+        out_ <<
+"static char sin_str_arena[65536];\n"
+"static size_t sin_str_pos = 0;\n"
+"static const char* sin_str_take(const char* a, size_t la, const char* b, size_t lb) {\n"
+"    if (sin_str_pos + la + lb + 1 > sizeof(sin_str_arena)) sin_str_pos = 0;\n"
+"    char* p = sin_str_arena + sin_str_pos;\n"
+"    if (la) memcpy(p, a, la);\n"
+"    if (lb) memcpy(p + la, b, lb);\n"
+"    p[la + lb] = 0;\n"
+"    sin_str_pos += la + lb + 1;\n"
+"    return p;\n"
+"}\n"
+"static const char* sin_str_concat(const char* a, const char* b) {\n"
+"    return sin_str_take(a, strlen(a), b, strlen(b));\n"
+"}\n"
+"static const char* sin_str_from_int(long long n) {\n"
+"    char buf[32]; int k = snprintf(buf, sizeof(buf), \"%lld\", n);\n"
+"    return sin_str_take(buf, (size_t)k, \"\", 0);\n"
+"}\n"
+"static const char* sin_str_from_float(double f) {\n"
+"    char buf[40]; int k = snprintf(buf, sizeof(buf), \"%g\", f);\n"
+"    return sin_str_take(buf, (size_t)k, \"\", 0);\n"
+"}\n"
+"static const char* sin_str_from_bool(int b) { return b ? \"true\" : \"false\"; }\n\n";
+    }
 
     // 收集所有数组包裹类型（值语义：可赋值 / 传参 / 返回 / 作结构体字段）
     std::vector<ArrType> arrs;
@@ -309,6 +405,16 @@ void CodeGen::emitPrint(const Call& c) {
     out_ << ")";
 }
 
+void CodeGen::emitStr(const Call& c) {
+    const Expr& a = *c.args[0];
+    switch (a.type) {
+        case Type::Int:    out_ << "sin_str_from_int(";   emitExpr(a); out_ << ")"; break;
+        case Type::Float:  out_ << "sin_str_from_float("; emitExpr(a); out_ << ")"; break;
+        case Type::Bool:   out_ << "sin_str_from_bool(";  emitExpr(a); out_ << ")"; break;
+        default:           emitExpr(a); break;   // string：已是字符串
+    }
+}
+
 void CodeGen::emitExpr(const Expr& e) {
     switch (e.kind) {
         case ExprKind::IntLit:
@@ -397,12 +503,16 @@ void CodeGen::emitExpr(const Expr& e) {
         }
         case ExprKind::Binary: {
             auto& b = static_cast<const Binary&>(e);
-            // 字符串相等比较走 strcmp
-            if ((b.op == "==" || b.op == "!=") && b.lhs->type == Type::String) {
+            if (b.lhs->type == Type::String) {
+                if (b.op == "+") {                 // 拼接
+                    out_ << "sin_str_concat(";
+                    emitExpr(*b.lhs); out_ << ", "; emitExpr(*b.rhs);
+                    out_ << ")";
+                    break;
+                }
+                // 所有字符串比较（== != < <= > >=）走 strcmp 符号
                 out_ << "(strcmp(";
-                emitExpr(*b.lhs);
-                out_ << ", ";
-                emitExpr(*b.rhs);
+                emitExpr(*b.lhs); out_ << ", "; emitExpr(*b.rhs);
                 out_ << ") " << b.op << " 0)";
                 break;
             }
@@ -416,6 +526,7 @@ void CodeGen::emitExpr(const Expr& e) {
         case ExprKind::Call: {
             auto& c = static_cast<const Call&>(e);
             if (c.callee == "print") { emitPrint(c); break; }
+            if (c.callee == "str") { emitStr(c); break; }
             out_ << c.callee << "(";
             for (size_t i = 0; i < c.args.size(); i++) {
                 if (i) out_ << ", ";

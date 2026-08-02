@@ -346,6 +346,8 @@
     play_tone(a) { this.beep(a[0], a[1]); },
     to_float(a) { return a[0]; },
     to_int(a) { return Math.trunc(a[0]); },
+    // 内建 str(x)：标量转字符串（与生成的 C 语义一致；'+' 拼接在 binop 里天然可用）
+    str(a) { const v = a[0]; return typeof v === "boolean" ? (v ? "true" : "false") : String(v); },
     print(a) { const t = String(a[0]); this.world.console.push(t); if (this.onPrint) this.onPrint(t); },
   };
 

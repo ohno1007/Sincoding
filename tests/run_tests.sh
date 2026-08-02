@@ -62,6 +62,7 @@ run_ok structs "$ROOT/examples/structs.sin" $'3\n7\n14\n0\n5'
 run_ok array_params "$ROOT/examples/array_params.sin" $'6\n2\n6\n1\n4'
 run_ok struct_array "$ROOT/examples/struct_array.sin" $'10\n50\n50'
 run_ok struct_nested "$ROOT/examples/struct_nested.sin" $'5\n9\n42\n2.5'
+run_ok str_concat "$ROOT/examples/str_concat.sin" $'Score: 42\npi=3.14\nflag=true\nless'
 
 echo
 echo "=== 反例：类型/语义错误应被拒绝 ==="
@@ -117,6 +118,7 @@ roundtrip structs "$ROOT/examples/structs.sin"
 roundtrip array_params "$ROOT/examples/array_params.sin"
 roundtrip struct_array "$ROOT/examples/struct_array.sin"
 roundtrip struct_nested "$ROOT/examples/struct_nested.sin"
+roundtrip str_concat "$ROOT/examples/str_concat.sin"
 
 # ---- 积木视图渲染（需要 node + playwright，缺失则跳过） ----
 echo
