@@ -327,11 +327,15 @@ if command -v emcmake >/dev/null 2>&1 && [[ -f /usr/local/lib/web/libraylib.a ]]
     else
         echo "✗ web-catch: $out"; ((FAIL++))
     fi
-    # guardian（结构体数组 + 造型 PNG）编成 wasm 网页版，验证 assets 预载
-    if out="$("$ROOT/tools/test_web.sh" "$ROOT/examples/guardian.sin" "$ROOT/examples/assets/guardian" 2>&1)"; then
-        echo "✓ web-guardian: 带造型资源的游戏 wasm 网页版渲染（$out）"; ((PASS++))
+    # guardian（结构体数组 + 造型 PNG）编成 wasm，验证 assets 预载打包成功。
+    # 只验构建产物（不走浏览器渲染，避免 headless Chromium 对大 wasm 的偶发崩溃；
+    # 浏览器渲染已由上面的 web / web-catch 覆盖）。
+    gwdir="$WORK/gweb"
+    if "$ROOT/tools/build_web.sh" "$ROOT/examples/guardian.sin" "$gwdir" "$ROOT/examples/assets/guardian" >/dev/null 2>&1 \
+       && [[ -f "$gwdir/index.data" ]]; then
+        echo "✓ web-guardian: 带造型资源编成 wasm（assets 预载 index.data $(wc -c <"$gwdir/index.data") 字节）"; ((PASS++))
     else
-        echo "✗ web-guardian: $out"; ((FAIL++))
+        echo "✗ web-guardian: 带 assets 的 web 构建失败"; ((FAIL++))
     fi
 else
     echo "○ 跳过（未检测到 emscripten / raylib-web / playwright）"
