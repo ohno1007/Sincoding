@@ -723,6 +723,51 @@
   });
   textOut.addEventListener("scroll", () => { syncHighlight(); if (ac.open) positionAC(); });
 
+  // ---------------- IDE 查询（mini-LSP）：光标类型 + F2 重命名 ----------------
+  // 文本偏移 → 1-based (line, col)，与编译器 token.col 对齐
+  function caretLineCol(pos) {
+    const before = textOut.value.slice(0, pos);
+    return { line: before.split("\n").length, col: pos - before.lastIndexOf("\n") };
+  }
+  function ideCall(fn, extraTypes, extraArgs) {
+    if (!sincMod) return null;
+    const { line, col } = caretLineCol(textOut.selectionStart);
+    try {
+      const out = sincMod.ccall(fn, "string",
+        ["string", "number", "number"].concat(extraTypes || []),
+        [textOut.value, line, col].concat(extraArgs || []));
+      return JSON.parse(out);
+    } catch (e) { return null; }
+  }
+  // 光标停在标识符上时，状态栏显示其类型（悬停显示类型的等价体验）
+  function showCaretType() {
+    if (!sincMod || ac.open) return;
+    const h = ideCall("sin_hover");
+    if (h && h.found) setTextStatus(h.kind + " " + h.name + " : " + h.type, "ok");
+  }
+  textOut.addEventListener("keyup", (e) => {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) showCaretType();
+  });
+  textOut.addEventListener("click", showCaretType);
+  textOut.addEventListener("keydown", (e) => {
+    if (e.key === "F2") {
+      e.preventDefault();
+      const cur = ideCall("sin_hover");
+      if (!cur || !cur.found) { setTextStatus("光标处不是可改名的标识符", "warn"); return; }
+      const nn = (prompt("把「" + cur.name + "」重命名为：", cur.name) || "").trim();
+      if (!nn || nn === cur.name) return;
+      const res = ideCall("sin_rename", ["string"], [nn]);
+      if (res && res.ok) {
+        setTextValue(res.source);
+        onTextEdited();
+        setTextStatus("已重命名 " + cur.name + " → " + nn + (res.note ? "（" + res.note + "）" : " ✓"),
+                      res.note ? "warn" : "ok");
+      } else {
+        setTextStatus((res && res.note) || "无法重命名", "warn");
+      }
+    }
+  });
+
   // ---------------- 语法诊断（点行可跳转） ----------------
   const diagList = document.getElementById("diag-list");
   function renderDiags(diags) {

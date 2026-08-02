@@ -202,6 +202,12 @@ if command -v node >/dev/null 2>&1 && \
     else
         echo "✗ IDE: 交互验证失败（$out）"; ((FAIL++))
     fi
+    # mini-LSP 前端：F2 重命名（作用域正确）+ 光标处 hover 显示类型
+    if rout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_rename.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ IDE mini-LSP: F2 重命名 + 光标 hover 类型（$rout）"; ((PASS++))
+    else
+        echo "✗ IDE mini-LSP: 验证失败（$rout）"; ((FAIL++))
+    fi
 else
     echo "○ 跳过（未检测到 node 或 playwright）"
 fi
