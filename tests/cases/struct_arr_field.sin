@@ -1,0 +1,3 @@
+struct Enemy { hp: int }
+struct World { enemies: Enemy[3] }
+fn main() -> int { return 0 }

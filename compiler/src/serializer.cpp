@@ -202,7 +202,9 @@ struct SourceWriter {
     void writeStruct(const StructDecl& st) {
         out << "struct " << st.name << " {\n";
         for (size_t i = 0; i < st.fields.size(); i++) {
-            out << "    " << st.fields[i].name << ": " << typeName(st.fields[i].type);
+            const auto& f = st.fields[i];
+            out << "    " << f.name << ": " << ptype(f.type, f.structName);
+            if (f.len > 0) out << "[" << f.len << "]";
             if (i + 1 < st.fields.size()) out << ",";
             out << "\n";
         }
@@ -497,7 +499,10 @@ std::string serializeBlocks(const Program& prog) {
                     if (j) w.out << ",";
                     w.nl(); w.out << "{"; w.depth++;
                     w.nl(); w.key("name"); w.str(st.fields[j].name);
-                    w.out << ","; w.nl(); w.key("type"); w.str(typeName(st.fields[j].type));
+                    w.out << ","; w.nl(); w.key("type");
+                    w.str(st.fields[j].type == Type::Struct ? st.fields[j].structName
+                                                            : typeName(st.fields[j].type));
+                    if (st.fields[j].len > 0) { w.out << ","; w.nl(); w.key("len"); w.out << st.fields[j].len; }
                     w.depth--; w.nl(); w.out << "}";
                 }
                 w.depth--; w.nl();

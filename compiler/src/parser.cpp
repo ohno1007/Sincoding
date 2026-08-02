@@ -107,8 +107,8 @@ StructPtr Parser::parseStruct() {
         f.line = cur().line;
         f.name = expect(TokKind::Ident, "字段名").text;
         expect(TokKind::Colon, "':'");
-        std::string sn;
-        f.type = parseType(sn);   // 字段类型（标量；结构体名由类型检查拒绝）
+        f.type = parseType(f.structName);  // 字段类型：标量 / 结构体 / 数组
+        f.len = parseArraySuffix();        // 可选 [N]（标量数组字段）
         s->fields.push_back(f);
         match(TokKind::Comma);    // 逗号可选（换行亦可分隔）
     }

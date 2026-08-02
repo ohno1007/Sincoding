@@ -66,10 +66,17 @@ bool TypeChecker::check(Program& prog) {
         }
         std::unordered_set<std::string> seen;
         for (auto& f : st->fields) {
-            if (f.type == Type::Struct)
-                error(f.line, "字段 '" + f.name + "' 暂不支持结构体类型（仅标量）");
-            else if (f.type == Type::Void)
+            if (f.type == Type::Void)
                 error(f.line, "字段 '" + f.name + "' 不能是 void");
+            else if (f.type == Type::Struct) {
+                // 结构体字段：必须是「已在前面声明」的其它结构体（防环，满足 C 顺序）
+                if (f.len > 0)
+                    error(f.line, "字段 '" + f.name + "' 暂不支持结构体数组（可用标量数组或结构体字段）");
+                else if (f.structName == st->name)
+                    error(f.line, "字段 '" + f.name + "' 不能是所属结构体自身（无指针，禁止递归）");
+                else if (!structs_.count(f.structName))
+                    error(f.line, "字段 '" + f.name + "' 引用了未定义或未在前面声明的结构体: " + f.structName);
+            }
             if (!seen.insert(f.name).second)
                 error(f.line, "字段名重复: " + f.name);
         }
@@ -168,23 +175,26 @@ void TypeChecker::checkStmt(Stmt& s) {
                 error(as.line, "赋值给未声明的变量: " + as.name);
             if (!as.field.empty()) {
                 // 字段赋值 name.field = value
-                Type ft = Type::Unknown;
+                Type ft = Type::Unknown; int fLen = 0; std::string fStruct;
                 if (vt.base != Type::Struct && vt.base != Type::Unknown) {
                     error(as.line, as.name + " 不是结构体，不能用 '." + as.field + "' 赋值");
                 } else {
                     bool found = false;
                     auto sit = structs_.find(vt.structName);
                     if (sit != structs_.end())
-                        for (auto& d : sit->second) if (d.name == as.field) { ft = d.type; found = true; }
+                        for (auto& d : sit->second) if (d.name == as.field) {
+                            ft = d.type; fLen = d.len; fStruct = d.structName; found = true;
+                        }
                     if (!found && vt.base == Type::Struct)
                         error(as.line, "结构体 " + vt.structName + " 没有字段 '" + as.field + "'");
                 }
                 Type valT = checkExpr(*as.value);
-                if (as.value->arrayLen != 0 || valT == Type::Struct)
-                    error(as.line, "字段只能赋标量值");
-                else if (valT != Type::Unknown && ft != Type::Unknown && valT != ft)
+                bool ok = (valT == ft) && (as.value->arrayLen == fLen) &&
+                          (ft != Type::Struct || as.value->structName == fStruct);
+                if (valT != Type::Unknown && ft != Type::Unknown && !ok)
                     error(as.line, "字段 '" + as.field + "' 类型不匹配: 应为 " +
-                                       typeName(ft) + "，得到 " + typeName(valT));
+                                       declTypeStr(ft, fLen, fStruct) + "，得到 " +
+                                       declTypeStr(valT, as.value->arrayLen, as.value->structName));
             } else if (as.index) {
                 // 元素赋值 name[idx] = value
                 if (vt.len == 0 && vt.base != Type::Unknown)
@@ -308,11 +318,12 @@ Type TypeChecker::checkExpr(Expr& e) {
                 if (!def) { error(sl.line, sl.typeName + " 没有字段 '" + fi.name + "'"); continue; }
                 if (!given.insert(fi.name).second)
                     error(sl.line, "字段 '" + fi.name + "' 重复赋值");
-                if (fi.value->arrayLen != 0 || vt == Type::Struct)
-                    error(sl.line, "字段 '" + fi.name + "' 只能是标量值");
-                else if (vt != Type::Unknown && vt != def->type)
+                bool ok = (vt == def->type) && (fi.value->arrayLen == def->len) &&
+                          (def->type != Type::Struct || fi.value->structName == def->structName);
+                if (vt != Type::Unknown && !ok)
                     error(sl.line, "字段 '" + fi.name + "' 类型应为 " +
-                                       typeName(def->type) + "，得到 " + typeName(vt));
+                                       declTypeStr(def->type, def->len, def->structName) +
+                                       "，得到 " + declTypeStr(vt, fi.value->arrayLen, fi.value->structName));
             }
             if (given.size() != fields.size())
                 error(sl.line, "结构体 " + sl.typeName + " 需要初始化全部 " +
@@ -331,7 +342,8 @@ Type TypeChecker::checkExpr(Expr& e) {
             auto it = structs_.find(fa.obj->structName);
             if (it != structs_.end()) {
                 for (auto& d : it->second) if (d.name == fa.field) {
-                    fa.type = d.type; fa.arrayLen = 0; return d.type;
+                    fa.type = d.type; fa.arrayLen = d.len; fa.structName = d.structName;
+                    return d.type;
                 }
             }
             error(fa.line, "结构体 " + fa.obj->structName + " 没有字段 '" + fa.field + "'");

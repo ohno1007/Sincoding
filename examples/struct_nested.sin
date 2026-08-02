@@ -1,0 +1,22 @@
+// struct_nested.sin — 嵌套结构体字段
+// 字段可以是：另一个已声明的结构体、或标量定长数组。
+
+struct Point { x: int, y: int }
+
+struct Enemy {
+    pos: Point,          // 结构体字段
+    trail: float[3],     // 标量数组字段
+    hp: int
+}
+
+fn main() -> int {
+    let e: Enemy                       // 零初始化（各字段递归置 0）
+    e.pos = Point { x: 5, y: 9 }       // 给结构体字段整体赋值
+    e.hp = 42
+    e.trail = [1.5, 2.5, 3.5]          // 给数组字段整体赋值
+    print(e.pos.x)                     // 5（链式：结构体字段的字段）
+    print(e.pos.y)                     // 9
+    print(e.hp)                        // 42
+    print(e.trail[1])                  // 2.5（数组字段下标）
+    return 0
+}

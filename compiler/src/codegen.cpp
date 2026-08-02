@@ -64,41 +64,51 @@ void CodeGen::indent() {
     for (int i = 0; i < depth_; i++) out_ << "    ";
 }
 
+static std::string fieldC(const StructField& f);  // 定义在下方
+
 std::string CodeGen::generate(const Program& prog) {
     out_ << "// 由 Sincoding 编译器自动生成，请勿手改\n";
     out_ << "#include <stdio.h>\n";
     out_ << "#include <stdbool.h>\n";
     out_ << "#include <string.h>\n\n";
 
-    // 结构体类型定义
-    if (!prog.structs.empty()) {
-        for (auto& st : prog.structs) {
-            out_ << "typedef struct {\n";
-            for (auto& f : st->fields)
-                out_ << "    " << typeToC(f.type) << " " << f.name << ";\n";
-            out_ << "} " << st->name << ";\n";
-        }
-        out_ << "\n";
-    }
-
-    // 数组包裹类型定义（值语义：可赋值 / 传参 / 返回）
+    // 收集所有数组包裹类型（值语义：可赋值 / 传参 / 返回 / 作结构体字段）
+    std::vector<ArrType> arrs;
     {
-        std::vector<ArrType> arrs;
         std::set<std::string> seen;
+        for (auto& st : prog.structs)
+            for (auto& f : st->fields) addArr(f.type, f.structName, f.len, arrs, seen);
         for (auto& g : prog.globals) collectStmt(*g, arrs, seen);
         for (auto& fn : prog.fns) {
             for (auto& p : fn->params) addArr(p.type, p.structName, p.len, arrs, seen);
             addArr(fn->ret, fn->retStruct, fn->retLen, arrs, seen);
             if (fn->body) collectBlock(*fn->body, arrs, seen);
         }
-        if (!arrs.empty()) {
-            for (auto& a : arrs)
-                out_ << "typedef struct { " << arrElemC(a.elem, a.structName)
-                     << " data[" << a.len << "]; } "
-                     << arrName(a.elem, a.structName, a.len) << ";\n";
-            out_ << "\n";
-        }
     }
+    // 依赖顺序：标量元素数组 → 结构体 → 结构体元素数组
+    auto emitArrs = [&](bool structElem) {
+        bool any = false;
+        for (auto& a : arrs) {
+            if ((a.elem == Type::Struct) != structElem) continue;
+            out_ << "typedef struct { " << arrElemC(a.elem, a.structName)
+                 << " data[" << a.len << "]; } "
+                 << arrName(a.elem, a.structName, a.len) << ";\n";
+            any = true;
+        }
+        if (any) out_ << "\n";
+    };
+
+    emitArrs(/*structElem=*/false);          // 1) 标量数组（结构体字段可能依赖）
+    if (!prog.structs.empty()) {             // 2) 结构体（字段可为标量数组 / 已声明结构体）
+        for (auto& st : prog.structs) {
+            out_ << "typedef struct {\n";
+            for (auto& f : st->fields)
+                out_ << "    " << fieldC(f) << " " << f.name << ";\n";
+            out_ << "} " << st->name << ";\n";
+        }
+        out_ << "\n";
+    }
+    emitArrs(/*structElem=*/true);           // 3) 结构体数组（依赖结构体定义）
 
     // 前向声明
     for (auto& fn : prog.fns) emitFnProto(*fn);
@@ -129,6 +139,12 @@ static std::string cType(Type t, const std::string& structName) {
 static std::string paramC(const Param& p) {
     if (p.len > 0) return arrName(p.type, p.structName, p.len);
     return cType(p.type, p.structName);
+}
+
+// 结构体字段的 C 类型（标量数组字段用包裹结构体，结构体字段用其名）
+static std::string fieldC(const StructField& f) {
+    if (f.len > 0) return arrName(f.type, f.structName, f.len);
+    return cType(f.type, f.structName);
 }
 
 // main 在 C 里必须返回 int，否则触发 -Wmain；其余函数按类型映射。

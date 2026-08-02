@@ -186,10 +186,13 @@ struct FnDecl {
 };
 using FnPtr = std::unique_ptr<FnDecl>;
 
-// 结构体声明：struct Name { field: type, ... }（字段为标量）
+// 结构体声明：struct Name { field: type, ... }
+// 字段可为标量、已声明的结构体（type==Struct + structName）、或标量定长数组（len>0）。
 struct StructField {
     std::string name;
     Type type;
+    int len = 0;             // >0 表示数组字段 T[N]（元素为标量）
+    std::string structName;  // type==Struct 时的结构体名
     int line;
 };
 struct StructDecl {
