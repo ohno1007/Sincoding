@@ -6,9 +6,11 @@
 #include "codegen.h"
 #include "lexer.h"
 #include "parser.h"
+#include "query.h"
 #include "serializer.h"
 #include "type_checker.h"
 
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -45,11 +47,18 @@ int main(int argc, char** argv) {
     std::string output;
     std::string emit = "c";
     bool dumpTokens = false;
+    std::string queryKind;  // 非空表示 IDE 查询模式
+    int qLine = 0, qCol = 0;
     for (int i = 2; i < argc; i++) {
         std::string a = argv[i];
         if (a == "-o" && i + 1 < argc) output = argv[++i];
         else if (a == "--emit" && i + 1 < argc) emit = argv[++i];
         else if (a == "--tokens") dumpTokens = true;
+        else if (a == "--query" && i + 3 < argc) {  // --query <hover> <line> <col>
+            queryKind = argv[++i];
+            qLine = std::atoi(argv[++i]);
+            qCol = std::atoi(argv[++i]);
+        }
         else { std::cerr << "未知参数: " << a << "\n"; return 2; }
     }
     if (emit != "c" && emit != "src" && emit != "blocks") {
@@ -78,7 +87,16 @@ int main(int argc, char** argv) {
 
     // 3) 类型检查
     TypeChecker checker;
-    if (!checker.check(prog)) { printDiags(input, checker.errors()); return 1; }
+    bool checkOk = checker.check(prog);
+
+    // IDE 查询模式：尽力而为（即使有类型错误也返回可用结果）
+    if (!queryKind.empty()) {
+        if (queryKind == "hover") std::cout << queryHover(prog, qLine, qCol) << "\n";
+        else { std::cerr << "未知查询类型: " << queryKind << "\n"; return 2; }
+        return 0;
+    }
+
+    if (!checkOk) { printDiags(input, checker.errors()); return 1; }
 
     // 4) 按 --emit 输出
     std::string result;

@@ -122,6 +122,17 @@ roundtrip struct_nested "$ROOT/examples/struct_nested.sin"
 roundtrip str_concat "$ROOT/examples/str_concat.sin"
 roundtrip mathx "$ROOT/examples/mathx.sin"
 
+# ---- IDE 查询：悬停显示类型（mini-LSP）----
+echo
+echo "=== IDE 查询：hover 显示类型 ==="
+HOVSRC="$WORK/hover.sin"
+printf '%s\n' 'fn main() -> int {' '    let xs: int[5] = [1,2,3,4,5]' '    return xs[0]' '}' > "$HOVSRC"
+if "$SINC" "$HOVSRC" --query hover 3 12 2>/dev/null | grep -q '"type":"int\[5\]"'; then
+    echo "✓ hover: xs 引用显示 int[5]"; ((PASS++))
+else
+    echo "✗ hover: 类型不符（$("$SINC" "$HOVSRC" --query hover 3 12 2>/dev/null)）"; ((FAIL++))
+fi
+
 # ---- 积木视图渲染（需要 node + playwright，缺失则跳过） ----
 echo
 echo "=== 积木视图渲染（Chromium 截图验证） ==="

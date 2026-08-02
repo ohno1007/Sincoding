@@ -422,12 +422,13 @@ ExprPtr Parser::parsePrimary() {
         case TokKind::Ident: {
             std::string name = t.text;
             int line = t.line;
+            int col = t.col;
             advance();
             ExprPtr e;
             if (check(TokKind::LBrace) && !noStructLit_) {
                 // 结构体字面量 Name { f: e, ... }
                 auto sl = std::make_unique<StructLit>();
-                sl->typeName = name; sl->line = line;
+                sl->typeName = name; sl->line = line; sl->col = col;
                 advance(); // '{'
                 bool save = noStructLit_; noStructLit_ = false;
                 if (!check(TokKind::RBrace)) {
@@ -444,7 +445,7 @@ ExprPtr Parser::parsePrimary() {
                 e = std::move(sl);
             } else if (check(TokKind::LParen)) {
                 auto call = std::make_unique<Call>();
-                call->callee = name; call->line = line;
+                call->callee = name; call->line = line; call->col = col;
                 advance(); // '('
                 bool save = noStructLit_; noStructLit_ = false;
                 if (!check(TokKind::RParen)) {
@@ -455,7 +456,7 @@ ExprPtr Parser::parsePrimary() {
                 e = std::move(call);
             } else {
                 auto v = std::make_unique<Var>();
-                v->name = name; v->line = line;
+                v->name = name; v->line = line; v->col = col;
                 e = std::move(v);
             }
             // 后缀：下标 a[i] 与字段 a.f
@@ -471,8 +472,9 @@ ExprPtr Parser::parsePrimary() {
                 } else {
                     advance(); // '.'
                     auto fa = std::make_unique<FieldAccess>();
-                    fa->line = line; fa->obj = std::move(e);
-                    fa->field = expect(TokKind::Ident, "字段名").text;
+                    fa->obj = std::move(e);
+                    const Token& ft = expect(TokKind::Ident, "字段名");
+                    fa->field = ft.text; fa->line = ft.line; fa->col = ft.col;
                     e = std::move(fa);
                 }
             }

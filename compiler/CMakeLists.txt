@@ -15,6 +15,7 @@ add_executable(sinc
   src/type_checker.cpp
   src/codegen.cpp
   src/serializer.cpp
+  src/query.cpp
 )
 target_include_directories(sinc PRIVATE include)
 

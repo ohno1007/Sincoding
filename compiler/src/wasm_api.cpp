@@ -5,6 +5,7 @@
 // 让编辑器用「规范引擎」做文本 → 积木 的反向同步。
 #include "lexer.h"
 #include "parser.h"
+#include "query.h"
 #include "serializer.h"
 #include "type_checker.h"
 
@@ -63,6 +64,19 @@ const char* sin_to_blocks(const char* src) {
     diags += "]";
 
     result = "{\"blocks\":" + serializeBlocks(prog) + ",\"diags\":" + diags + "}";
+    return result.c_str();
+}
+
+// IDE 悬停：返回 (line,col) 处标识符的类型信息 JSON（尽力而为，容错）。
+const char* sin_hover(const char* src, int line, int col) {
+    static std::string result;
+    std::string source = src ? src : "";
+    Lexer lexer(source);
+    Parser parser(lexer.tokenize());
+    Program prog = parser.parseProgram();
+    TypeChecker checker;
+    checker.check(prog); // 忽略返回值，尽量填充类型
+    result = queryHover(prog, line, col);
     return result.c_str();
 }
 

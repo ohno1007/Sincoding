@@ -25,6 +25,7 @@ struct Expr {
     int arrayLen = 0;           // >0 表示该表达式是定长数组（type 为元素类型）
     std::string structName;     // type==Struct 时的结构体名
     int line = 0;
+    int col = 0;                // 标识符起始列（IDE 定位用；与 token.col 同基数）
     virtual ~Expr() = default;
 protected:
     explicit Expr(ExprKind k) : kind(k) {}
