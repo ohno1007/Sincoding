@@ -106,7 +106,21 @@ tools/build_web.sh examples/guardian.sin out/guardian-web examples/assets/guardi
 
 # Windows .exe（需 MinGW-w64 + raylib-win）
 tools/build_windows.sh examples/guardian.sin out/guardian.exe
+
+# Android arm64 .so（需 NDK + raylib-android）→ 放进 APK 的 jniLibs/<abi>/
+tools/build_android.sh examples/guardian.sin out/libsincoding.so
+# 一步打成可安装签名 APK（另需 Android SDK build-tools）
+tools/build_apk.sh examples/guardian.sin out/guardian.apk Guardian
 ```
+
+**四端交叉编译均已端到端验证**（`tests/run_tests.sh`，缺工具链则跳过）：
+
+| 目标 | 产物 | 验证方式 |
+|---|---|---|
+| Linux | 原生二进制 | 无头 raylib 渲染 + 计分逻辑 |
+| Web | `.html + .wasm + .data` | Chromium 渲染截图（含造型预载） |
+| Windows | `.exe` | PE32+ MS Windows 可执行 |
+| Android | `.so`（→ APK） | ARM aarch64 + 导出 `ANativeActivity_onCreate` |
 
 编辑器里也可以「一键发布」弹窗勾选平台；**单文件 HTML** 目标完全在浏览器内生成
 （内联解释器 + 程序 + 造型），双击即玩、免任何工具链。
