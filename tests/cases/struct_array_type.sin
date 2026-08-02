@@ -1,0 +1,7 @@
+struct A { x: int }
+struct B { y: int }
+fn main() -> int {
+    let es: A[2]
+    es[0] = B { y: 9 }    // B 不是 A，应报错
+    return 0
+}

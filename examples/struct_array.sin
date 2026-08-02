@@ -1,0 +1,23 @@
+// struct_array.sin — 结构体数组（"敌人列表"这类核心结构）
+// 结构体数组 = 数组包裹 + 结构体元素；可下标读写、可整体作参数传递。
+
+struct Enemy { x: int, hp: int }
+
+fn strongest(es: Enemy[3]) -> int {     // 结构体数组作参数
+    let best = 0
+    for i in 0..3 {
+        if es[i].hp > best { best = es[i].hp }
+    }
+    return best
+}
+
+fn main() -> int {
+    let es: Enemy[3]                    // 零初始化
+    es[0] = Enemy { x: 10, hp: 30 }    // 元素赋结构体字面量
+    es[1] = Enemy { x: 20, hp: 50 }
+    es[2] = Enemy { x: 30, hp: 40 }
+    print(es[0].x)                     // 10（元素的字段）
+    print(es[1].hp)                    // 50
+    print(strongest(es))               // 50
+    return 0
+}

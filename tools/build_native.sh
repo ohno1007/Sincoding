@@ -24,14 +24,16 @@ if [[ ! -x "$SINC" ]]; then
 fi
 
 # 定位 raylib：优先 pkg-config，其次 /usr/local 里的静态库
+# 注：raylib 的 .pc 常不写 Libs.private，静态链接需手动补系统依赖库。
+RAYLIB_SYSLIBS="-lGL -lm -lpthread -ldl -lrt -lX11"
 RAYLIB_CFLAGS=""
 RAYLIB_LIBS=""
 if pkg-config --exists raylib 2>/dev/null; then
     RAYLIB_CFLAGS="$(pkg-config --cflags raylib)"
-    RAYLIB_LIBS="$(pkg-config --libs raylib)"
+    RAYLIB_LIBS="$(pkg-config --libs raylib) $RAYLIB_SYSLIBS"
 elif [[ -f /usr/local/lib/libraylib.a ]]; then
     RAYLIB_CFLAGS="-I/usr/local/include"
-    RAYLIB_LIBS="/usr/local/lib/libraylib.a -lGL -lm -lpthread -ldl -lrt -lX11"
+    RAYLIB_LIBS="/usr/local/lib/libraylib.a $RAYLIB_SYSLIBS"
 else
     echo "找不到 raylib（pkg-config 或 /usr/local/lib/libraylib.a）" >&2
     exit 1

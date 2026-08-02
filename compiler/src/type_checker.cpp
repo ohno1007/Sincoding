@@ -195,9 +195,12 @@ void TypeChecker::checkStmt(Stmt& s) {
                 Type valT = checkExpr(*as.value);
                 if (as.value->arrayLen != 0)
                     error(as.line, "不能把数组赋给单个元素");
-                else if (valT != Type::Unknown && vt.base != Type::Unknown && valT != vt.base)
+                else if (valT != Type::Unknown && vt.base != Type::Unknown &&
+                         (valT != vt.base ||
+                          (vt.base == Type::Struct && as.value->structName != vt.structName)))
                     error(as.line, "元素类型不匹配: " + as.name + " 的元素是 " +
-                                       typeName(vt.base) + "，却赋以 " + typeName(valT));
+                                       declTypeStr(vt.base, 0, vt.structName) + "，却赋以 " +
+                                       declTypeStr(valT, 0, as.value->structName));
             } else {
                 Type valT = checkExpr(*as.value);
                 int valLen = as.value->arrayLen;
