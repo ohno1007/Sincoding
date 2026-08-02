@@ -83,13 +83,13 @@ bool TypeChecker::check(Program& prog) {
             continue;
         }
         FnSig sig;
-        sig.ret = {fn->ret, 0, fn->retStruct};
+        sig.ret = {fn->ret, fn->retLen, fn->retStruct};
         if (fn->ret == Type::Struct && !structs_.count(fn->retStruct))
             error(fn->line, "未定义的结构体: " + fn->retStruct);
         for (auto& p : fn->params) {
             if (p.type == Type::Struct && !structs_.count(p.structName))
                 error(p.line, "未定义的结构体: " + p.structName);
-            sig.params.push_back({p.type, 0, p.structName});
+            sig.params.push_back({p.type, p.len, p.structName});
         }
         fns_[fn->name] = sig;
     }
@@ -110,12 +110,13 @@ bool TypeChecker::check(Program& prog) {
 
 void TypeChecker::checkFn(FnDecl& fn) {
     curRet_ = fn.ret;
+    curRetLen_ = fn.retLen;
     curRetStruct_ = fn.retStruct;
     pushScope();
     for (auto& p : fn.params) {
         if (p.type == Type::Void)
             error(p.line, "参数 '" + p.name + "' 不能是 void 类型");
-        if (!declare(p.name, {p.type, 0, p.structName}))
+        if (!declare(p.name, {p.type, p.len, p.structName}))
             error(p.line, "参数名重复: " + p.name);
     }
     checkBlock(*fn.body);
@@ -244,16 +245,14 @@ void TypeChecker::checkStmt(Stmt& s) {
             auto& rs = static_cast<ReturnStmt&>(s);
             if (rs.value) {
                 Type vt = checkExpr(*rs.value);
-                if (rs.value->arrayLen != 0)
-                    error(rs.line, "不能返回数组");
                 if (curRet_ == Type::Void)
                     error(rs.line, "void 函数不能返回值");
                 else if (vt != Type::Unknown &&
-                         (vt != curRet_ ||
+                         (vt != curRet_ || rs.value->arrayLen != curRetLen_ ||
                           (curRet_ == Type::Struct && rs.value->structName != curRetStruct_)))
                     error(rs.line, "返回类型不匹配: 期望 " +
-                                       declTypeStr(curRet_, 0, curRetStruct_) + "，得到 " +
-                                       declTypeStr(vt, 0, rs.value->structName));
+                                       declTypeStr(curRet_, curRetLen_, curRetStruct_) + "，得到 " +
+                                       declTypeStr(vt, rs.value->arrayLen, rs.value->structName));
             } else if (curRet_ != Type::Void) {
                 error(rs.line, "非 void 函数必须返回 " +
                                    std::string(typeName(curRet_)) + " 值");
@@ -454,11 +453,9 @@ Type TypeChecker::checkExpr(Expr& e) {
                                   std::to_string(c.args.size()));
             for (size_t i = 0; i < c.args.size(); i++) {
                 Type at = checkExpr(*c.args[i]);
-                if (c.args[i]->arrayLen != 0)
-                    error(c.line, "不能把数组作为参数传递");
                 if (i < sig.params.size()) {
                     const VarType& pt = sig.params[i];
-                    bool ok = (at == pt.base) &&
+                    bool ok = (at == pt.base) && (c.args[i]->arrayLen == pt.len) &&
                               (pt.base != Type::Struct || c.args[i]->structName == pt.structName);
                     if (at != Type::Unknown && !ok)
                         error(c.line, "函数 " + c.callee + " 第 " + std::to_string(i + 1) +

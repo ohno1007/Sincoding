@@ -1,0 +1,5 @@
+fn f() -> int[3] {
+    let r: int[2] = [1,2]
+    return r      // int[2] 不能作 int[3] 返回
+}
+fn main() -> int { return 0 }

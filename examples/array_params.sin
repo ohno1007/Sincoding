@@ -1,0 +1,27 @@
+// array_params.sin — 数组作参数 / 返回值 / 整体赋值（值语义）
+// 数组像标量一样进出函数：按值传递（拷贝），可整体赋值、可作返回值。
+
+fn total(xs: int[3]) -> int {
+    let s = 0
+    for i in 0..3 { s = s + xs[i] }
+    return s
+}
+
+fn scale(xs: int[3], k: int) -> int[3] {
+    let r: int[3]
+    for i in 0..3 { r[i] = xs[i] * k }
+    return r                      // 返回数组
+}
+
+fn main() -> int {
+    let a: int[3] = [1, 2, 3]
+    print(total(a))              // 6
+    let b = scale(a, 2)          // 用返回的数组初始化
+    print(b[0])                  // 2
+    print(b[2])                  // 6
+    print(a[0])                  // 1（值语义：scale 未改动调用者的 a）
+    let c: int[3]
+    c = b                        // 数组整体赋值
+    print(c[1])                  // 4
+    return 0
+}

@@ -33,6 +33,7 @@ private:
     FnPtr parseFn();
     StructPtr parseStruct();
     Type parseType(std::string& structName);
+    int parseArraySuffix();  // 解析可选的 [N]；无则返回 0（用于 let/参数/返回类型）
     BlockPtr parseBlock();
     StmtPtr parseStmt();
     StmtPtr parseLet();

@@ -219,9 +219,13 @@ struct SourceWriter {
         for (size_t i = 0; i < fn.params.size(); i++) {
             if (i) out << ", ";
             out << fn.params[i].name << ": " << ptype(fn.params[i].type, fn.params[i].structName);
+            if (fn.params[i].len > 0) out << "[" << fn.params[i].len << "]";
         }
         out << ")";
-        if (fn.ret != Type::Void) out << " -> " << ptype(fn.ret, fn.retStruct);
+        if (fn.ret != Type::Void) {
+            out << " -> " << ptype(fn.ret, fn.retStruct);
+            if (fn.retLen > 0) out << "[" << fn.retLen << "]";
+        }
         if (fn.isExtern) {
             out << "\n";
         } else {

@@ -1,0 +1,5 @@
+fn f(xs: int[3]) -> int { return xs[0] }
+fn main() -> int {
+    let a: int[5] = [1,2,3,4,5]
+    return f(a)   // int[5] 不能传给 int[3]
+}

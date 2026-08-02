@@ -1,7 +1,64 @@
 #include "codegen.h"
 #include <cstdio>
+#include <set>
+#include <vector>
 
 namespace sincoding {
+
+// ---------- 数组值语义：C 侧用结构体包裹定长数组 ----------
+// 语言的 T[N] 转成 `typedef struct { cT data[N]; } Arr_<tag>_<N>;`，
+// 使数组像标量一样可赋值 / 传参 / 返回（统一值语义，无裸指针别名）。
+namespace {
+
+struct ArrType { Type elem; std::string structName; int len; };
+
+std::string arrTag(Type t, const std::string& sn) {
+    switch (t) {
+        case Type::Int: return "int";
+        case Type::Float: return "float";
+        case Type::Bool: return "bool";
+        case Type::String: return "str";
+        case Type::Struct: return sn;
+        default: return "x";
+    }
+}
+std::string arrName(Type t, const std::string& sn, int len) {
+    return "Arr_" + arrTag(t, sn) + "_" + std::to_string(len);
+}
+std::string arrElemC(Type t, const std::string& sn) {
+    return t == Type::Struct ? sn : typeToC(t);
+}
+
+void addArr(Type t, const std::string& sn, int len,
+            std::vector<ArrType>& out, std::set<std::string>& seen) {
+    if (len <= 0) return;
+    if (seen.insert(arrName(t, sn, len)).second) out.push_back({t, sn, len});
+}
+void collectStmt(const Stmt& s, std::vector<ArrType>& out, std::set<std::string>& seen);
+void collectBlock(const Block& b, std::vector<ArrType>& out, std::set<std::string>& seen) {
+    for (auto& s : b.stmts) collectStmt(*s, out, seen);
+}
+void collectStmt(const Stmt& s, std::vector<ArrType>& out, std::set<std::string>& seen) {
+    switch (s.kind) {
+        case StmtKind::Let: {
+            auto& ls = static_cast<const LetStmt&>(s);
+            addArr(ls.declared, ls.structName, ls.declaredLen, out, seen);
+            break;
+        }
+        case StmtKind::If: {
+            auto& is = static_cast<const IfStmt&>(s);
+            collectBlock(*is.thenBlock, out, seen);
+            if (is.elseBlock) collectBlock(*is.elseBlock, out, seen);
+            break;
+        }
+        case StmtKind::While: collectBlock(*static_cast<const WhileStmt&>(s).body, out, seen); break;
+        case StmtKind::For:   collectBlock(*static_cast<const ForStmt&>(s).body, out, seen); break;
+        case StmtKind::Block: collectBlock(static_cast<const Block&>(s), out, seen); break;
+        default: break;
+    }
+}
+
+} // namespace
 
 void CodeGen::indent() {
     for (int i = 0; i < depth_; i++) out_ << "    ";
@@ -22,6 +79,25 @@ std::string CodeGen::generate(const Program& prog) {
             out_ << "} " << st->name << ";\n";
         }
         out_ << "\n";
+    }
+
+    // 数组包裹类型定义（值语义：可赋值 / 传参 / 返回）
+    {
+        std::vector<ArrType> arrs;
+        std::set<std::string> seen;
+        for (auto& g : prog.globals) collectStmt(*g, arrs, seen);
+        for (auto& fn : prog.fns) {
+            for (auto& p : fn->params) addArr(p.type, p.structName, p.len, arrs, seen);
+            addArr(fn->ret, fn->retStruct, fn->retLen, arrs, seen);
+            if (fn->body) collectBlock(*fn->body, arrs, seen);
+        }
+        if (!arrs.empty()) {
+            for (auto& a : arrs)
+                out_ << "typedef struct { " << arrElemC(a.elem, a.structName)
+                     << " data[" << a.len << "]; } "
+                     << arrName(a.elem, a.structName, a.len) << ";\n";
+            out_ << "\n";
+        }
     }
 
     // 前向声明
@@ -49,9 +125,16 @@ static std::string cType(Type t, const std::string& structName) {
     return typeToC(t);
 }
 
+// 参数的 C 类型（数组用包裹结构体，按值传递）
+static std::string paramC(const Param& p) {
+    if (p.len > 0) return arrName(p.type, p.structName, p.len);
+    return cType(p.type, p.structName);
+}
+
 // main 在 C 里必须返回 int，否则触发 -Wmain；其余函数按类型映射。
 static std::string fnRetC(const FnDecl& fn) {
     if (fn.name == "main" && fn.ret == Type::Int) return "int";
+    if (fn.retLen > 0) return arrName(fn.ret, fn.retStruct, fn.retLen);
     if (fn.ret == Type::Struct) return fn.retStruct;
     return typeToC(fn.ret);
 }
@@ -64,7 +147,7 @@ void CodeGen::emitFnProto(const FnDecl& fn) {
     } else {
         for (size_t i = 0; i < fn.params.size(); i++) {
             if (i) out_ << ", ";
-            out_ << cType(fn.params[i].type, fn.params[i].structName) << " " << fn.params[i].name;
+            out_ << paramC(fn.params[i]) << " " << fn.params[i].name;
         }
     }
     out_ << ");\n";
@@ -77,7 +160,7 @@ void CodeGen::emitFn(const FnDecl& fn) {
     } else {
         for (size_t i = 0; i < fn.params.size(); i++) {
             if (i) out_ << ", ";
-            out_ << cType(fn.params[i].type, fn.params[i].structName) << " " << fn.params[i].name;
+            out_ << paramC(fn.params[i]) << " " << fn.params[i].name;
         }
     }
     out_ << ") ";
@@ -98,8 +181,10 @@ void CodeGen::emitStmt(const Stmt& s) {
         case StmtKind::Let: {
             auto& ls = static_cast<const LetStmt&>(s);
             indent();
-            out_ << cType(ls.declared, ls.structName) << " " << ls.name;
-            if (ls.declaredLen > 0) out_ << "[" << ls.declaredLen << "]";
+            if (ls.declaredLen > 0)
+                out_ << arrName(ls.declared, ls.structName, ls.declaredLen) << " " << ls.name;
+            else
+                out_ << cType(ls.declared, ls.structName) << " " << ls.name;
             out_ << " = ";
             if (ls.init) {
                 emitExpr(*ls.init);
@@ -120,7 +205,7 @@ void CodeGen::emitStmt(const Stmt& s) {
             auto& as = static_cast<const AssignStmt&>(s);
             indent();
             out_ << as.name;
-            if (as.index) { out_ << "["; emitExpr(*as.index); out_ << "]"; }
+            if (as.index) { out_ << ".data["; emitExpr(*as.index); out_ << "]"; }
             if (!as.field.empty()) out_ << "." << as.field;
             out_ << " = ";
             emitExpr(*as.value);
@@ -254,19 +339,20 @@ void CodeGen::emitExpr(const Expr& e) {
         case ExprKind::Index: {
             auto& ix = static_cast<const IndexExpr&>(e);
             emitExpr(*ix.arr);
-            out_ << "[";
+            out_ << ".data[";
             emitExpr(*ix.idx);
             out_ << "]";
             break;
         }
         case ExprKind::ArrayLit: {
             auto& al = static_cast<const ArrayLit&>(e);
-            out_ << "{";
+            // 复合字面量 (Arr_tag_N){{...}}：初始化与整体赋值位置都合法
+            out_ << "(" << arrName(al.type, al.structName, al.arrayLen) << "){{";
             for (size_t i = 0; i < al.elems.size(); i++) {
                 if (i) out_ << ", ";
                 emitExpr(*al.elems[i]);
             }
-            out_ << "}";
+            out_ << "}}";
             break;
         }
         case ExprKind::Field: {

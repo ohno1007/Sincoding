@@ -64,6 +64,15 @@ Type Parser::parseType(std::string& structName) {
     }
 }
 
+// 解析可选的定长数组后缀 [N]；无 '[' 时返回 0
+int Parser::parseArraySuffix() {
+    if (!match(TokKind::LBracket)) return 0;
+    const Token& n = expect(TokKind::Int, "数组长度");
+    int len = (int)std::strtoll(n.text.c_str(), nullptr, 10);
+    expect(TokKind::RBracket, "']'");
+    return len;
+}
+
 Program Parser::parseProgram() {
     Program prog;
     while (!check(TokKind::End)) {
@@ -123,12 +132,15 @@ FnPtr Parser::parseFn() {
             param.line = p.line;
             expect(TokKind::Colon, "':'");
             param.type = parseType(param.structName);
+            param.len = parseArraySuffix();   // 支持数组参数 T[N]
             fn->params.push_back(param);
         } while (match(TokKind::Comma));
     }
     expect(TokKind::RParen, "')'");
-    if (match(TokKind::Arrow)) fn->ret = parseType(fn->retStruct);
-    else fn->ret = Type::Void;
+    if (match(TokKind::Arrow)) {
+        fn->ret = parseType(fn->retStruct);
+        fn->retLen = parseArraySuffix();      // 支持返回数组 T[N]
+    } else fn->ret = Type::Void;
     if (fn->isExtern) {
         // extern 声明没有函数体，分号可选
         match(TokKind::Semicolon);
@@ -169,11 +181,7 @@ StmtPtr Parser::parseLet() {
     s->name = expect(TokKind::Ident, "变量名").text;
     if (match(TokKind::Colon)) {
         s->declared = parseType(s->structName);
-        if (match(TokKind::LBracket)) { // 数组类型 T[N]
-            const Token& n = expect(TokKind::Int, "数组长度");
-            s->declaredLen = (int)std::strtoll(n.text.c_str(), nullptr, 10);
-            expect(TokKind::RBracket, "']'");
-        }
+        s->declaredLen = parseArraySuffix(); // 数组类型 T[N]
     }
     // 初始化可选：有类型标注时可省略（零初始化）
     if (match(TokKind::Assign)) s->init = parseExpr();

@@ -169,6 +169,7 @@ struct ExprStmt : Stmt {
 struct Param {
     std::string name;
     Type type;
+    int len = 0;            // >0 表示定长数组参数 T[N]（按值传递，C 侧结构体包裹）
     std::string structName; // type==Struct 时
     int line;
 };
@@ -177,6 +178,7 @@ struct FnDecl {
     std::string name;
     std::vector<Param> params;
     Type ret = Type::Void;
+    int retLen = 0;         // >0 表示返回定长数组 T[N]
     std::string retStruct;  // ret==Struct 时
     BlockPtr body;          // extern 函数为空（无函数体）
     bool isExtern = false;  // 由 'extern fn' 声明，链接到外部/运行时实现

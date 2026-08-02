@@ -59,6 +59,7 @@ run_ok strings "$ROOT/examples/strings.sin" $'Hello, Sincoding!\n世界\ntrue\nt
 run_ok arrays  "$ROOT/examples/arrays.sin"  $'30\n7\n14\n0\nb'
 run_ok globals_for "$ROOT/examples/globals_for.sin" $'10\n7\n10\n10'
 run_ok structs "$ROOT/examples/structs.sin" $'3\n7\n14\n0\n5'
+run_ok array_params "$ROOT/examples/array_params.sin" $'6\n2\n6\n1\n4'
 
 echo
 echo "=== 反例：类型/语义错误应被拒绝 ==="
@@ -71,6 +72,8 @@ expect_error string_arith  "$ROOT/tests/cases/string_arith.sin"
 expect_error array_len     "$ROOT/tests/cases/array_len.sin"
 expect_error for_bad       "$ROOT/tests/cases/for_bad.sin"
 expect_error struct_field   "$ROOT/tests/cases/struct_field.sin"
+expect_error array_param_len "$ROOT/tests/cases/array_param_len.sin"
+expect_error array_ret_len   "$ROOT/tests/cases/array_ret_len.sin"
 
 # roundtrip <name> <source.sin> — 验证 AST ⇄ 文本 ⇄ 积木 序列化正确
 roundtrip() {
@@ -106,6 +109,7 @@ roundtrip strings "$ROOT/examples/strings.sin"
 roundtrip arrays  "$ROOT/examples/arrays.sin"
 roundtrip globals_for "$ROOT/examples/globals_for.sin"
 roundtrip structs "$ROOT/examples/structs.sin"
+roundtrip array_params "$ROOT/examples/array_params.sin"
 
 # ---- 积木视图渲染（需要 node + playwright，缺失则跳过） ----
 echo
