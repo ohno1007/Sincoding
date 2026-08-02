@@ -174,6 +174,23 @@ ABI 约定：语言 `int` → C `long long`，`float` → C `double`，`bool` �
 这是语言访问 raylib 运行时（开窗口、画角色、读输入）以及未来 JSON 桥接外部 ELF 的统一入口。
 完整运行时函数清单见 [`runtime/prelude.h`](../runtime/prelude.h)，示例见 [`examples/game.sin`](../examples/game.sin)。
 
+### 数学函数（libm）
+
+C 标准数学库 `libm` 的 `double f(double...)` 函数，签名正好与语言 `float` 对齐，
+**直接 `extern fn` 声明即可用**（无需改运行时），程序链接 `-lm`（raylib 成品天然已链接）：
+
+```rust
+extern fn sqrt(x: float) -> float
+extern fn fabs(x: float) -> float
+extern fn fmin(a: float, b: float) -> float
+extern fn fmax(a: float, b: float) -> float
+// 亦可：sin cos tan floor ceil pow ...
+```
+
+常用：`sqrt`（距离）、`sin/cos`（角度）、`fabs`（绝对值）、`fmin/fmax`（clamp）、
+`floor/ceil`（取整）、`pow`（幂）。示例见 [`examples/mathx.sin`](../examples/mathx.sin)。
+预览解释器（`interp.js`）已内置这些函数的等价实现，编辑期即可试跑。
+
 ## 5. 控制流
 
 ```rust

@@ -293,6 +293,23 @@
     sprite_move_to(a) { const s = this.world.sprites[a[0]]; if (s) { s.x = a[1]; s.y = a[2]; } },
     sprite_x(a) { const s = this.world.sprites[a[0]]; return s ? s.x : 0; },
     sprite_y(a) { const s = this.world.sprites[a[0]]; return s ? s.y : 0; },
+    // 两精灵是否碰撞（AABB 重叠；与 runtime rt_touching 同语义）
+    sprite_touching(a) {
+      const sa = this.world.sprites[a[0]], sb = this.world.sprites[a[1]];
+      if (!sa || !sb) return false;
+      const half = (s) => {
+        const k = s.scale || 1;
+        if (s.kind === "image" && s.tex) {
+          const w = (s.tex.naturalWidth || s.tex.width || 48) * k;
+          const h = (s.tex.naturalHeight || s.tex.height || 48) * k;
+          return [w / 2, h / 2];
+        }
+        const z = (s.size || 48) * k / 2;
+        return [z, z];
+      };
+      const [ahw, ahh] = half(sa), [bhw, bhh] = half(sb);
+      return Math.abs(sa.x - sb.x) < ahw + bhw && Math.abs(sa.y - sb.y) < ahh + bhh;
+    },
     sprite_draw(a) {
       const s = this.world.sprites[a[0]]; if (!s) return;
       const ctx = this.ctx, [cx, cy] = this.s2c(s.x, s.y), k = s.scale || 1;
@@ -348,6 +365,17 @@
     to_int(a) { return Math.trunc(a[0]); },
     // 内建 str(x)：标量转字符串（与生成的 C 语义一致；'+' 拼接在 binop 里天然可用）
     str(a) { const v = a[0]; return typeof v === "boolean" ? (v ? "true" : "false") : String(v); },
+    // libm 数学函数（对应 extern fn sqrt/sin/... 直接绑定 libm，程序需 -lm）
+    sqrt(a) { return Math.sqrt(a[0]); },
+    sin(a) { return Math.sin(a[0]); },
+    cos(a) { return Math.cos(a[0]); },
+    tan(a) { return Math.tan(a[0]); },
+    floor(a) { return Math.floor(a[0]); },
+    ceil(a) { return Math.ceil(a[0]); },
+    fabs(a) { return Math.abs(a[0]); },
+    fmin(a) { return Math.min(a[0], a[1]); },
+    fmax(a) { return Math.max(a[0], a[1]); },
+    pow(a) { return Math.pow(a[0], a[1]); },
     print(a) { const t = String(a[0]); this.world.console.push(t); if (this.onPrint) this.onPrint(t); },
   };
 

@@ -1,0 +1,32 @@
+// collide.sin — 碰撞检测 sprite_touching(a, b)
+// 方块 b 从左向右穿过静止的方块 a，统计发生碰撞（AABB 重叠）的帧数。
+
+extern fn stage_init(w: int, h: int)
+extern fn stage_running() -> bool
+extern fn frame_begin()
+extern fn frame_end()
+extern fn stage_close()
+extern fn sprite_new(x: float, y: float, size: float) -> int
+extern fn sprite_move_to(s: int, x: float, y: float)
+extern fn sprite_draw(s: int)
+extern fn sprite_touching(a: int, b: int) -> bool
+
+fn main() -> int {
+    stage_init(400, 400)
+    let a = sprite_new(0.0, 0.0, 40.0)         // 静止
+    let b = sprite_new(0.0 - 150.0, 0.0, 40.0) // 从左侧移入
+    let hits = 0
+    let bx = 0.0 - 150.0
+    while stage_running() {
+        bx = bx + 4.0
+        sprite_move_to(b, bx, 0.0)
+        if sprite_touching(a, b) { hits = hits + 1 }
+        frame_begin()
+        sprite_draw(a)
+        sprite_draw(b)
+        frame_end()
+    }
+    stage_close()
+    print(hits)                                 // 穿过时碰撞若干帧 → >0
+    return 0
+}

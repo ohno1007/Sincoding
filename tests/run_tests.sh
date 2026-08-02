@@ -26,7 +26,7 @@ run_ok() {
     if ! "$SINC" "$src" -o "$cfile" >/dev/null 2>"$WORK/$name.err"; then
         echo "✗ $name: 转译失败"; cat "$WORK/$name.err"; ((FAIL++)); return
     fi
-    if ! "$CC" -std=c11 -O2 "$cfile" -o "$bin" 2>"$WORK/$name.cc.err"; then
+    if ! "$CC" -std=c11 -O2 "$cfile" -o "$bin" -lm 2>"$WORK/$name.cc.err"; then
         echo "✗ $name: C 编译失败"; cat "$WORK/$name.cc.err"; ((FAIL++)); return
     fi
     local got
@@ -63,6 +63,7 @@ run_ok array_params "$ROOT/examples/array_params.sin" $'6\n2\n6\n1\n4'
 run_ok struct_array "$ROOT/examples/struct_array.sin" $'10\n50\n50'
 run_ok struct_nested "$ROOT/examples/struct_nested.sin" $'5\n9\n42\n2.5'
 run_ok str_concat "$ROOT/examples/str_concat.sin" $'Score: 42\npi=3.14\nflag=true\nless'
+run_ok mathx "$ROOT/examples/mathx.sin" $'5\n10\n0\n7.5'
 
 echo
 echo "=== 反例：类型/语义错误应被拒绝 ==="
@@ -119,6 +120,7 @@ roundtrip array_params "$ROOT/examples/array_params.sin"
 roundtrip struct_array "$ROOT/examples/struct_array.sin"
 roundtrip struct_nested "$ROOT/examples/struct_nested.sin"
 roundtrip str_concat "$ROOT/examples/str_concat.sin"
+roundtrip mathx "$ROOT/examples/mathx.sin"
 
 # ---- 积木视图渲染（需要 node + playwright，缺失则跳过） ----
 echo
@@ -356,6 +358,21 @@ if "$ROOT/tools/build_native.sh" "$ROOT/examples/pen.sin" "$PENBIN" >/dev/null 2
         else echo "✗ pen: 笔迹像素过少（$nb）"; ((FAIL++)); fi
     else echo "✗ pen: 运行/截图失败"; ((FAIL++)); fi
 else echo "✗ pen: 构建失败"; ((FAIL++)); fi
+
+# ---- 碰撞检测（collide.sin：sprite_touching AABB 无头验证）----
+echo
+echo "=== 碰撞：collide.sin（sprite_touching AABB） ==="
+if have_raylib && command -v xvfb-run >/dev/null 2>&1; then
+    CBIN="$WORK/collide"
+    if "$ROOT/tools/build_native.sh" "$ROOT/examples/collide.sin" "$CBIN" >/dev/null 2>&1; then
+        hits="$(SIN_MAX_FRAMES=60 xvfb-run -a -s "-screen 0 400x400x24" "$CBIN" 2>/dev/null | tail -1)"
+        if [[ "$hits" =~ ^[0-9]+$ && "$hits" -gt 0 ]]; then
+            echo "✓ collide: sprite_touching 生效（碰撞 $hits 帧）"; ((PASS++))
+        else echo "✗ collide: 碰撞帧数异常（$hits）"; ((FAIL++)); fi
+    else echo "✗ collide: 构建失败"; ((FAIL++)); fi
+else
+    echo "○ 跳过（未检测到 raylib 或 xvfb）"
+fi
 
 # ---- Android APK 打包（aapt2 链接 + 签名，需 Android SDK build-tools） ----
 echo

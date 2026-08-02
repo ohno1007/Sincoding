@@ -212,6 +212,28 @@ void rt_point(rt_sprite s, float degrees) {
 float rt_x(rt_sprite s) { return sprite_valid(s) ? g_sprites[s].x : 0.0f; }
 float rt_y(rt_sprite s) { return sprite_valid(s) ? g_sprites[s].y : 0.0f; }
 
+// 精灵的半宽/半高（纹理用图片尺寸，方块用边长；均乘缩放）
+static void sprite_half(const RtSprite* sp, float* hw, float* hh) {
+    if (sp->kind == RT_SPR_TEXTURE) {
+        *hw = sp->tex.width  * sp->scale * 0.5f;
+        *hh = sp->tex.height * sp->scale * 0.5f;
+    } else {
+        *hw = *hh = sp->size * sp->scale * 0.5f;
+    }
+}
+
+bool rt_touching(rt_sprite a, rt_sprite b) {
+    if (!sprite_valid(a) || !sprite_valid(b)) return false;
+    const RtSprite* sa = &g_sprites[a];
+    const RtSprite* sb = &g_sprites[b];
+    float ahw, ahh, bhw, bhh;
+    sprite_half(sa, &ahw, &ahh);
+    sprite_half(sb, &bhw, &bhh);
+    float dx = sa->x - sb->x; if (dx < 0) dx = -dx;
+    float dy = sa->y - sb->y; if (dy < 0) dy = -dy;
+    return dx < (ahw + bhw) && dy < (ahh + bhh);
+}
+
 // ---------- 输入 ----------
 bool rt_key_down(int key) { return IsKeyDown(key); }
 bool rt_mouse_down(int button) { return IsMouseButtonDown(button); }

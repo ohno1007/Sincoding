@@ -1,0 +1,25 @@
+// mathx.sin — 数学函数：libm 的 sqrt/fabs/fmin/fmax 直接用 extern fn 声明即可用
+// （程序链接 -lm；raylib 成品天然已链接 libm）。距离、clamp 等游戏常用工具。
+
+extern fn sqrt(x: float) -> float
+extern fn fabs(x: float) -> float
+extern fn fmin(a: float, b: float) -> float
+extern fn fmax(a: float, b: float) -> float
+
+fn dist(x1: float, y1: float, x2: float, y2: float) -> float {
+    let dx = x2 - x1
+    let dy = y2 - y1
+    return sqrt(dx * dx + dy * dy)       // 勾股：两点距离
+}
+
+fn clamp(v: float, lo: float, hi: float) -> float {
+    return fmax(lo, fmin(v, hi))         // 把 v 夹在 [lo, hi]
+}
+
+fn main() -> int {
+    print(dist(0.0, 0.0, 3.0, 4.0))     // 5
+    print(clamp(12.0, 0.0, 10.0))       // 10
+    print(clamp(0.0 - 3.0, 0.0, 10.0))  // 0
+    print(fabs(0.0 - 7.5))              // 7.5
+    return 0
+}

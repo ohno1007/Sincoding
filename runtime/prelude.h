@@ -32,6 +32,7 @@ void sprite_move_to(long long s, double x, double y);
 double sprite_x(long long s);
 double sprite_y(long long s);
 void sprite_draw(long long s);
+bool sprite_touching(long long a, long long b);   // 两精灵是否碰撞（AABB 重叠）
 
 // 文字 / 气泡（string 接入运行时）
 void say(long long s, const char* text);

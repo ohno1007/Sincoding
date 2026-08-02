@@ -63,6 +63,7 @@ void sprite_move_to(long long s, double x, double y) {
 double sprite_x(long long s) { return (double)rt_x((rt_sprite)s); }
 double sprite_y(long long s) { return (double)rt_y((rt_sprite)s); }
 void sprite_draw(long long s) { rt_sprite_draw((rt_sprite)s); }
+bool sprite_touching(long long a, long long b) { return rt_touching((rt_sprite)a, (rt_sprite)b); }
 
 bool key_down(long long key) { return rt_key_down((int)key); }
 

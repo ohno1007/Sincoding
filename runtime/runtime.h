@@ -38,6 +38,7 @@ void rt_turn(rt_sprite s, float degrees);
 void rt_point(rt_sprite s, float degrees);  // 面向指定方向
 float rt_x(rt_sprite s);
 float rt_y(rt_sprite s);
+bool rt_touching(rt_sprite a, rt_sprite b);   // 两精灵 AABB 是否重叠（碰撞检测）
 
 // ---------- 输入 ----------
 bool rt_key_down(int key);        // 对应 IsKeyDown
