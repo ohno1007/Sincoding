@@ -5,6 +5,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/toolchains.sh"   # 工具链自动发现（仓库内 .toolchains/ 或系统位置）
 SINC="$ROOT/compiler/build/sinc"
 WORK="$(mktemp -d)"
 CC="${CC:-gcc}"
@@ -213,10 +214,7 @@ else
 fi
 
 # ---- 阶段 0：图形垂直切片（需要 raylib + xvfb，缺失则跳过） ----
-have_raylib() {
-    pkg-config --exists raylib 2>/dev/null && return 0
-    [[ -f /usr/local/lib/libraylib.a ]]
-}
+have_raylib() { sin_have_native; }
 
 echo
 echo "=== 阶段 0：Sincoding → C → raylib 成品（无头渲染验证） ==="
@@ -312,7 +310,7 @@ fi
 # ---- 阶段 4：Web(wasm) 成品（需要 emscripten + node/playwright） ----
 echo
 echo "=== 阶段 4：Sincoding → wasm → 浏览器渲染（emscripten） ==="
-if command -v emcmake >/dev/null 2>&1 && [[ -f /usr/local/lib/web/libraylib.a ]] && \
+if sin_have_web && \
    command -v node >/dev/null 2>&1 && \
    NODE_PATH="$(npm root -g 2>/dev/null)" node -e "require('playwright')" >/dev/null 2>&1; then
     chmod +x "$ROOT/tools/test_web.sh"
@@ -344,7 +342,7 @@ fi
 # ---- 阶段 4：Windows .exe（MinGW 交叉编译） ----
 echo
 echo "=== 阶段 4：Sincoding → Windows .exe（MinGW 交叉编译） ==="
-if command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1 && [[ -f /usr/local/lib/win/libraylib.a ]]; then
+if sin_have_windows; then
     if "$ROOT/tools/build_windows.sh" "$ROOT/examples/game.sin" "$WORK/game.exe" >/dev/null 2>&1; then
         ft="$(file "$WORK/game.exe")"
         if [[ "$ft" == *"PE32+"* && "$ft" == *"Windows"* ]]; then
@@ -358,10 +356,10 @@ fi
 # ---- 阶段 4：Android .so（NDK 交叉编译） ----
 echo
 echo "=== 阶段 4：Sincoding → Android .so（NDK 交叉编译） ==="
-NDK_CLANG="/usr/lib/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang"
-NDK_NM="/usr/lib/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
-if [[ -x "$NDK_CLANG" ]] && [[ -f /usr/local/lib/android/arm64-v8a/libraylib.a ]]; then
-    if ANDROID_NDK=/usr/lib/android-ndk "$ROOT/tools/build_android.sh" \
+NDK_BIN="${ANDROID_NDK:-}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+NDK_NM="$NDK_BIN/llvm-nm"
+if sin_have_android; then
+    if "$ROOT/tools/build_android.sh" \
          "$ROOT/examples/game.sin" "$WORK/libsincoding.so" >/dev/null 2>&1; then
         ft="$(file "$WORK/libsincoding.so")"
         if [[ "$ft" == *"aarch64"* ]] && \
@@ -418,13 +416,13 @@ fi
 # ---- Android APK 打包（aapt2 链接 + 签名，需 Android SDK build-tools） ----
 echo
 echo "=== Android APK：guardian.sin → 签名 APK（需 SDK build-tools） ==="
-APK_SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/tmp/android-sdk}}"
+APK_SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 APK_BT="$APK_SDK/build-tools/${ANDROID_BUILD_TOOLS:-34.0.0}"
-if [[ -x "$NDK_CLANG" ]] && [[ -f /usr/local/lib/android/arm64-v8a/libraylib.a ]] && \
+if sin_have_apk && \
    [[ -x "$APK_BT/aapt2" ]] && [[ -x "$APK_BT/apksigner" ]] && \
    [[ -f "$APK_SDK/platforms/${ANDROID_PLATFORM:-android-29}/android.jar" ]]; then
     APK="$WORK/guardian.apk"
-    if ANDROID_NDK=/usr/lib/android-ndk ANDROID_SDK_ROOT="$APK_SDK" \
+    if ANDROID_SDK_ROOT="$APK_SDK" \
          "$ROOT/tools/build_apk.sh" "$ROOT/examples/guardian.sin" "$APK" "Guardian" >/dev/null 2>&1; then
         # 解析二进制 Manifest + 校验签名 + 确认含原生库
         if "$APK_BT/aapt2" dump badging "$APK" 2>/dev/null | grep -q "native-code: 'arm64-v8a'" && \

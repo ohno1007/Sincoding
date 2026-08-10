@@ -13,9 +13,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ $# -lt 2 ]]; then echo "用法: $0 <input.sin> <out.apk> [app_label]" >&2; exit 2; fi
 SRC="$1"; OUT="$2"; LABEL="${3:-Sincoding}"
 
-# —— 工具链定位（可被环境变量覆盖） ——
-ANDROID_NDK="${ANDROID_NDK:-/usr/lib/android-ndk}"
-ANDROID_SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/tmp/android-sdk}}"
+# —— 工具链定位：由 tools/toolchains.sh 自动发现（可被环境变量覆盖） ——
+. "$ROOT/tools/toolchains.sh"
+ANDROID_SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 BUILD_TOOLS_VER="${ANDROID_BUILD_TOOLS:-34.0.0}"
 PLATFORM_VER="${ANDROID_PLATFORM:-android-29}"
 ABIS="${ANDROID_ABIS:-arm64-v8a}"

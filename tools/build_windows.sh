@@ -8,16 +8,15 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/toolchains.sh"      # 自动发现工具链（无需用户配置）
 SINC="$ROOT/compiler/build/sinc"
-RAYLIB_WIN_LIB="${RAYLIB_WIN_LIB:-/usr/local/lib/win/libraylib.a}"
-RAYLIB_WIN_INCLUDE="${RAYLIB_WIN_INCLUDE:-/usr/local/include}"
 
 if [[ $# -ne 2 ]]; then echo "用法: $0 <input.sin> <out_exe>" >&2; exit 2; fi
 SRC="$1"; OUT="$2"
 
 [[ -x "$SINC" ]] || { echo "找不到 sinc，请先构建 compiler" >&2; exit 1; }
-command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1 || { echo "需要 MinGW-w64" >&2; exit 1; }
-[[ -f "$RAYLIB_WIN_LIB" ]] || { echo "缺少 raylib Windows 静态库: $RAYLIB_WIN_LIB" >&2; exit 1; }
+command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1 || { sin_hint MinGW-w64 windows; exit 1; }
+[[ -n "$RAYLIB_WIN_LIB" && -f "$RAYLIB_WIN_LIB" ]] || { sin_hint "raylib(win)" windows; exit 1; }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 GEN="$TMP/program.c"; BUILD="$TMP/build"

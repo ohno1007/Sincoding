@@ -9,19 +9,17 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/toolchains.sh"      # 自动发现 NDK / raylib-android（无需用户 export）
 SINC="$ROOT/compiler/build/sinc"
-ANDROID_NDK="${ANDROID_NDK:-/usr/lib/android-ndk}"
 ABI="${ANDROID_ABI:-arm64-v8a}"
 API="${ANDROID_API:-29}"
-RAYLIB_ANDROID_LIB="${RAYLIB_ANDROID_LIB:-/usr/local/lib/android/$ABI/libraylib.a}"
-RAYLIB_ANDROID_INCLUDE="${RAYLIB_ANDROID_INCLUDE:-/usr/local/include}"
 
 if [[ $# -ne 2 ]]; then echo "用法: $0 <input.sin> <out_so>" >&2; exit 2; fi
 SRC="$1"; OUT="$2"
 
 [[ -x "$SINC" ]] || { echo "找不到 sinc，请先构建 compiler" >&2; exit 1; }
-[[ -d "$ANDROID_NDK" ]] || { echo "找不到 NDK: $ANDROID_NDK（设 ANDROID_NDK）" >&2; exit 1; }
-[[ -f "$RAYLIB_ANDROID_LIB" ]] || { echo "缺少 raylib Android 静态库: $RAYLIB_ANDROID_LIB" >&2; exit 1; }
+[[ -n "$ANDROID_NDK" && -d "$ANDROID_NDK" ]] || { sin_hint "Android NDK" android; exit 1; }
+[[ -n "$RAYLIB_ANDROID_LIB" && -f "$RAYLIB_ANDROID_LIB" ]] || { sin_hint "raylib(android)" android; exit 1; }
 
 case "$ABI" in
     arm64-v8a)   TARGET=aarch64-linux-android ;;

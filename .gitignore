@@ -30,3 +30,6 @@ desktop/web/
 # Web demo 成品（提交，便于直接打开）
 !web-demo/index.wasm
 !editor/sinc.wasm
+
+# 工具链（tools/setup_toolchains.sh 生成，勿入库）
+.toolchains/

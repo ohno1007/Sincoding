@@ -4,6 +4,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/toolchains.sh"         # 自动发现/激活工具链
 SRC="${1:-$ROOT/examples/game.sin}"   # 可指定要构建的 .sin（默认 game）
 ASSETS="${2:-}"                        # 可选：造型资源目录（随 wasm 预载打包）
 WORK="$(mktemp -d)"

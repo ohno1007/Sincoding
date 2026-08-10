@@ -6,7 +6,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-command -v emcc >/dev/null 2>&1 || { echo "需要 emscripten (emcc)" >&2; exit 1; }
+. "$ROOT/tools/toolchains.sh"      # 自动激活 emsdk（无需用户 source emsdk_env.sh）
+sin_activate_emsdk || { sin_hint emscripten web; exit 1; }
 
 OUT="$ROOT/editor/sinc.js"
 

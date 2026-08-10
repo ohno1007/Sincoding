@@ -8,6 +8,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/toolchains.sh"      # 自动发现工具链（无需用户配置）
 SINC="$ROOT/compiler/build/sinc"
 CC="${CC:-gcc}"
 
@@ -28,14 +29,14 @@ fi
 RAYLIB_SYSLIBS="-lGL -lm -lpthread -ldl -lrt -lX11"
 RAYLIB_CFLAGS=""
 RAYLIB_LIBS=""
-if pkg-config --exists raylib 2>/dev/null; then
+if [[ -n "${RAYLIB_LIB:-}" ]]; then          # 工具链目录 / 系统静态库（toolchains.sh 解析）
+    RAYLIB_CFLAGS="-I$RAYLIB_INCLUDE"
+    RAYLIB_LIBS="$RAYLIB_LIB $RAYLIB_SYSLIBS"
+elif pkg-config --exists raylib 2>/dev/null; then
     RAYLIB_CFLAGS="$(pkg-config --cflags raylib)"
     RAYLIB_LIBS="$(pkg-config --libs raylib) $RAYLIB_SYSLIBS"
-elif [[ -f /usr/local/lib/libraylib.a ]]; then
-    RAYLIB_CFLAGS="-I/usr/local/include"
-    RAYLIB_LIBS="/usr/local/lib/libraylib.a $RAYLIB_SYSLIBS"
 else
-    echo "找不到 raylib（pkg-config 或 /usr/local/lib/libraylib.a）" >&2
+    sin_hint raylib native
     exit 1
 fi
 

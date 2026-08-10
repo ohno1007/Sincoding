@@ -8,16 +8,16 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/toolchains.sh"      # 自动发现工具链 + 激活 emsdk（无需用户 source）
 SINC="$ROOT/compiler/build/sinc"
-RAYLIB_WEB_LIB="${RAYLIB_WEB_LIB:-/usr/local/lib/web/libraylib.a}"
-RAYLIB_WEB_INCLUDE="${RAYLIB_WEB_INCLUDE:-/usr/local/include}"
+sin_activate_emsdk || true         # emcc 进 PATH；失败时由下面的检查统一报错
 
 if [[ $# -lt 2 ]]; then echo "用法: $0 <input.sin> <out_dir> [assets_dir]" >&2; exit 2; fi
 SRC="$1"; OUTDIR="$2"; ASSETS="${3:-}"
 
 [[ -x "$SINC" ]] || { echo "找不到 sinc，请先构建 compiler" >&2; exit 1; }
-command -v emcmake >/dev/null 2>&1 || { echo "需要 emscripten（emcmake 不在 PATH）" >&2; exit 1; }
-[[ -f "$RAYLIB_WEB_LIB" ]] || { echo "缺少 raylib web 静态库: $RAYLIB_WEB_LIB" >&2; exit 1; }
+command -v emcmake >/dev/null 2>&1 || { sin_hint emscripten web; exit 1; }
+[[ -n "$RAYLIB_WEB_LIB" && -f "$RAYLIB_WEB_LIB" ]] || { sin_hint "raylib(web)" web; exit 1; }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 GEN="$TMP/program.c"
