@@ -10,15 +10,18 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 sin_activate_emsdk || { sin_hint emscripten web; exit 1; }
 
 OUT="$ROOT/editor/sinc.js"
+GEN="$ROOT/compiler/generated"
+"$ROOT/tools/gen_std_modules.sh" "$GEN/std_modules.h" >/dev/null   # 内置标准库
 
 emcc -std=c++17 -O2 \
-    -I"$ROOT/compiler/include" \
+    -I"$ROOT/compiler/include" -I"$GEN" \
     "$ROOT/compiler/src/lexer.cpp" \
     "$ROOT/compiler/src/parser.cpp" \
     "$ROOT/compiler/src/type_checker.cpp" \
     "$ROOT/compiler/src/codegen.cpp" \
     "$ROOT/compiler/src/serializer.cpp" \
     "$ROOT/compiler/src/query.cpp" \
+    "$ROOT/compiler/src/modules.cpp" \
     "$ROOT/compiler/src/wasm_api.cpp" \
     -sMODULARIZE=1 -sEXPORT_NAME=SincModule \
     -sEXPORTED_FUNCTIONS='["_sin_to_blocks","_sin_hover","_sin_references","_sin_rename","_malloc","_free"]' \

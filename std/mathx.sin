@@ -1,0 +1,63 @@
+// std/mathx — 数学工具库（用 Sincoding 自己写的标准库）
+//
+// 用法：  import "std/mathx"
+// 库内只用 extern fn 借 libm 的标量函数，其余全部是本语言实现。
+// 本模块随编译器内置，无需任何文件准备（原生与浏览器内均可用）。
+
+extern fn sqrt(x: float) -> float
+extern fn fabs(x: float) -> float
+extern fn fmin(a: float, b: float) -> float
+extern fn fmax(a: float, b: float) -> float
+
+// —— 浮点 ——
+
+fn clamp(v: float, lo: float, hi: float) -> float {
+    return fmax(lo, fmin(v, hi))
+}
+
+// t=0 返回 a，t=1 返回 b
+fn lerp(a: float, b: float, t: float) -> float {
+    return a + (b - a) * t
+}
+
+// 正数 1.0 / 负数 -1.0 / 零 0.0
+fn sign(v: float) -> float {
+    if v > 0.0 { return 1.0 }
+    if v < 0.0 { return 0.0 - 1.0 }
+    return 0.0
+}
+
+// 两点距离（勾股）
+fn dist(x1: float, y1: float, x2: float, y2: float) -> float {
+    let dx = x2 - x1
+    let dy = y2 - y1
+    return sqrt(dx * dx + dy * dy)
+}
+
+// 两点距离的平方（比大小时用它，省一次开方）
+fn dist2(x1: float, y1: float, x2: float, y2: float) -> float {
+    let dx = x2 - x1
+    let dy = y2 - y1
+    return dx * dx + dy * dy
+}
+
+// —— 整数（libm 只管浮点，这些用本语言实现）——
+
+fn abs_i(v: int) -> int {
+    if v < 0 { return 0 - v }
+    return v
+}
+
+fn min_i(a: int, b: int) -> int {
+    if a < b { return a }
+    return b
+}
+
+fn max_i(a: int, b: int) -> int {
+    if a > b { return a }
+    return b
+}
+
+fn clamp_i(v: int, lo: int, hi: int) -> int {
+    return max_i(lo, min_i(v, hi))
+}

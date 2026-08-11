@@ -242,12 +242,23 @@ struct SourceWriter {
 
 std::string serializeSource(const Program& prog) {
     SourceWriter w;
-    for (auto& st : prog.structs) { w.writeStruct(*st); w.out << "\n"; } // 结构体在最前
-    for (auto& g : prog.globals) w.writeStmt(*g);   // 全局变量
-    if (!prog.globals.empty()) w.out << "\n";
-    for (size_t i = 0; i < prog.fns.size(); i++) {
-        if (i) w.out << "\n";
-        w.writeFn(*prog.fns[i]);
+    // 导入：只写回 import 行本身；被导入的声明（module 非空）一律跳过，
+    // 否则库源码会被灌进用户文件，破坏「源码 → AST → 源码」的幂等。
+    for (auto& im : prog.imports) w.out << "import \"" << im.name << "\"\n";
+    if (!prog.imports.empty()) w.out << "\n";
+
+    for (auto& st : prog.structs)
+        if (st->module.empty()) { w.writeStruct(*st); w.out << "\n"; }   // 结构体在最前
+    bool anyGlobal = false;
+    for (auto& g : prog.globals)
+        if (g->module.empty()) { w.writeStmt(*g); anyGlobal = true; }    // 全局变量
+    if (anyGlobal) w.out << "\n";
+    bool first = true;
+    for (auto& fn : prog.fns) {
+        if (!fn->module.empty()) continue;
+        if (!first) w.out << "\n";
+        first = false;
+        w.writeFn(*fn);
     }
     return w.out.str();
 }
@@ -480,16 +491,37 @@ struct JsonWriter {
 
 std::string serializeBlocks(const Program& prog) {
     JsonWriter w;
+    // 只导出用户自己的声明；import 进来的（module 非空）不进积木画布，
+    // 只在 "imports" 里列出模块名（供编辑器渲染库分类 / 只读展示）。
+    std::vector<const StructDecl*> structs;
+    std::vector<const Stmt*> globals;
+    std::vector<const FnDecl*> fns;
+    for (auto& st : prog.structs) if (st->module.empty()) structs.push_back(st.get());
+    for (auto& g  : prog.globals) if (g->module.empty())  globals.push_back(g.get());
+    for (auto& fn : prog.fns)     if (fn->module.empty()) fns.push_back(fn.get());
+
     w.out << "{"; w.depth++;
+    // 导入的模块名
+    w.nl(); w.key("imports");
+    if (prog.imports.empty()) { w.out << "[]"; }
+    else {
+        w.out << "[";
+        for (size_t i = 0; i < prog.imports.size(); i++) {
+            if (i) w.out << ", ";
+            w.str(prog.imports[i].name);
+        }
+        w.out << "]";
+    }
+    w.out << ",";
     // 结构体定义
     w.nl(); w.key("structs");
-    if (prog.structs.empty()) {
+    if (structs.empty()) {
         w.out << "[]";
     } else {
         w.out << "["; w.depth++;
-        for (size_t i = 0; i < prog.structs.size(); i++) {
+        for (size_t i = 0; i < structs.size(); i++) {
             if (i) w.out << ",";
-            const auto& st = *prog.structs[i];
+            const auto& st = *structs[i];
             w.nl(); w.out << "{"; w.depth++;
             w.nl(); w.key("name"); w.str(st.name);
             w.out << ","; w.nl(); w.key("fields"); w.out << "[";
@@ -515,23 +547,23 @@ std::string serializeBlocks(const Program& prog) {
     w.out << ",";
     // 全局变量
     w.nl(); w.key("globals");
-    if (prog.globals.empty()) {
+    if (globals.empty()) {
         w.out << "[]";
     } else {
         w.out << "["; w.depth++;
-        for (size_t i = 0; i < prog.globals.size(); i++) {
+        for (size_t i = 0; i < globals.size(); i++) {
             if (i) w.out << ",";
-            w.nl(); w.stmt(*prog.globals[i]);
+            w.nl(); w.stmt(*globals[i]);
         }
         w.depth--; w.nl(); w.out << "]";
     }
     w.out << ",";
     w.nl(); w.key("program"); w.out << "[";
-    if (!prog.fns.empty()) {
+    if (!fns.empty()) {
         w.depth++;
-        for (size_t i = 0; i < prog.fns.size(); i++) {
+        for (size_t i = 0; i < fns.size(); i++) {
             if (i) w.out << ",";
-            w.nl(); w.fn(*prog.fns[i]);
+            w.nl(); w.fn(*fns[i]);
         }
         w.depth--; w.nl();
     }

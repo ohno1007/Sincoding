@@ -1,0 +1,2 @@
+import "std/nope"   // 不存在的模块应报错
+fn main() -> int { return 0 }

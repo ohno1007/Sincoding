@@ -65,6 +65,7 @@ run_ok struct_array "$ROOT/examples/struct_array.sin" $'10\n50\n50'
 run_ok struct_nested "$ROOT/examples/struct_nested.sin" $'5\n9\n42\n2.5'
 run_ok str_concat "$ROOT/examples/str_concat.sin" $'Score: 42\npi=3.14\nflag=true\nless'
 run_ok mathx "$ROOT/examples/mathx.sin" $'5\n10\n0\n7.5'
+run_ok use_std "$ROOT/examples/use_std.sin" $'5\n10\n2.5\n-1\n10\n7\n9'
 
 echo
 echo "=== 反例：类型/语义错误应被拒绝 ==="
@@ -82,6 +83,7 @@ expect_error array_ret_len   "$ROOT/tests/cases/array_ret_len.sin"
 expect_error struct_array_type "$ROOT/tests/cases/struct_array_type.sin"
 expect_error struct_self_ref   "$ROOT/tests/cases/struct_self_ref.sin"
 expect_error struct_arr_field  "$ROOT/tests/cases/struct_arr_field.sin"
+expect_error import_missing    "$ROOT/tests/cases/import_missing.sin"
 
 # roundtrip <name> <source.sin> — 验证 AST ⇄ 文本 ⇄ 积木 序列化正确
 roundtrip() {
@@ -122,6 +124,37 @@ roundtrip struct_array "$ROOT/examples/struct_array.sin"
 roundtrip struct_nested "$ROOT/examples/struct_nested.sin"
 roundtrip str_concat "$ROOT/examples/str_concat.sin"
 roundtrip mathx "$ROOT/examples/mathx.sin"
+roundtrip use_std "$ROOT/examples/use_std.sin"
+
+# ---- 模块系统：用户库（磁盘）/ 嵌套 import / extern 去重 / 循环检测 ----
+echo
+echo "=== 模块系统：import 解析 ==="
+LIB="$WORK/lib"; mkdir -p "$LIB"
+printf '%s\n' 'import "std/mathx"' 'struct Vec2 { x: float, y: float }' \
+  'fn v_len(v: Vec2) -> float { return dist(0.0, 0.0, v.x, v.y) }' > "$LIB/geom.sin"
+printf '%s\n' 'import "geom"' 'extern fn sqrt(x: float) -> float' 'fn main() -> int {' \
+  '    let v = Vec2 { x: 3.0, y: 4.0 }' '    print(v_len(v))' '    print(sqrt(9.0))' \
+  '    return 0' '}' > "$LIB/app.sin"
+if "$SINC" "$LIB/app.sin" -o "$WORK/app.c" >/dev/null 2>&1 && \
+   "$CC" -std=c11 -O2 "$WORK/app.c" -o "$WORK/app" -lm 2>/dev/null && \
+   [[ "$("$WORK/app" | tr '\n' ' ')" == "5 3 " ]]; then
+    echo "✓ import: 磁盘用户库 + 嵌套 import(std) + extern 去重"; ((PASS++))
+else echo "✗ import: 用户库解析失败"; ((FAIL++)); fi
+
+printf '%s\n' 'import "b"' 'fn fa() -> int { return 1 }' > "$LIB/a.sin"
+printf '%s\n' 'import "a"' 'fn fb() -> int { return 2 }' > "$LIB/b.sin"
+printf '%s\n' 'import "a"' 'fn main() -> int { return fa() }' > "$LIB/circ.sin"
+if "$SINC" "$LIB/circ.sin" -o /dev/null 2>&1 | grep -q "循环导入" || \
+   ! "$SINC" "$LIB/circ.sin" -o /dev/null >/dev/null 2>&1; then
+    echo "✓ import: 循环导入被检测并拒绝"; ((PASS++))
+else echo "✗ import: 循环导入未被检测"; ((FAIL++)); fi
+
+# 导入后 --emit src 只写回 import 行（库源码不得灌进用户文件）
+emitted="$("$SINC" "$ROOT/examples/use_std.sin" --emit src 2>/dev/null)"
+if [[ "$(grep -c '^import "std/mathx"' <<<"$emitted")" == "1" ]] && \
+   [[ "$(grep -c '^fn clamp' <<<"$emitted")" == "0" ]]; then
+    echo "✓ import: --emit src 只写回 import 行（库源码未污染用户文件）"; ((PASS++))
+else echo "✗ import: 序列化把库源码灌进来了"; ((FAIL++)); fi
 
 # ---- IDE 查询：悬停显示类型（mini-LSP）----
 echo

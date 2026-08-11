@@ -4,6 +4,7 @@
 // 源码 → 词法/语法/类型检查（尽力而为，容错）→ 积木模型 JSON + 诊断。
 // 让编辑器用「规范引擎」做文本 → 积木 的反向同步。
 #include "lexer.h"
+#include "modules.h"
 #include "parser.h"
 #include "query.h"
 #include "serializer.h"
@@ -53,6 +54,8 @@ const char* sin_to_blocks(const char* src) {
     auto tokens = lexer.tokenize();
     Parser parser(std::move(tokens));
     Program prog = parser.parseProgram();
+    std::vector<Diagnostic> modDiags;
+    resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
     TypeChecker checker;
     checker.check(prog); // 忽略返回值，尽量填充类型
 
@@ -60,6 +63,7 @@ const char* sin_to_blocks(const char* src) {
     std::string diags = "[";
     diags += diagsJson(lexer.errors(), first);
     diags += diagsJson(parser.errors(), first);
+    diags += diagsJson(modDiags, first);
     diags += diagsJson(checker.errors(), first);
     diags += "]";
 
@@ -74,6 +78,8 @@ const char* sin_hover(const char* src, int line, int col) {
     Lexer lexer(source);
     Parser parser(lexer.tokenize());
     Program prog = parser.parseProgram();
+    std::vector<Diagnostic> modDiags;
+    resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
     TypeChecker checker;
     checker.check(prog); // 忽略返回值，尽量填充类型
     result = queryHover(prog, line, col);
@@ -87,6 +93,8 @@ const char* sin_references(const char* src, int line, int col) {
     Lexer lexer(source);
     Parser parser(lexer.tokenize());
     Program prog = parser.parseProgram();
+    std::vector<Diagnostic> modDiags;
+    resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
     TypeChecker checker;
     checker.check(prog);
     result = queryReferences(prog, line, col);
@@ -100,6 +108,8 @@ const char* sin_rename(const char* src, int line, int col, const char* newName) 
     Lexer lexer(source);
     Parser parser(lexer.tokenize());
     Program prog = parser.parseProgram();
+    std::vector<Diagnostic> modDiags;
+    resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
     TypeChecker checker;
     checker.check(prog);
     result = applyRename(prog, line, col, newName ? newName : "");

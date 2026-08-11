@@ -33,3 +33,6 @@ desktop/web/
 
 # 工具链（tools/setup_toolchains.sh 生成，勿入库）
 .toolchains/
+
+# 构建期生成的内置标准库头
+compiler/generated/

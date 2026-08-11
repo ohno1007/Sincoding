@@ -107,6 +107,7 @@ struct Stmt {
     StmtKind kind;
     int line = 0;
     int col = 0;                // 主标识符起始列（let/assign/for 的变量名，IDE 定位用）
+    std::string module;         // 非空 = 来自 import 的模块（序列化时跳过，只写 import 行）
     virtual ~Stmt() = default;
 protected:
     explicit Stmt(StmtKind k) : kind(k) {}
@@ -187,6 +188,7 @@ struct FnDecl {
     bool isExtern = false;  // 由 'extern fn' 声明，链接到外部/运行时实现
     int line = 0;
     int col = 0;            // 函数名起始列
+    std::string module;     // 非空 = 来自 import 的模块
 };
 using FnPtr = std::unique_ptr<FnDecl>;
 
@@ -205,12 +207,21 @@ struct StructDecl {
     std::vector<StructField> fields;
     int line = 0;
     int col = 0;             // 结构体名起始列
+    std::string module;      // 非空 = 来自 import 的模块
 };
 using StructPtr = std::unique_ptr<StructDecl>;
 
+// import "std/mathx" —— 模块导入（标准库随编译器内置，用户库从磁盘解析）
+struct ImportDecl {
+    std::string name;
+    int line = 0;
+    int col = 0;
+};
+
 struct Program {
-    std::vector<StructPtr> structs; // 结构体声明
-    std::vector<StmtPtr> globals;   // 顶层全局变量（LetStmt）
+    std::vector<ImportDecl> imports; // 导入声明（序列化时原样写回）
+    std::vector<StructPtr> structs;  // 结构体声明
+    std::vector<StmtPtr> globals;    // 顶层全局变量（LetStmt）
     std::vector<FnPtr> fns;
 };
 

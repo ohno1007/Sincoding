@@ -1,0 +1,16 @@
+// use_std.sin — 导入标准库（标准库本身就是用 Sincoding 写的，见 std/mathx.sin）
+//
+// std/* 随编译器内置：不需要准备任何文件，原生与浏览器内都能直接 import。
+
+import "std/mathx"
+
+fn main() -> int {
+    print(dist(0.0, 0.0, 3.0, 4.0))       // 5   勾股距离
+    print(clamp(12.0, 0.0, 10.0))         // 10  夹到 [0,10]
+    print(lerp(0.0, 10.0, 0.25))          // 2.5 插值
+    print(sign(0.0 - 3.0))                // -1  取符号
+    print(clamp_i(42, 0, 10))             // 10  整数版
+    print(abs_i(0 - 7))                   // 7
+    print(max_i(3, 9))                    // 9
+    return 0
+}

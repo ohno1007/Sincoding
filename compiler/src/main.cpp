@@ -5,6 +5,7 @@
 //   sinc <input.sin> --tokens       仅打印 token（调试用）
 #include "codegen.h"
 #include "lexer.h"
+#include "modules.h"
 #include "parser.h"
 #include "query.h"
 #include "serializer.h"
@@ -86,6 +87,14 @@ int main(int argc, char** argv) {
     Parser parser(std::move(tokens));
     Program prog = parser.parseProgram();
     if (!parser.ok()) { printDiags(input, parser.errors()); return 1; }
+
+    // 2.5) 解析 import：把模块声明合并进来（内置标准库 + 同目录 + SINCODING_PATH）
+    {
+        auto slash = input.find_last_of('/');
+        std::string baseDir = (slash == std::string::npos) ? "." : input.substr(0, slash);
+        std::vector<Diagnostic> modDiags;
+        if (!resolveImports(prog, baseDir, modDiags)) { printDiags(input, modDiags); return 1; }
+    }
 
     // 3) 类型检查
     TypeChecker checker;

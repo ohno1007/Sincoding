@@ -88,8 +88,18 @@ Program Parser::parseProgram() {
             StmtPtr g = parseLet();   // 顶层全局变量
             if (g) prog.globals.push_back(std::move(g));
             if (panic_) synchronize();
+        } else if (check(TokKind::Ident) && cur().text == "import" &&
+                   peek(1).kind == TokKind::Str) {
+            // import "std/mathx" —— 'import' 是上下文关键字（同 for..in 的 'in'）
+            ImportDecl im;
+            im.line = cur().line;
+            im.col = cur().col;
+            advance();                       // 'import'
+            im.name = advance().text;        // "模块名"
+            match(TokKind::Semicolon);
+            prog.imports.push_back(im);
         } else {
-            error(cur(), "顶层只允许结构体 (struct ...)、全局变量 (let ...) 或函数 (fn ... / extern fn ...)");
+            error(cur(), "顶层只允许 import \"模块\"、结构体 (struct ...)、全局变量 (let ...) 或函数 (fn ... / extern fn ...)");
             synchronize();
         }
     }

@@ -191,6 +191,39 @@ extern fn fmax(a: float, b: float) -> float
 `floor/ceil`（取整）、`pow`（幂）。示例见 [`examples/mathx.sin`](../examples/mathx.sin)。
 预览解释器（`interp.js`）已内置这些函数的等价实现，编辑期即可试跑。
 
+## 4.5 模块与标准库（import）
+
+用 `import "模块名"` 复用其它 `.sin` 文件的结构体与函数：
+
+```rust
+import "std/mathx"      // 内置标准库（随编译器分发，无需准备任何文件）
+import "geom"           // 同目录下的 geom.sin
+
+fn main() -> int {
+    print(dist(0.0, 0.0, 3.0, 4.0))   // 5，来自 std/mathx
+    return 0
+}
+```
+
+**标准库本身就是用 Sincoding 写的**（见 [`std/mathx.sin`](../std/mathx.sin)），
+构建期嵌入编译器，所以在原生 CLI 与**浏览器编辑器内**都能直接 import。
+
+解析顺序：内置标准库 → 导入方所在目录 `<dir>/<name>.sin` → 环境变量
+`SINCODING_PATH`（冒号分隔的目录列表）。
+
+- 支持**嵌套导入**（库自己也能 import），重复导入自动去重（幂等）。
+- **循环导入**会被检测并报错。
+- 各模块都可能 `extern fn` 借同一个 libm 函数，重复的 extern 原型自动去重，不算冲突。
+- 命名空间是**扁平**的：不同模块的同名函数/结构体会被类型检查报「重复定义」。
+- `--emit src` 只写回 `import` 行，**不会**把库源码灌进你的文件（往返幂等）；
+  积木视图同理只显示你自己的代码，模块名单独放在积木 JSON 的 `imports` 字段。
+
+`std/mathx` 现有：`clamp / lerp / sign / dist / dist2`（浮点）与
+`abs_i / min_i / max_i / clamp_i`（整数）。
+
+> **已知限制**：数组类型含长度（`int[8]` 与 `int[16]` 是不同类型），且暂无泛型，
+> 因此通用的数组工具库（排序/查找）尚无法用一份代码覆盖各种长度——这是下一步的语言课题。
+
 ## 5. 控制流
 
 ```rust
