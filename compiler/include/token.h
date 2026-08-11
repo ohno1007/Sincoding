@@ -8,7 +8,7 @@ enum class TokKind {
     // 字面量 / 标识符
     Int, Float, Str, Ident,
     // 关键字
-    KwLet, KwFn, KwIf, KwElse, KwWhile, KwFor, KwReturn,
+    KwLet, KwConst, KwFn, KwIf, KwElse, KwWhile, KwFor, KwReturn,
     KwBreak, KwContinue,
     KwExtern, KwStruct, KwTrue, KwFalse,
     KwTypeInt, KwTypeFloat, KwTypeBool, KwTypeVoid, KwTypeString,

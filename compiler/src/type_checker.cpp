@@ -190,7 +190,7 @@ void TypeChecker::checkStmt(Stmt& s) {
                 // 作用域释放/所有权转移，后续版本再放开
                 if (inFn_) error(ls.line, "列表 T[*] 目前只能声明为全局变量（函数外）");
                 if (ls.init) error(ls.line, "列表从空开始，用 push 添加元素（不支持初始化字面量）");
-                declare(ls.name, {ls.declared, -2, ls.structName});
+                declare(ls.name, {ls.declared, -2, ls.structName, ls.isConst});
                 if (ls.declared == Type::Struct && !structs_.count(ls.structName))
                     error(ls.line, "未定义的结构体: " + ls.structName);
                 if (ls.declared == Type::Unknown || ls.declared == Type::Void)
@@ -227,7 +227,7 @@ void TypeChecker::checkStmt(Stmt& s) {
                 error(ls.line, "未定义的结构体: " + ls.structName);
             if (ls.declaredLen == -1 && scopes_.size() <= 1)
                 error(ls.line, "全局变量 '" + ls.name + "' 不能是切片 T[]（切片只能作参数或局部借用）");
-            if (!declare(ls.name, {ls.declared, ls.declaredLen, ls.structName}))
+            if (!declare(ls.name, {ls.declared, ls.declaredLen, ls.structName, ls.isConst}))
                 error(ls.line, "变量重复定义: " + ls.name);
             break;
         }
@@ -236,6 +236,8 @@ void TypeChecker::checkStmt(Stmt& s) {
             VarType vt = lookup(as.name);
             if (vt.base == Type::Unknown)
                 errorAt(as, "赋值给未声明的变量: " + as.name);
+            if (vt.isConst)
+                errorAt(as, "不能修改常量 " + as.name + "（它是 const 声明的）");
             if (as.index && !as.field.empty()) {
                 // 元素字段赋值 name[idx].field = value（结构体数组/列表的成员直接改）
                 if (vt.len == 0 && vt.base != Type::Unknown)

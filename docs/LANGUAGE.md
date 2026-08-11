@@ -403,6 +403,17 @@ while cond {
 不再是 C 的未定义行为。等待用 `wait(secs: float)`（Scratch 的「等待 x 秒」，
 全场冻结，预览与成品一致）。
 
+常量用 `const` 声明（必须给初始值，任何再赋值都会被编译期拒绝）：
+
+```rust
+const MAX_HP = 100
+
+fn hurt(hp: int) -> int {
+    // MAX_HP = 90      // 错误：不能修改常量
+    return hp - 10
+}
+```
+
 结构体数组/列表的元素字段可以直接赋值：
 
 ```rust
@@ -465,7 +476,7 @@ type      ::= ('int' | 'float' | 'bool' | 'string' | 'void') ('[' INT ']')?
 block     ::= '{' stmt* '}'
 stmt      ::= let | assign | if | while | for | return | 'break' | 'continue' | expr_stmt
 for       ::= 'for' IDENT 'in' expr '..' expr block
-let       ::= 'let' IDENT (':' type)? ('=' expr)? ';'?
+let       ::= ('let' | 'const') IDENT (':' type)? ('=' expr)? ';'?
 assign    ::= IDENT ('[' expr ']')? ('.' IDENT)? '=' expr ';'?
 if        ::= 'if' expr block ('else' (if | block))?
 while     ::= 'while' expr block

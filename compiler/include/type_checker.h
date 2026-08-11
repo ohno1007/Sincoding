@@ -14,6 +14,7 @@ struct VarType {
     Type base = Type::Unknown;
     int len = 0;
     std::string structName;
+    bool isConst = false;   // const 声明的名字：一切再赋值都被拒绝
 };
 
 struct FnSig {

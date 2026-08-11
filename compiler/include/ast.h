@@ -133,6 +133,7 @@ struct LetStmt : Stmt {
     int declaredLen = 0;           // >0 表示定长数组
     std::string structName;        // declared==Struct 时的结构体名
     ExprPtr init;                  // 可为空（有类型标注时零初始化）
+    bool isConst = false;          // const 声明：检查器拒绝一切再赋值
     LetStmt() : Stmt(StmtKind::Let) {}
 };
 

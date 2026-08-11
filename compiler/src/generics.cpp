@@ -116,7 +116,7 @@ StmtPtr cloneStmt(const Stmt& s, const Subst& sb) {
             auto& l = static_cast<const LetStmt&>(s);
             auto n = std::make_unique<LetStmt>(); copyStmtBase(*n, s);
             n->name = l.name; n->declared = l.declared; n->declaredLen = l.declaredLen;
-            n->structName = l.structName;
+            n->structName = l.structName; n->isConst = l.isConst;
             substType(n->declared, n->structName, sb);      // let x: T
             if (l.init) n->init = cloneExpr(*l.init, sb);
             return n;

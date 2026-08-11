@@ -138,7 +138,7 @@ struct SourceWriter {
         switch (s.kind) {
             case StmtKind::Let: {
                 auto& ls = static_cast<const LetStmt&>(s);
-                out << "let " << ls.name;
+                out << (ls.isConst ? "const " : "let ") << ls.name;
                 // 类型未知（泛型模板体内不做具体类型检查）时省略标注，靠初始化推断
                 if (ls.declared != Type::Unknown) {
                     out << ": " << (ls.declared == Type::Struct ? ls.structName : typeName(ls.declared));
@@ -471,6 +471,7 @@ struct JsonWriter {
             case StmtKind::Let: {
                 auto& ls = static_cast<const LetStmt&>(s);
                 str("let"); out << ","; nl(); key("name"); str(ls.name);
+                if (ls.isConst) { out << ","; nl(); key("konst"); out << "true"; }
                 out << ","; nl(); key("type");
                 str(ls.declared == Type::Struct ? ls.structName : typeName(ls.declared));
                 out << ","; nl(); key("len"); out << ls.declaredLen;

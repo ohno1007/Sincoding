@@ -788,7 +788,7 @@
     if (node.block === "let" || node.block === "assign") {
       blk = el("div", "block var");
       const row = el("div", "hdr");
-      row.append(el("span", "label", node.block === "let" ? "设" : "赋"));
+      row.append(el("span", "label", node.block === "let" ? (node.konst ? "常" : "设") : "赋"));
       // 赋值语句的变量名也用下拉；let 声明仍是文本（在定义新变量）
       if (node.block === "assign" && scope) row.append(varSelect(scope, () => node.name, (v) => { node.name = v; }));
       else row.append(field(() => node.name, (s) => { node.name = s || "x"; }));
@@ -1332,12 +1332,35 @@
     return script;
   }
 
+  // ---- 卡片级签名缓存：大项目编辑不再整画布重建 ----
+  // 300+ 积木时全量重建一次要秒级。每张顶层卡（结构体/全局/函数）按内容签名缓存
+  // DOM：编辑只重建真正变了的那张卡，其余原样复用——模型对象没变，卡里闭包抓的
+  // 就是同一批对象，事件监听/断点标记/_el 执行高亮引用全部依然有效。
+  const cardCache = new Map();          // 模型对象 → { sig, dom }
+  let cardScopeSig = "";                // 全局/结构体一变（各卡下拉选项跟着变）→ 整体重建
+  const cardSig = (o) => JSON.stringify(o, (k, v) => (k && k[0] === "_" ? undefined : v));
+  function renderCard(obj, extra, build) {
+    const sig = cardSig(obj) + extra;
+    const hit = cardCache.get(obj);
+    if (hit && hit.sig === sig) {
+      hit.dom.style.left = (obj._x || 0) + "px";     // 位置不入签名：拖动只挪不重建
+      hit.dom.style.top = (obj._y || 0) + "px";
+      return hit.dom;
+    }
+    const dom = build();
+    cardCache.set(obj, { sig: sig, dom: dom });
+    return dom;
+  }
   function renderCanvas() {
+    const scopeNow = cardSig(project.structs || []) + "|" + cardSig(project.globals || []) + "|" + project.cur;
+    if (scopeNow !== cardScopeSig) { cardCache.clear(); cardScopeSig = scopeNow; }
+    const seen = new Set();
     canvas.innerHTML = "";
     // 项目级共享状态（所有精灵可见）先画，再画当前精灵的函数
-    (project.structs || []).forEach((st, i) => canvas.append(renderStructBlock(st, i)));
-    (project.globals || []).forEach((g, i) => canvas.append(renderGlobalBlock(g, i)));
-    sprite().program.forEach((fn) => canvas.append(renderFn(fn)));
+    (project.structs || []).forEach((st, i) => { seen.add(st); canvas.append(renderCard(st, "#s" + i, () => renderStructBlock(st, i))); });
+    (project.globals || []).forEach((g, i) => { seen.add(g); canvas.append(renderCard(g, "#g" + i, () => renderGlobalBlock(g, i))); });
+    sprite().program.forEach((fn) => { seen.add(fn); canvas.append(renderCard(fn, "", () => renderFn(fn))); });
+    for (const k of [...cardCache.keys()]) if (!seen.has(k)) cardCache.delete(k);   // 删卡清缓存
     markSelected();
     const tag = document.getElementById("page-tag");
     if (tag) tag.textContent = sprite().name + " 的积木";
@@ -2035,6 +2058,7 @@
   // ---------------- 调色板 ----------------
   const NEW = {
     let: () => ({ block: "let", name: "x", type: "int", len: 0, value: { block: "int", value: 0 } }),
+    const_val: () => ({ block: "let", konst: true, name: "MAX", type: "int", len: 0, value: { block: "int", value: 10 } }),
     let_str: () => ({ block: "let", name: "s", type: "string", len: 0, value: { block: "string", value: "你好" } }),
     let_arr: () => ({ block: "let", name: "a", type: "int", len: 3,
       value: { block: "array", elems: [{ block: "int", value: 0 }, { block: "int", value: 0 }, { block: "int", value: 0 }] } }),
@@ -2264,7 +2288,7 @@
   // 调色板分类（仿 Scratch：左侧分类导航 + 右侧「所见即所得」积木预览）
   const PALETTE = [
     { id: "custom", name: "自制积木", color: "#FF6680", items: [{ special: "addFn", label: "新建函数" }] },
-    { id: "data", name: "变量 / 数据", color: "#FF8C1A", items: ["let", "let_str", "let_arr", "set_idx",
+    { id: "data", name: "变量 / 数据", color: "#FF8C1A", items: ["let", "const_val", "let_str", "let_arr", "set_idx",
         { special: "addList", label: "新建列表" }, "list_push", "list_insert", "list_remove", "list_clear"] },
     // 分类点颜色 = 该栏积木主色（本栏是赋值形态的运算，块体是变量橙，点也用橙）
     { id: "op", name: "运算", color: "#FF8C1A", items: ["incr", "decr", "set_op", "to_int", "to_float"] },

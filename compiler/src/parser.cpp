@@ -43,6 +43,7 @@ void Parser::synchronize() {
         switch (cur().kind) {
             case TokKind::KwFn:
             case TokKind::KwLet:
+            case TokKind::KwConst:
             case TokKind::KwIf:
             case TokKind::KwWhile:
             case TokKind::KwReturn:
@@ -106,8 +107,8 @@ Program Parser::parseProgram() {
             StructPtr st = parseStruct();
             if (st) prog.structs.push_back(std::move(st));
             if (panic_) synchronize();
-        } else if (check(TokKind::KwLet)) {
-            StmtPtr g = parseLet();   // 顶层全局变量
+        } else if (check(TokKind::KwLet) || check(TokKind::KwConst)) {
+            StmtPtr g = parseLet();   // 顶层全局变量 / 常量
             if (g) prog.globals.push_back(std::move(g));
             if (panic_) synchronize();
         } else if (check(TokKind::Ident) && cur().text == "import" &&
@@ -206,6 +207,7 @@ BlockPtr Parser::parseBlock() {
 StmtPtr Parser::parseStmt() {
     switch (cur().kind) {
         case TokKind::KwLet: return parseLet();
+        case TokKind::KwConst: return parseLet();
         case TokKind::KwIf: return parseIf();
         case TokKind::KwWhile: return parseWhile();
         case TokKind::KwFor: return parseFor();
@@ -227,14 +229,16 @@ StmtPtr Parser::parseStmt() {
 StmtPtr Parser::parseLet() {
     auto s = std::make_unique<LetStmt>();
     s->line = cur().line;
-    expect(TokKind::KwLet, "'let'");
+    if (check(TokKind::KwConst)) { advance(); s->isConst = true; }
+    else expect(TokKind::KwLet, "'let'");
     { const Token& nt = expect(TokKind::Ident, "变量名"); s->name = nt.text; s->col = nt.col; }
     if (match(TokKind::Colon)) {
         s->declared = parseType(s->structName);
         s->declaredLen = parseArraySuffix(); // 数组类型 T[N]
     }
-    // 初始化可选：有类型标注时可省略（零初始化）
+    // 初始化可选：有类型标注时可省略（零初始化）；const 必须给初始值
     if (match(TokKind::Assign)) s->init = parseExpr();
+    else if (s->isConst) error(cur(), "const 常量必须给初始值（const 名字 = 值）");
     match(TokKind::Semicolon); // 分号可选
     return s;
 }

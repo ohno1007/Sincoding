@@ -230,6 +230,7 @@ StmtPtr readStmtInner(const JPtr& j) {
     std::string b = gstr(j, "block");
     if (b == "let") {
         auto n = mk<LetStmt>(j); n->name = gstr(j, "name");
+        n->isConst = gbool(j, "konst", false);
         parseTypeName(gstr(j, "type"), n->declared, n->structName);
         n->declaredLen = (int)gnum(j, "len", 0);
         if (get(j, "value")) n->init = readExpr(get(j, "value"));
