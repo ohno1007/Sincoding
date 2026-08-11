@@ -67,6 +67,19 @@ bool sprite_touching(long long a, long long b) { return rt_touching((rt_sprite)a
 
 bool key_down(long long key) { return rt_key_down((int)key); }
 
+void sprite_show(long long s) { rt_show((rt_sprite)s); }
+void sprite_hide(long long s) { rt_hide((rt_sprite)s); }
+void sprite_bounce(long long s) { rt_bounce((rt_sprite)s); }
+bool sprite_touching_mouse(long long s) { return rt_touching_mouse((rt_sprite)s); }
+double timer(void) { return rt_timer(); }
+void timer_reset(void) { rt_timer_reset(); }
+bool key_pressed_space(void) { return rt_key_pressed(RT_KEY_SPACE); }
+bool key_pressed_left(void)  { return rt_key_pressed(RT_KEY_LEFT); }
+bool key_pressed_right(void) { return rt_key_pressed(RT_KEY_RIGHT); }
+bool key_pressed_up(void)    { return rt_key_pressed(RT_KEY_UP); }
+bool key_pressed_down(void)  { return rt_key_pressed(RT_KEY_DOWN); }
+bool mouse_clicked(void) { return rt_mouse_clicked(); }
+
 long long key_left(void)       { return RT_KEY_LEFT; }
 long long key_right(void)      { return RT_KEY_RIGHT; }
 long long key_up(void)         { return RT_KEY_UP; }

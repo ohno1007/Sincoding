@@ -60,6 +60,24 @@ extern fn play_tone(freq: int, ms: int)
 extern fn broadcast(message: string)
 extern fn received(message: string) -> bool
 
+// —— 显隐 / 边缘反弹 / 碰鼠标 ——
+extern fn sprite_show(s: int)
+extern fn sprite_hide(s: int)
+extern fn sprite_bounce(s: int)
+extern fn sprite_touching_mouse(s: int) -> bool
+
+// —— 计时器 ——
+extern fn timer() -> float
+extern fn timer_reset()
+
+// —— 按键"刚按下"（边沿触发；事件函数 on_key_* 由驱动器自动接上）——
+extern fn key_pressed_space() -> bool
+extern fn key_pressed_left() -> bool
+extern fn key_pressed_right() -> bool
+extern fn key_pressed_up() -> bool
+extern fn key_pressed_down() -> bool
+extern fn mouse_clicked() -> bool
+
 // —— 平台 / 工具 ——
 extern fn random_int(lo: int, hi: int) -> int
 extern fn screen_width() -> int

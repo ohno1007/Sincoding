@@ -36,6 +36,7 @@ typedef struct {
     float x, y;        // 舞台坐标（中心原点，y 向上为正，贴近 Scratch）
     float heading;     // 朝向，度，0 = 向右
     float scale;
+    bool hidden;       // 隐藏时不绘制、不参与碰撞
     char bubble[128];  // 说的气泡，空串表示不显示
 } RtSprite;
 
@@ -99,11 +100,19 @@ void rt_stage_init(int width, int height, const char* title) {
     g_frame_index = 0;
 }
 
+// 帧内 stage_close 的语义是「请求退出」：真正的 CloseWindow 必须等这一帧画完
+// （EndDrawing 之前关窗会段错误），也要防重复 close（事件驱动的合成驱动会在
+// 循环后再补一次 stage_close）。
+static bool g_quit_requested = false;
+static bool g_in_frame = false;
+static bool g_closed = false;
+
 bool rt_stage_running(void) {
-    return !WindowShouldClose();
+    return !g_quit_requested && !WindowShouldClose();
 }
 
 void rt_frame_begin(void) {
+    g_in_frame = true;
     // 交换事件队列：上一帧投递的广播在本帧可被查询
     memcpy(g_events_cur, g_events_next, sizeof(g_events_cur));
     g_events_cur_n = g_events_next_n;
@@ -128,6 +137,7 @@ void rt_frame_end(void) {
     }
 #endif
     EndDrawing();
+    g_in_frame = false;
     g_frame_index++;
 #ifdef SIN_DEBUG
     sin_dbg_frame_done();
@@ -141,6 +151,9 @@ void rt_frame_end(void) {
 }
 
 void rt_stage_close(void) {
+    if (g_in_frame) { g_quit_requested = true; return; }   // 帧内：只请求退出
+    if (g_closed) return;                                  // 已关过：幂等
+    g_closed = true;
 #ifdef SIN_DEBUG
     sin_dbg_shutdown();
 #endif
@@ -189,6 +202,7 @@ static bool sprite_valid(rt_sprite s) {
 }
 
 void rt_sprite_draw(rt_sprite s) {
+    if (sprite_valid(s) && g_sprites[s].hidden) return;
     if (!sprite_valid(s) || !g_sprites[s].loaded) return;
     RtSprite* sp = &g_sprites[s];
     Vector2 pos = stage_to_screen(sp->x, sp->y);
@@ -255,6 +269,8 @@ static void sprite_half(const RtSprite* sp, float* hw, float* hh) {
 }
 
 bool rt_touching(rt_sprite a, rt_sprite b) {
+    if (sprite_valid(a) && g_sprites[a].hidden) return false;
+    if (sprite_valid(b) && g_sprites[b].hidden) return false;
     if (!sprite_valid(a) || !sprite_valid(b)) return false;
     const RtSprite* sa = &g_sprites[a];
     const RtSprite* sb = &g_sprites[b];
@@ -268,6 +284,39 @@ bool rt_touching(rt_sprite a, rt_sprite b) {
 
 // ---------- 输入 ----------
 bool rt_key_down(int key) { return IsKeyDown(key); }
+bool rt_key_pressed(int key) { return IsKeyPressed(key); }   // 本帧刚按下（边沿）
+bool rt_mouse_clicked(void) { return IsMouseButtonPressed(MOUSE_BUTTON_LEFT); }
+
+void rt_show(rt_sprite s) { if (sprite_valid(s)) g_sprites[s].hidden = false; }
+void rt_hide(rt_sprite s) { if (sprite_valid(s)) g_sprites[s].hidden = true; }
+
+// 碰到舞台边缘就反弹：镜像朝向并把精灵夹回舞台内（Scratch 的 if on edge, bounce）
+void rt_bounce(rt_sprite s) {
+    if (!sprite_valid(s)) return;
+    RtSprite* sp = &g_sprites[s];
+    float hw, hh;
+    sprite_half(sp, &hw, &hh);
+    float xmax = (float)g_stage_w * 0.5f - hw, ymax = (float)g_stage_h * 0.5f - hh;
+    if (sp->x > xmax)  { sp->x = xmax;  sp->heading = 180.0f - sp->heading; }
+    if (sp->x < -xmax) { sp->x = -xmax; sp->heading = 180.0f - sp->heading; }
+    if (sp->y > ymax)  { sp->y = ymax;  sp->heading = -sp->heading; }
+    if (sp->y < -ymax) { sp->y = -ymax; sp->heading = -sp->heading; }
+}
+
+// 精灵是否碰到鼠标指针（AABB 含点）
+bool rt_touching_mouse(rt_sprite s) {
+    if (!sprite_valid(s) || g_sprites[s].hidden) return false;
+    RtSprite* sp = &g_sprites[s];
+    float hw, hh;
+    sprite_half(sp, &hw, &hh);
+    float mx = rt_mouse_x(), my = rt_mouse_y();
+    return mx >= sp->x - hw && mx <= sp->x + hw && my >= sp->y - hh && my <= sp->y + hh;
+}
+
+// 计时器：舞台启动起的秒数，可归零（Scratch 的 timer / reset timer）
+static double g_timer_base = 0.0;
+double rt_timer(void) { return GetTime() - g_timer_base; }
+void rt_timer_reset(void) { g_timer_base = GetTime(); }
 bool rt_mouse_down(int button) { return IsMouseButtonDown(button); }
 float rt_mouse_x(void) {
     return (float)GetMouseX() - (float)g_stage_w * 0.5f;

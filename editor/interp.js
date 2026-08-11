@@ -35,11 +35,19 @@
       this.onPrint = null;
       canvas.tabIndex = 0;
       canvas.addEventListener("keydown", (e) => {
-        const c = KEYMAP[e.key]; if (c !== undefined) { this.keys.add(c); e.preventDefault(); }
+        const c = KEYMAP[e.key];
+        if (c !== undefined) {
+          if (!this.keys.has(c)) this.pressedQueue.add(c);   // 只有"从松到按"才算刚按下
+          this.keys.add(c); e.preventDefault();
+        }
       });
       canvas.addEventListener("keyup", (e) => {
         const c = KEYMAP[e.key]; if (c !== undefined) this.keys.delete(c);
       });
+      // 边沿检测："本帧刚按下"的键（keydown 入 pressedQueue，帧首搬到 pressedNow）
+      this.pressedQueue = new Set();
+      this.pressedNow = new Set();
+      this.clickQueue = false; this.clickNow = false;
       // 鼠标：记录舞台坐标（中心原点、y 向上）与按下状态
       this.mouse = { x: 0, y: 0, down: false };
       canvas.addEventListener("mousemove", (e) => {
@@ -49,7 +57,7 @@
         this.mouse.x = cx - canvas.width / 2;
         this.mouse.y = canvas.height / 2 - cy;
       });
-      canvas.addEventListener("mousedown", () => { this.mouse.down = true; });
+      canvas.addEventListener("mousedown", () => { this.mouse.down = true; this.clickQueue = true; });
       window.addEventListener("mouseup", () => { this.mouse.down = false; });
     }
 
@@ -107,6 +115,7 @@
       this.penCanvas.width = w; this.penCanvas.height = h;
       this.penCtx = this.penCanvas.getContext("2d");
       this.penColor = "#000"; this.penSize = 2;
+      this.timerBase = performance.now();
       // 共享全局作用域：所有精灵 actor 的 env 栈底都是同一个 Map，
       // 因此一个精灵对全局数组/结构体/变量的修改对其它精灵立即可见。
       this.structDefs = {};
@@ -125,7 +134,27 @@
       for (const program of (programs || [])) {
         const fns = Object.assign({}, libFns);
         (program || []).forEach((f) => { if (f.block === "fn") fns[f.name] = f; });
-        const main = fns["main"];
+        let main = fns["main"];
+        // 事件驱动：没写 main 但定义了 on_start/on_frame/on_key_* → 合成主循环，
+        // 顺序与 codegen 生成的 C 驱动完全一致（预览 = 成品）
+        if (!main && (program || []).some((f) => f.block === "fn" && f.name.startsWith("on_"))) {
+          const call = (name, args) => ({ block: "expr", expr: { block: "call", callee: name, args: args || [] } });
+          const EV = [["on_key_space", "key_pressed_space"], ["on_key_left", "key_pressed_left"],
+                      ["on_key_right", "key_pressed_right"], ["on_key_up", "key_pressed_up"],
+                      ["on_key_down", "key_pressed_down"], ["on_click", "mouse_clicked"]];
+          const loopBody = [call("frame_begin")];
+          for (const [h, pressed] of EV)
+            if (fns[h]) loopBody.push({ block: "if",
+              cond: { block: "call", callee: pressed, args: [] }, then: [call(h)] });
+          if (fns["on_frame"]) loopBody.push(call("on_frame"));
+          loopBody.push(call("frame_end"));
+          const body = [call("stage_init", [{ block: "int", value: 480 }, { block: "int", value: 360 }])];
+          if (fns["on_start"]) body.push(call("on_start"));
+          body.push({ block: "while", cond: { block: "call", callee: "stage_running", args: [] }, body: loopBody });
+          body.push(call("stage_close"));
+          main = { block: "fn", name: "main", params: [], ret: "void", body };
+          fns["main"] = main;
+        }
         if (!main) continue;
         hasMain = true;
         const env = [this.globalScope, new Map()];
@@ -146,7 +175,7 @@
           if (!(e instanceof ReturnSignal)) this.onStatus("运行出错: " + e.message, "warn");
         }
       }
-      if (!hasMain) { this.onStatus("没有 main()，无法预览", "warn"); return; }
+      if (!hasMain) { this.onStatus("没有 main() 或事件函数（当绿旗被点击…），无法预览", "warn"); return; }
       this.hadLoop = this.actors.some((a) => a.loop);
       if (this.actors.length === 0) { this.drawConsole(); this.onStatus("运行完成 ✓", "ok"); return; }
       this.onStatus(this.actors.length > 1 ?
@@ -165,7 +194,11 @@
       // 从上次暂停处续跑；否则开新的一帧
       let startIdx = 0;
       if (this.pending) { startIdx = this.pending.ai; }
-      else { wd.frameCleared = false; wd.broadcasts = wd.nextBroadcasts; wd.nextBroadcasts = new Set(); }
+      else {
+        wd.frameCleared = false; wd.broadcasts = wd.nextBroadcasts; wd.nextBroadcasts = new Set();
+        this.pressedNow = this.pressedQueue; this.pressedQueue = new Set();   // 边沿：本帧可见
+        this.clickNow = this.clickQueue; this.clickQueue = false;
+      }
       for (let ai = startIdx; ai < this.actors.length; ai++) {
         const a = this.actors[ai];
         this.fns = a.fns;
@@ -395,7 +428,7 @@
     // 两精灵是否碰撞（AABB 重叠；与 runtime rt_touching 同语义）
     sprite_touching(a) {
       const sa = this.world.sprites[a[0]], sb = this.world.sprites[a[1]];
-      if (!sa || !sb) return false;
+      if (!sa || !sb || sa.hidden || sb.hidden) return false;
       const half = (s) => {
         const k = s.scale || 1;
         if (s.kind === "image" && s.tex) {
@@ -410,7 +443,7 @@
       return Math.abs(sa.x - sb.x) < ahw + bhw && Math.abs(sa.y - sb.y) < ahh + bhh;
     },
     sprite_draw(a) {
-      const s = this.world.sprites[a[0]]; if (!s) return;
+      const s = this.world.sprites[a[0]]; if (!s || s.hidden) return;
       const ctx = this.ctx, [cx, cy] = this.s2c(s.x, s.y), k = s.scale || 1;
       let z = s.size * k;
       if (s.kind === "image") {
@@ -435,6 +468,32 @@
       if (s.bubble) { ctx.fillStyle = "#000"; ctx.font = "16px sans-serif"; ctx.fillText(s.bubble, cx + z / 2, cy - z / 2 - 6); }
     },
     key_down(a) { return this.world.keys.has(a[0]); },
+    key_pressed_space() { return this.pressedNow.has(32); },
+    key_pressed_left()  { return this.pressedNow.has(263); },
+    key_pressed_right() { return this.pressedNow.has(262); },
+    key_pressed_up()    { return this.pressedNow.has(265); },
+    key_pressed_down()  { return this.pressedNow.has(264); },
+    mouse_clicked() { return this.clickNow; },
+    sprite_show(a) { const s = this.world.sprites[a[0]]; if (s) s.hidden = false; },
+    sprite_hide(a) { const s = this.world.sprites[a[0]]; if (s) s.hidden = true; },
+    // 碰到舞台边缘就反弹：镜像朝向并夹回舞台内（与 rt_bounce 同语义）
+    sprite_bounce(a) {
+      const s = this.world.sprites[a[0]]; if (!s) return;
+      const k = s.scale || 1, hw = (s.size || 48) * k / 2, hh = hw;
+      const xmax = this.world.W / 2 - hw, ymax = this.world.H / 2 - hh;
+      if (s.x > xmax)  { s.x = xmax;  s.heading = 180 - (s.heading || 0); }
+      if (s.x < -xmax) { s.x = -xmax; s.heading = 180 - (s.heading || 0); }
+      if (s.y > ymax)  { s.y = ymax;  s.heading = -(s.heading || 0); }
+      if (s.y < -ymax) { s.y = -ymax; s.heading = -(s.heading || 0); }
+    },
+    sprite_touching_mouse(a) {
+      const s = this.world.sprites[a[0]]; if (!s || s.hidden) return false;
+      const k = s.scale || 1, hw = (s.size || 48) * k / 2, hh = hw;
+      const m = this.mouse;
+      return m.x >= s.x - hw && m.x <= s.x + hw && m.y >= s.y - hh && m.y <= s.y + hh;
+    },
+    timer() { return (performance.now() - this.timerBase) / 1000; },
+    timer_reset() { this.timerBase = performance.now(); },
     key_left() { return 263; }, key_right() { return 262; }, key_up() { return 265; }, key_down_arrow() { return 264; }, key_space() { return 32; },
     mouse_x() { return this.mouse.x; }, mouse_y() { return this.mouse.y; }, mouse_down() { return this.mouse.down; },
     // 运动（精灵）

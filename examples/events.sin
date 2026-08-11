@@ -1,0 +1,25 @@
+// 事件驱动示例：没有 main，没有主循环样板——编译器自动合成驱动。
+// on_start 做初始化，on_frame 每帧执行；空格键的"刚按下"沿由驱动器接到 on_key_space。
+import "std/stage"
+
+let ball: int = 0
+let ticks: int = 0
+let boosts: int = 0
+
+fn on_start() {
+    ball = sprite_new(0.0, 0.0, 40.0)
+    sprite_point(ball, 45.0)
+}
+
+fn on_key_space() {
+    boosts = boosts + 1
+}
+
+fn on_frame() {
+    sprite_move(ball, 6.0)
+    sprite_bounce(ball)   // 碰到边缘就反弹
+    sprite_draw(ball)
+    draw_number(ticks, -220.0, 150.0, 20)
+    ticks = ticks + 1
+    if ticks > 40 { stage_close() }
+}

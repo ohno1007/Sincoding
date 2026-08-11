@@ -41,7 +41,15 @@ float rt_y(rt_sprite s);
 bool rt_touching(rt_sprite a, rt_sprite b);   // 两精灵 AABB 是否重叠（碰撞检测）
 
 // ---------- 输入 ----------
-bool rt_key_down(int key);        // 对应 IsKeyDown
+bool rt_key_down(int key);
+bool rt_key_pressed(int key);              // 本帧刚按下（边沿触发）
+bool rt_mouse_clicked(void);               // 本帧刚点下左键
+void rt_show(rt_sprite s);
+void rt_hide(rt_sprite s);
+void rt_bounce(rt_sprite s);               // 碰到舞台边缘就反弹
+bool rt_touching_mouse(rt_sprite s);       // 精灵是否碰到鼠标指针
+double rt_timer(void);                     // 舞台启动起的秒数
+void rt_timer_reset(void);        // 对应 IsKeyDown
 bool rt_mouse_down(int button);
 float rt_mouse_x(void);
 float rt_mouse_y(void);

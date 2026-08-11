@@ -236,6 +236,15 @@ header .tabs button.active { background:#fff; color:var(--c-motion); font-weight
 .hdr-actions button.primary { background:#ffab19; color:#20160a; border-color:#ffab19; }
 .hdr-actions button.primary:hover { filter:brightness(1.06); background:#ffab19; }
 
+/* 示例模板卡片 */
+.tpl-list { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.tpl-card { border:1px solid var(--line); border-radius:10px; padding:12px; cursor:pointer;
+  background:#fff; transition:.12s; display:flex; flex-direction:column; gap:5px; }
+.tpl-card:hover { border-color:var(--c-motion); box-shadow:0 2px 8px rgba(76,151,255,.18); }
+.tpl-card .tpl-ic { font-size:22px; }
+.tpl-card .tpl-nm { font-weight:700; font-size:13.5px; color:#3B4351; }
+.tpl-card .tpl-ds { font-size:11.5px; color:#8a92a5; font-weight:500; }
+
 /* ---------- 模态框 ---------- */
 .modal-overlay { position:fixed; inset:0; background:rgba(18,12,38,.55); z-index:50;
   display:flex; align-items:center; justify-content:center; }
@@ -349,6 +358,7 @@ header .tabs button.active { background:#fff; color:var(--c-motion); font-weight
 
 /* 分类色（填充 + 描边） */
 .fn         { --c:var(--c-myblocks);  --cb:var(--b-myblocks); }
+.event-hat  { --c:var(--c-events);    --cb:var(--b-events); }
 .extern_fn  { --c:#ff5274;            --cb:#e02a50; }
 .ctrl       { --c:var(--c-control);   --cb:var(--b-control); }
 .var        { --c:var(--c-variables); --cb:var(--b-variables); }
@@ -369,6 +379,8 @@ header .tabs button.active { background:#fff; color:var(--c-motion); font-weight
   border-radius:14px 14px 5px 5px; padding:7px 12px;
   flex-wrap:nowrap; width:max-content;   /* 定义头保持一行（Scratch define 块） */
 }
+/* 事件帽：Scratch 事件黄，更饱满的圆顶 */
+.block.hat.fn.event-hat > .hdr { border-radius:20px 20px 4px 4px; padding:8px 16px 6px; }
 /* 帽子底部的榫头，连向第一条语句 */
 .block.hat.fn > .hdr::after {
   content:""; position:absolute; left:10px; bottom:-4px; width:16px; height:4px; z-index:1;

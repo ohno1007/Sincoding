@@ -21,6 +21,7 @@
   <div class="hdr-actions">
     <button id="btn-undo" class="icon-only" title="撤销 (Ctrl+Z)" data-icon="undo" data-icon-size="15"></button>
     <button id="btn-redo" class="icon-only" title="重做 (Ctrl+Y)" data-icon="redo" data-icon-size="15"></button>
+    <button id="btn-templates" title="从示例模板开始（会替换当前精灵的积木，可撤销）"><span data-icon="sparkle" data-icon-size="15"></span>示例</button>
     <button id="btn-open-proj" title="打开 .sinproj 项目，继续编辑"><span data-icon="folder" data-icon-size="15"></span>打开项目</button>
     <button id="btn-save-proj" title="保存为 .sinproj 项目文件（含全部精灵/造型/积木）"><span data-icon="save" data-icon-size="15"></span>保存项目</button>
     <button id="btn-publish" class="primary" title="一键编译发布到 Linux / Windows / Android / Web"><span data-icon="rocket" data-icon-size="15"></span>发布</button>
@@ -67,6 +68,21 @@
       <span id="pub-status" class="hint"></span>
       <button id="publish-cancel" class="ghost">取消</button>
       <button id="publish-go" class="primary"><span data-icon="rocket" data-icon-size="14"></span>开始编译</button>
+    </div>
+  </div>
+</div>
+
+<!-- 示例模板：每个模板是一段真实源码，载入走引擎解析（与手写文本同一条路径） -->
+<div id="tpl-modal" class="modal-overlay" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <span data-icon="sparkle" data-icon-size="18"></span>
+      <h2>从示例开始</h2>
+      <button id="tpl-close" class="modal-x" title="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="tpl-list" class="tpl-list"></div>
+      <span class="hint">载入会替换<b>当前精灵</b>的积木（Ctrl+Z 可撤销）。</span>
     </div>
   </div>
 </div>
@@ -194,6 +210,7 @@
 <script src="./interp.js"></script>
 <script src="./paint.js"></script>
 <script src="./blocks_data.js"></script>
+<script src="./templates.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

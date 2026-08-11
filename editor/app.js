@@ -568,6 +568,16 @@
     random_int: "随机数", screen_width: "屏幕宽", screen_height: "屏幕高", frame_index: "帧数",
     pen_clear: "清空画笔", pen_color: "设笔颜色", pen_size: "设笔粗细",
     pen_line: "画线", pen_dot: "画点", print: "打印",
+    sprite_show: "显示精灵", sprite_hide: "隐藏精灵", sprite_bounce: "碰到边缘就反弹",
+    sprite_touching_mouse: "碰到鼠标?", timer: "计时器", timer_reset: "计时器归零",
+    key_pressed_space: "刚按下空格?", key_pressed_left: "刚按下←?", key_pressed_right: "刚按下→?",
+    key_pressed_up: "刚按下↑?", key_pressed_down: "刚按下↓?", mouse_clicked: "刚点击?",
+  };
+  // 事件函数：约定名 → 帽子块的中文标签（渲染成 Scratch 式事件帽，名字仍是唯一真相）
+  const EVENT_LABELS = {
+    on_start: "当 ⚑ 被点击", on_frame: "每一帧",
+    on_key_space: "当按下 空格键", on_key_left: "当按下 ←", on_key_right: "当按下 →",
+    on_key_up: "当按下 ↑", on_key_down: "当按下 ↓", on_click: "当点击舞台",
   };
   const callLabel = (callee) => CALL_LABELS[callee] || callee;
 
@@ -883,6 +893,37 @@
     if (br) br.addEventListener("click", doRedo);
   })();
 
+  // ---------------- 示例模板：模板 = 真实源码，载入走引擎解析（同一条路径） ----------------
+  (() => {
+    const modal = document.getElementById("tpl-modal"), listEl = document.getElementById("tpl-list");
+    const btn = document.getElementById("btn-templates"), close = document.getElementById("tpl-close");
+    if (!modal || !btn) return;
+    function loadTemplate(t) {
+      modal.hidden = true;
+      setTextValue(t.src);
+      onTextEdited();          // 引擎解析 → 积木/共享状态/预览全部联动；撤销可回退
+      setPvStatus("已载入示例「" + t.name + "」", "ok");
+    }
+    function buildList() {
+      listEl.innerHTML = "";
+      (window.SIN_TEMPLATES || []).forEach((t) => {
+        const card = el("div", "tpl-card");
+        card.append(el("div", "tpl-ic", t.icon || "📦"),
+                    el("div", "tpl-nm", t.name),
+                    el("div", "tpl-ds", t.desc));
+        card.addEventListener("click", () => loadTemplate(t));
+        listEl.append(card);
+      });
+    }
+    btn.addEventListener("click", () => { buildList(); modal.hidden = false; });
+    close.addEventListener("click", () => { modal.hidden = true; });
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.hidden = true; });
+    window._sinTemplates = { load: (id) => {   // 测试探针
+      const t = (window.SIN_TEMPLATES || []).find((x) => x.id === id);
+      if (t) loadTemplate(t);
+    } };
+  })();
+
   // ---------------- 积木拖拽（语句重排 / 从调色板拖入 / 拖到调色板删除 / 表达式嵌套） ----------------
   let drag = null;
   window._sinDragState = () => (drag ? { kind: drag.kind, hasTarget: !!drag.target, hasSlot: !!drag.slot, fromList: !!drag.fromList } : null);
@@ -1039,8 +1080,42 @@
   function renderFn(fn) {
     const script = el("div", "script");
     script.style.left = fn._x + "px"; script.style.top = fn._y + "px";
-    const blk = el("div", "block hat " + (fn.block === "extern_fn" ? "extern_fn" : "fn"));
+    // 事件函数（on_start 等约定名 + 无参 void）渲染成 Scratch 式事件帽：
+    // 只显示事件短语，不显示"定义 名字"。名字仍是唯一真相——序列化不受影响。
+    const isEvent = fn.block === "fn" && EVENT_LABELS[fn.name] &&
+                    (!fn.params || !fn.params.length) && (fn.ret === "void" || !fn.ret);
+    const blk = el("div", "block hat " +
+      (fn.block === "extern_fn" ? "extern_fn" : (isEvent ? "fn event-hat" : "fn")));
     const hdr = el("div", "hdr");
+    if (isEvent) {
+      hdr.append(el("span", "label", EVENT_LABELS[fn.name]));
+      blk.append(hdr);
+      if (fn.body) { const m = el("div", "mouth"); m.append(renderStmtList(fn.body, collectScope(fn))); blk.append(m); }
+      const script0 = script; script0.append(blk);
+      hdr.addEventListener("pointerdown", (e) => {
+        if (e.target.classList.contains("field")) return;
+        selected = fn; markSelected();
+        e.stopPropagation();
+        const start = { mx: e.clientX, my: e.clientY, ox: fn._x, oy: fn._y };
+        const onMove = (ev) => {
+          fn._x = start.ox + (ev.clientX - start.mx) / view.k;
+          fn._y = start.oy + (ev.clientY - start.my) / view.k;
+          script0.style.left = fn._x + "px"; script0.style.top = fn._y + "px";
+        };
+        const onUp = () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+      });
+      // 右键事件帽 = 删除该事件（有确认；普通函数右键是复制，事件帽更需要删除入口）
+      hdr.addEventListener("contextmenu", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (!confirm("删除「" + EVENT_LABELS[fn.name] + "」及其中的积木？")) return;
+        const i = sprite().program.indexOf(fn);
+        if (i >= 0) { sprite().program.splice(i, 1); selected = sprite().program[0] || null; render(); }
+      });
+      script0._fn = fn;
+      return script0;
+    }
     hdr.append(el("span", "label", (fn.block === "extern_fn" ? "外部" : "定义")));
     hdr.append(field(() => fn.name, (s) => { fn.name = s || "f"; }));
     // 泛型类型参数 <T, U>（点击可编辑；留空即取消泛型）
@@ -1857,6 +1932,10 @@
     // 外观
     sprite_load: () => ({ block: "let", name: "s", type: "int", len: 0, value: C("sprite_load", S("ball.png")) }),
     sprite_draw: () => Ex(C("sprite_draw", Vr("s"))),
+    sprite_show: () => Ex(C("sprite_show", Vr("s"))),
+    sprite_hide: () => Ex(C("sprite_hide", Vr("s"))),
+    sprite_bounce: () => Ex(C("sprite_bounce", Vr("s"))),
+    timer_reset: () => Ex(C("timer_reset")),
     say: () => Ex(C("say", Vr("s"), S("你好"))),
     draw_text: () => Ex(C("draw_text", S("文字"), F(0), F(0), I(24))),
     draw_number: () => Ex(C("draw_number", Vr("x"), F(0), F(0), I(24))),
@@ -1909,6 +1988,7 @@
     r_field: () => ({ block: "field", obj: Vr("s"), name: "field" }),   // 结构体字段 s.field
     r_random: () => C("random_int", I(1), I(10)),
     r_mouse_x: () => C("mouse_x"), r_mouse_y: () => C("mouse_y"), r_mouse_down: () => C("mouse_down"),
+    r_timer: () => C("timer"), r_touch_mouse: () => C("sprite_touching_mouse", Vr("s")),
     r_key: () => C("key_down", C("key_left")), r_received: () => C("received", S("go")),
     r_sprite_x: () => C("sprite_x", Vr("s")), r_sprite_y: () => C("sprite_y", Vr("s")),
   };
@@ -1946,6 +2026,14 @@
                            _x: p.x, _y: p.y + 130 });
     render();
   }
+  function addEventFn(name) {
+    const exist = sprite().program.find((f) => f.block === "fn" && f.name === name);
+    if (exist) { selected = exist; markSelected(); return; }   // 每种事件一个就够
+    const p = freeSpot();
+    const fn = { block: "fn", name: name, params: [], ret: "void", body: [],
+                 _x: p.x, _y: p.y };
+    sprite().program.push(fn); selected = fn; render();
+  }
   function addFn() {
     const fn = { block: "fn", name: "fn" + (sprite().program.length + 1), params: [], ret: "int",
       body: [{ block: "return", value: { block: "int", value: 0 } }],
@@ -1963,14 +2051,20 @@
       items: ["r_var", "r_index", "r_field", "r_add", "r_sub", "r_mul", "r_div", "r_mod",
         "r_lt", "r_gt", "r_eq", "r_le", "r_ge", "r_ne", "r_and", "r_or", "r_not",
         "r_int", "r_float", "r_str", "r_true", "r_random",
-        "r_mouse_x", "r_mouse_y", "r_mouse_down", "r_key", "r_received", "r_sprite_x", "r_sprite_y"] },
+        "r_mouse_x", "r_mouse_y", "r_mouse_down", "r_key", "r_received", "r_sprite_x", "r_sprite_y",
+        "r_timer", "r_touch_mouse"] },
     { id: "control", name: "控制", color: "#FFAB19", items: ["if", "if_else", "while", "for", "repeat", "return", "print"] },
     { id: "stage", name: "舞台", color: "#FFAB19", items: ["stage_init", "game_loop", "frame_begin", "frame_end", "stage_close"] },
-    { id: "motion", name: "运动", color: "#4C97FF", items: ["sprite_new", "sprite_move_to", "sprite_move", "sprite_turn", "sprite_point", "sprite_scale", "sprite_x", "sprite_y"] },
+    { id: "motion", name: "运动", color: "#4C97FF", items: ["sprite_new", "sprite_move_to", "sprite_move", "sprite_turn", "sprite_point", "sprite_scale", "sprite_bounce", "sprite_show", "sprite_hide", "sprite_x", "sprite_y"] },
     { id: "looks", name: "外观", color: "#9966FF", items: ["sprite_load", "sprite_draw", "say", "draw_text", "draw_number"] },
     { id: "pen", name: "画笔", color: "#0FBD8C", items: ["pen_clear", "pen_color", "pen_size", "pen_line", "pen_dot"] },
-    { id: "platform", name: "平台", color: "#5CB1D6", items: ["if_mouse", "let_mouse_x", "let_mouse_y", "let_random", "let_screen_w"] },
-    { id: "events", name: "事件 / 声音", color: "#FFBF00", items: ["if_key", "if_key_right", "if_key_up", "if_key_down", "broadcast", "if_received", "play_tone", "play_sound"] },
+    { id: "platform", name: "平台", color: "#5CB1D6", items: ["if_mouse", "let_mouse_x", "let_mouse_y", "let_random", "let_screen_w", "timer_reset"] },
+    { id: "events", name: "事件 / 声音", color: "#FFBF00", items: [
+        { special: "addEvent", ev: "on_start" }, { special: "addEvent", ev: "on_frame" },
+        { special: "addEvent", ev: "on_key_space" }, { special: "addEvent", ev: "on_key_left" },
+        { special: "addEvent", ev: "on_key_right" }, { special: "addEvent", ev: "on_key_up" },
+        { special: "addEvent", ev: "on_key_down" }, { special: "addEvent", ev: "on_click" },
+        "if_key", "if_key_right", "if_key_up", "if_key_down", "broadcast", "if_received", "play_tone", "play_sound"] },
     { id: "shared", name: "结构体 / 全局", color: "#FF6680",
       items: [{ special: "addStruct", label: "新建结构体" },
               { special: "addGlobal", label: "新建全局变量" }] },
@@ -2060,6 +2154,13 @@
       });
       return blk;
     }
+    if (sp.special === "addEvent") {
+      const blk = el("div", "block fn hat event-hat");
+      const row = el("div", "hdr");
+      row.append(el("span", "label", EVENT_LABELS[sp.ev] || sp.ev));
+      blk.append(row);
+      return blk;
+    }
     if (sp.special === "addFn") {
       const blk = el("div", "block fn hat");
       const row = el("div", "hdr");
@@ -2119,7 +2220,8 @@
         const wys = el("div", "pal-wys" + (isReporter ? " pal-reporter" : ""));
         const special = typeof it === "object" && it.special;
         const lib = typeof it === "object" && it.lib;     // 库函数：按签名生成积木
-        wys.dataset.kind = special ? it.special : (lib ? "lib:" + it.lib.name : it);
+        wys.dataset.kind = special ? (it.special === "addEvent" ? "addEvent:" + it.ev : it.special)
+                                   : (lib ? "lib:" + it.lib.name : it);
         const mk = lib ? () => libNode(it.lib) : null;    // 每次取用都新建一份节点
         let preview;
         if (special) preview = specialPreview(it);
@@ -2150,6 +2252,7 @@
             if (started) return;
             if (special) {
               if (it.special === "addFn") addFn();
+              else if (it.special === "addEvent") addEventFn(it.ev);
               else if (it.special === "addImport") addImport();
               else if (it.special === "addStruct") addStruct();
               else if (it.special === "addGlobal") addGlobal();

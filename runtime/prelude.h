@@ -78,6 +78,24 @@ void play_tone(long long freq, long long ms);
 void broadcast(const char* message);
 bool received(const char* message);
 
+// 显隐 / 边缘反弹 / 碰鼠标（Scratch 常用能力）
+void sprite_show(long long s);
+void sprite_hide(long long s);
+void sprite_bounce(long long s);
+bool sprite_touching_mouse(long long s);
+
+// 计时器
+double timer(void);
+void timer_reset(void);
+
+// 按键"刚按下"（边沿触发，事件驱动的 on_key_* 用它）
+bool key_pressed_space(void);
+bool key_pressed_left(void);
+bool key_pressed_right(void);
+bool key_pressed_up(void);
+bool key_pressed_down(void);
+bool mouse_clicked(void);
+
 // 数值转换（int ↔ float）
 double to_float(long long n);
 long long to_int(double f);

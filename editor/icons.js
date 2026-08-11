@@ -22,6 +22,7 @@
     stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
     flag: '<path d="M5 21V3.5"/><path d="M5 4c2.7-1.6 5.3 1.6 8 0s5.3-1.6 7 0l-2 5.5 2 5.5c-1.7-1.6-4.3 0-7 1.6s-5.3-1.6-8 0" fill="currentColor" stroke-linejoin="round"/>',
     pause: '<line x1="9" y1="5" x2="9" y2="19"/><line x1="15" y1="5" x2="15" y2="19"/>',
+    sparkle: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/>',
     undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
     redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
     stopsign: '<polygon points="8.2 3 15.8 3 21 8.2 21 15.8 15.8 21 8.2 21 3 15.8 3 8.2" fill="currentColor" stroke-linejoin="round"/>',

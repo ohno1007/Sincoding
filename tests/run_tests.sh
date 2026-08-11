@@ -413,6 +413,12 @@ if command -v node >/dev/null 2>&1 && \
     else
         echo "✗ 信任底线: 验证失败（$uout）"; ((FAIL++))
     fi
+    # 事件驱动 + 示例模板：模板零诊断、事件帽渲染、无 main 预览、调色板事件帽
+    if eout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_events.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ 事件/模板: 4 模板零诊断 + 事件帽 + 无 main 预览 + 调色板 8 帽（$eout）"; ((PASS++))
+    else
+        echo "✗ 事件/模板: 验证失败（$eout）"; ((FAIL++))
+    fi
     # 预览 = 成品：import 的库函数在预览里也能真正执行（不只是有积木）
     if pout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_lib_preview.js" "$ROOT/editor/index.html" 2>&1)"; then
         echo "✓ 预览库调用: import 的库函数在预览里执行正确（$pout）"; ((PASS++))
@@ -640,6 +646,27 @@ if sin_have_native && sin_have_imgui && command -v xvfb-run >/dev/null 2>&1 && c
     else echo "✗ 调试面板: 构建失败或发布构建含调试钩子（$relhooks）"; ((FAIL++)); fi
 else
     echo "○ 跳过（缺 raylib / imgui / xvfb / g++）"
+fi
+
+# ---- 事件驱动（events.sin：无 main，编译器合成主循环）----
+echo
+echo "=== 事件驱动：events.sin（on_start/on_frame，无 main） ==="
+if have_raylib && command -v xvfb-run >/dev/null 2>&1; then
+    EBIN="$WORK/events"
+    if "$ROOT/tools/build_native.sh" "$ROOT/examples/events.sin" "$EBIN" >/dev/null 2>&1; then
+        SIN_MAX_FRAMES=30 SIN_SCREENSHOT="$WORK/events.png" \
+            xvfb-run -a -s "-screen 0 500x400x24" "$EBIN" >/dev/null 2>&1
+        enb="$(python3 "$ROOT/tools/png_nonbg.py" "$WORK/events.png" 2>/dev/null || echo 0)"
+        if [[ "$enb" -gt 300 ]]; then
+            echo "✓ events: 无 main 程序经合成驱动运行并渲染（非背景像素 $enb）"; ((PASS++))
+        else echo "✗ events: 渲染疑似空白（非背景像素 $enb）"; ((FAIL++)); fi
+        # 帧内 stage_close 不再段错误（退出请求延迟到帧尾）
+        if SIN_MAX_FRAMES=100 xvfb-run -a -s "-screen 0 500x400x24" "$EBIN" >/dev/null 2>&1; then
+            echo "✓ events: 帧内 stage_close 干净退出（无段错误）"; ((PASS++))
+        else echo "✗ events: 退出异常（exit=$?）"; ((FAIL++)); fi
+    else echo "✗ events: 构建失败"; ((FAIL++)); fi
+else
+    echo "○ 跳过（未检测到 raylib 或 xvfb）"
 fi
 
 # ---- 碰撞检测（collide.sin：sprite_touching AABB 无头验证）----

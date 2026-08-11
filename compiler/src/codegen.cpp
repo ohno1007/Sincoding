@@ -257,6 +257,48 @@ std::string CodeGen::generate(const Program& prog) {
         emitFn(*fn);
         out_ << "\n";
     }
+
+    // 事件驱动：没写 main 但定义了事件函数（on_start / on_frame / on_key_*）时，
+    // 合成主循环驱动。舞台隐式初始化——零样板，打开就能写游戏逻辑。
+    // 顺序与编辑器预览解释器完全一致（预览 = 成品）。
+    bool hasMain = false, hasEvent = false;
+    auto has = [&](const char* n) {
+        for (auto& fn : prog.fns) if (!fn->isExtern && fn->name == n) return true;
+        return false;
+    };
+    for (auto& fn : prog.fns) {
+        if (fn->isExtern) continue;
+        if (fn->name == "main") hasMain = true;
+        if (fn->name.rfind("on_", 0) == 0) hasEvent = true;
+    }
+    if (!hasMain && hasEvent) {
+        out_ << "// 事件驱动主循环（编译器合成：用户程序只写事件函数）\n";
+        out_ << "extern void stage_init(long long w, long long h);\n"
+                "extern bool stage_running(void);\n"
+                "extern void frame_begin(void);\n"
+                "extern void frame_end(void);\n"
+                "extern void stage_close(void);\n";
+        static const struct { const char* fn; const char* pressed; } KEYS[] = {
+            {"on_key_space", "key_pressed_space"}, {"on_key_left", "key_pressed_left"},
+            {"on_key_right", "key_pressed_right"}, {"on_key_up", "key_pressed_up"},
+            {"on_key_down", "key_pressed_down"},   {"on_click", "mouse_clicked"},
+        };
+        for (auto& k : KEYS)
+            if (has(k.fn)) out_ << "extern bool " << k.pressed << "(void);\n";
+        out_ << "int main(void) {\n"
+                "    stage_init(480, 360);\n";
+        if (has("on_start")) out_ << "    on_start();\n";
+        out_ << "    while (stage_running()) {\n"
+                "        frame_begin();\n";
+        for (auto& k : KEYS)
+            if (has(k.fn)) out_ << "        if (" << k.pressed << "()) " << k.fn << "();\n";
+        if (has("on_frame")) out_ << "        on_frame();\n";
+        out_ << "        frame_end();\n"
+                "    }\n"
+                "    stage_close();\n"
+                "    return 0;\n"
+                "}\n";
+    }
     return out_.str();
 }
 

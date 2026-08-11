@@ -122,9 +122,24 @@ bool TypeChecker::check(Program& prog) {
         }
         fns_[fn->name] = sig;
     }
-    // 必须有 main
-    if (!fns_.count("main"))
-        error(0, "缺少入口函数 main");
+    // 必须有 main，或者至少一个事件处理函数（on_start/on_frame/on_key_* 等，
+    // 见 codegen 的事件驱动：没写 main 时编译器会合成主循环驱动）
+    bool hasEntry = fns_.count("main") > 0;
+    for (auto& fn : prog.fns)
+        if (!hasEntry && fn->name.rfind("on_", 0) == 0 && !fn->isExtern) hasEntry = true;
+    if (!hasEntry)
+        error(0, "缺少入口：需要 main 函数，或至少一个事件函数（on_start / on_frame / on_key_空格键 等）");
+    // 事件函数必须是无参 void：驱动器不带实参调用它们
+    for (auto& fn : prog.fns) {
+        if (fn->isExtern || fn->name.rfind("on_", 0) != 0) continue;
+        static const char* EVENTS[] = {"on_start", "on_frame", "on_key_space", "on_key_left",
+                                       "on_key_right", "on_key_up", "on_key_down", "on_click"};
+        bool known = false;
+        for (auto* e : EVENTS) if (fn->name == e) known = true;
+        if (!known) continue;                      // 其它 on_ 开头的名字当普通函数
+        if (!fn->params.empty() || fn->ret != Type::Void)
+            error(fn->line, "事件函数 " + fn->name + " 必须没有参数且不返回值（fn " + fn->name + "() { ... }）");
+    }
 
     // 全局变量在最外层作用域，函数体内可见
     pushScope();
