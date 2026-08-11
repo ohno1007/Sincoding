@@ -192,6 +192,23 @@ else
     echo "✗ 诊断列号: 未指向正确位置（$("$SINC" "$DIAGSRC" -o /dev/null 2>&1 | head -1)）"; ((FAIL++))
 fi
 
+# ---- 恶意输入：解析器不许挂死（曾对 struct Pair<T> 死循环） ----
+echo
+echo "=== 解析器健壮性：非法输入必须快速退出 ==="
+hang_ok=1
+printf 'struct Pair<T> { a: T, b: T }\nfn main() -> int { return 0 }\n' > "$WORK/hg1.sin"
+printf 'fn f(a: { }\n' > "$WORK/hg2.sin"
+printf 'struct S { x: : }\nlet\n' > "$WORK/hg3.sin"
+printf 'fn main( -> int {{{{\n' > "$WORK/hg4.sin"
+for f in hg1 hg2 hg3 hg4; do
+    timeout 3 "$SINC" "$WORK/$f.sin" -o /dev/null >/dev/null 2>&1
+    rc=$?
+    if [[ $rc -eq 124 ]]; then echo "  ✗ $f: 挂死（timeout）"; hang_ok=0; fi
+done
+if [[ "$hang_ok" == "1" ]] && timeout 3 "$SINC" "$WORK/hg1.sin" -o /dev/null 2>&1 | grep -q "暂不支持泛型"; then
+    echo "✓ 解析器: 4 个恶意输入全部快速退出，泛型结构体给明确诊断"; ((PASS++))
+else echo "✗ 解析器: 存在挂死或诊断缺失"; ((FAIL++)); fi
+
 # ---- 字符串库（UTF-8 码点） + .sinlib 打包/解包 ----
 echo
 echo "=== 字符串库 + .sinlib 库包 ==="
@@ -461,6 +478,12 @@ if command -v node >/dev/null 2>&1 && \
         echo "✓ 信任底线: 注释保真 + 撤销/重做 + 积木/函数复制（$uout）"; ((PASS++))
     else
         echo "✗ 信任底线: 验证失败（$uout）"; ((FAIL++))
+    fi
+    # 数据安全：语法错误保 last-good、恶意源码不挂死、损坏项目明确拒绝、出错积木红标
+    if sout2="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_safety.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ 数据安全: last-good 保积木 + 不挂死 + 版本门 + 红标（$sout2）"; ((PASS++))
+    else
+        echo "✗ 数据安全: 验证失败（$sout2）"; ((FAIL++))
     fi
     # 字符串库 + .sinlib 用户库：码点语义、安装/导入/预览/持久化/删除
     if lout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_sinlib.js" "$ROOT/editor/index.html" 2>&1)"; then

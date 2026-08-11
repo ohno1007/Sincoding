@@ -210,7 +210,8 @@ ExprPtr readExpr(const JPtr& j) {
             }
         return n;
     }
-    auto n = mk<IntLit>(j); n->value = 0; return n;      // 未知块：占位，保证不空指针
+    // 未知块：**硬报错**。静默改写成 0 会在下一次写回时把用户数据毁掉还显示"已同步"
+    throw std::runtime_error("未知积木类型: " + (b.empty() ? "(空)" : b));
 }
 
 BlockPtr readBlockList(const JPtr& arr) {
@@ -261,10 +262,12 @@ StmtPtr readStmtInner(const JPtr& j) {
         return n;
     }
     if (b == "block_group") return readBlockList(get(j, "body"));
-    // 默认按表达式语句处理（"expr"）
-    auto n = mk<ExprStmt>(j);
-    n->expr = get(j, "expr") ? readExpr(get(j, "expr")) : readExpr(j);
-    return n;
+    if (b == "expr") {
+        auto n = mk<ExprStmt>(j);
+        n->expr = get(j, "expr") ? readExpr(get(j, "expr")) : readExpr(j);
+        return n;
+    }
+    throw std::runtime_error("未知语句积木类型: " + (b.empty() ? "(空)" : b));
 }
 
 FnPtr readFn(const JPtr& j) {

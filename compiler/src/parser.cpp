@@ -29,7 +29,11 @@ const Token& Parser::expect(TokKind k, const char* what) {
     if (check(k)) { panic_ = false; return advance(); }
     error(cur(), std::string("期望 ") + what + "，但遇到 '" +
                      (cur().text.empty() ? tokKindName(cur().kind) : cur().text) + "'");
-    return cur();
+    // 失败必须**吃掉一个 token**再返回：所有"解析到 X 为止"的循环都靠 expect 前进，
+    // 原地返回会让循环卡死——非法输入（如 struct Pair<T>）曾把编译器和编辑器整个挂起
+    const Token& bad = cur();
+    if (!check(TokKind::End)) advance();
+    return bad;
 }
 
 void Parser::synchronize() {
@@ -129,6 +133,11 @@ StructPtr Parser::parseStruct() {
     s->line = cur().line;
     expect(TokKind::KwStruct, "'struct'");
     { const Token& nt = expect(TokKind::Ident, "结构体名"); s->name = nt.text; s->col = nt.col; }
+    if (check(TokKind::Lt)) {                       // struct Pair<T> —— 给明确诊断而不是一串误导
+        error(cur(), "结构体暂不支持泛型参数 <T>（泛型目前只支持函数 fn f<T>）");
+        while (!check(TokKind::Gt) && !check(TokKind::LBrace) && !check(TokKind::End)) advance();
+        match(TokKind::Gt);
+    }
     expect(TokKind::LBrace, "'{'");
     while (!check(TokKind::RBrace) && !check(TokKind::End)) {
         StructField f;

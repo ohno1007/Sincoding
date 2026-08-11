@@ -1287,7 +1287,22 @@
     // 引擎就绪前 modelToSource 只能返回 null（文本视图是引擎序列化的，无 JS 镜像），
     // 所以首屏渲染时文本框是空的——引擎到位后必须补一次渲染，否则用户不动积木就一直空着。
     window.SincModule().then((m) => { sincMod = m; window.__sincReady = true; syncLibsToEngine(); refreshText(); })
-      .catch(() => setTextStatus("反向解析不可用（请用 HTTP 打开）", "warn"));
+      .catch((e) => { setTextStatus("引擎加载失败", "warn"); showEngineBanner(e); });
+  } else {
+    showEngineBanner(null);
+  }
+  function showEngineBanner(err) {
+    const b = document.createElement("div");
+    b.id = "engine-banner";
+    const isFile = location.protocol === "file:";
+    b.innerHTML = "<b>编译引擎加载失败</b> — " +
+      (isFile ? "浏览器不允许 file:// 直接加载 wasm。请在项目目录运行 " +
+                "<code>python3 -m http.server</code> 后访问 http://localhost:8000/editor/，" +
+                "或使用桌面版。"
+              : "sinc.js/sinc.wasm 未能加载（网络或部署问题）。积木仍可编辑，" +
+                "但文本同步、诊断与发布不可用。") +
+      (err ? "<span class='eb-err'>" + String(err).slice(0, 120) + "</span>" : "");
+    document.body.prepend(b);
   }
 
   function setTextStatus(text, cls) {
@@ -1295,6 +1310,7 @@
     if (el2) { el2.textContent = text; el2.className = cls || ""; }
   }
   let textTimer = null;
+  let parseBad = false;    // 文本当前有语法错误（积木/保存停留在 last-good）
   function onTextEdited() {
     if (!sincMod) { setTextStatus("编译器加载中…", "warn"); return; }
     let res;
@@ -1302,6 +1318,15 @@
       const out = sincMod.ccall("sin_to_blocks", "string", ["string"], [textOut.value]);
       res = JSON.parse(out);
     } catch (e) { setTextStatus("解析失败", "warn"); return; }
+    // 语法层失败（多敲个 { 之类）：引擎返回的积木是**残缺**的，语句可能已被吞。
+    // 保持上一次正确的积木模型不动（画布/保存都用它），只显示诊断——
+    // 否则用户在文本里打错一个字再保存，作品就永久损毁了。
+    parseBad = res.parseOk === false;
+    if (parseBad) {
+      renderDiags(res.diags || []);
+      setTextStatus("语法有误（积木保持上次正确状态）", "warn");
+      return;
+    }
     const blk = res.blocks || {};
     const prog = blk.program || [];
     // 尽量保留同名函数的画布位置
@@ -1383,7 +1408,19 @@
 
   // ---------------- 语法诊断（点行可跳转） ----------------
   const diagList = document.getElementById("diag-list");
+  // 诊断按行号映射回积木：出错的积木加红色描边（文本区之外也能一眼看到哪块有问题）
+  function markErrBlocks(diags) {
+    [...canvas.querySelectorAll(".block.blk-err")].forEach((b) => b.classList.remove("blk-err"));
+    if (!diags || !diags.length) return;
+    const lines = new Set(diags.map((d) => d.line));
+    const walk = (list) => (list || []).forEach((n) => {
+      if (n && n.line && lines.has(n.line) && n._el) n._el.classList.add("blk-err");
+      walk(n.then); walk(n.else); walk(n.body);
+    });
+    (sprite().program || []).forEach((f) => walk(f.body));
+  }
   function renderDiags(diags) {
+    markErrBlocks(diags);
     if (!diagList) return;
     if (!diags || !diags.length) { diagList.hidden = true; diagList.innerHTML = ""; return; }
     diagList.hidden = false; diagList.innerHTML = "";
@@ -1591,11 +1628,20 @@
     if (!obj || obj.format !== "sincoding-project" || !Array.isArray(obj.sprites)) {
       alert("不是有效的 .sinproj 项目文件"); return false;
     }
+    // 版本门：未来格式升级时旧版编辑器要明确拒绝，而不是静默丢字段
+    if ((obj.version || 1) > 1) {
+      alert("这个项目是更新版本的 Sincoding 保存的（v" + obj.version + "），请升级编辑器后再打开");
+      return false;
+    }
     const sprites = [];
     for (const sp of obj.sprites) {
+      if (!sp || typeof sp !== "object") continue;      // 损坏条目跳过，不整体炸掉
       const costumes = [];
       for (const c of (sp.costumes || [])) {
-        costumes.push({ name: c.name || "造型1", data: c.png ? await pngToImageData(c.png) : null });
+        let data = null;
+        try { data = c && c.png ? await pngToImageData(c.png) : null; }
+        catch (e) { console.warn("造型损坏，已跳过:", c && c.name, e); }
+        costumes.push({ name: (c && c.name) || "造型1", data });
       }
       const program = (sp.program || []).map((f) => ({ ...f }));
       placeFns(program);
@@ -1614,12 +1660,16 @@
     renderSpriteBar(); render(); schedulePreview();
     return true;
   }
+  window._sinParseBad = () => parseBad;   // 测试探针
   window._sinLoadProject = loadProject;   // 供测试调用
   window._sinSerializeProject = serializeProject;
 
   function openProjectFile(file) {
     const r = new FileReader();
-    r.onload = () => { try { loadProject(JSON.parse(r.result)); } catch (e) { alert("解析项目失败: " + e.message); } };
+    r.onload = async () => {
+      try { await loadProject(JSON.parse(r.result)); }
+      catch (e) { alert("打开项目失败: " + e.message); }
+    };
     r.readAsText(file);
   }
 
@@ -1704,7 +1754,12 @@
               body: JSON.stringify({ name, pkg, platforms: serverPlats, source, logo: logoDataURL,
                                      assets: collectAssets(), libs: project.userLibs || [] }),
             });
-            if (!resp.ok) throw new Error("HTTP " + resp.status);
+            if (!resp.ok) {
+              let detail = "";
+              try { const eb = await resp.json(); detail = eb.error || eb.detail || ""; }
+              catch (e) { try { detail = (await resp.text()).slice(0, 200); } catch (e2) {} }
+              throw new Error("HTTP " + resp.status + (detail ? "：" + detail : ""));
+            }
             const out = await resp.json();
             (out.results || []).forEach((r) => rows.push({
               label: platLabel(r.platform) + (r.ok ? "" : "：" + (r.error || "失败")),
@@ -2119,6 +2174,7 @@
   }
   function installSinlib(obj) {
     if (!obj || obj.format !== "sinlib" || !Array.isArray(obj.modules)) return "不是有效的 .sinlib 文件";
+    if ((obj.version || 1) > 1) return "这个库包是更新版本的格式（v" + obj.version + "），请升级编辑器";
     project.userLibs = project.userLibs || [];
     let n = 0;
     for (const m of obj.modules) {
@@ -2518,7 +2574,12 @@
   const expBtn = document.getElementById("btn-export-sin");
   if (expBtn) expBtn.addEventListener("click", exportSin);
   const saveBtn = document.getElementById("btn-save-proj");
-  if (saveBtn) saveBtn.addEventListener("click", saveProject);
+  if (saveBtn) saveBtn.addEventListener("click", () => {
+    // 文本有语法错误时保存的是最近一次正确的积木状态——说清楚，别让用户误会
+    if (parseBad && !confirm("代码里有语法错误，将保存最近一次正确的积木状态（文本里未解析的改动不会保存）。继续？"))
+      return;
+    saveProject();
+  });
   const openBtn = document.getElementById("btn-open-proj");
   const openInput = document.getElementById("open-proj-input");
   if (openBtn && openInput) {

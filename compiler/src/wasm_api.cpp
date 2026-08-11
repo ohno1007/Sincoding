@@ -71,7 +71,12 @@ const char* sin_to_blocks(const char* src) {
     diags += diagsJson(checkDiags, first);
     diags += "]";
 
-    result = "{\"blocks\":" + serializeBlocks(prog) + ",\"diags\":" + diags + "}";
+    // parseOk=false 表示语法层失败：此时积木模型是**残缺**的（语句可能被吞），
+    // 编辑器必须保持上一次正确的模型，否则用户一保存就永久丢积木
+    bool parseOk = lexer.ok() && parser.ok();
+    result = "{\"blocks\":" + serializeBlocks(prog) +
+             ",\"parseOk\":" + (parseOk ? "true" : "false") +
+             ",\"diags\":" + diags + "}";
     return result.c_str();
 }
 

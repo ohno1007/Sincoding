@@ -236,6 +236,15 @@ header .tabs button.active { background:#fff; color:var(--c-motion); font-weight
 .hdr-actions button.primary { background:#ffab19; color:#20160a; border-color:#ffab19; }
 .hdr-actions button.primary:hover { filter:brightness(1.06); background:#ffab19; }
 
+/* 引擎加载失败横幅（醒目，可操作的指引） */
+#engine-banner { background:#FDECEC; border-bottom:2px solid #EC5959; color:#8A1F1F;
+  padding:10px 16px; font-size:13px; line-height:1.6; }
+#engine-banner code { background:#fff; border:1px solid #F2B8B8; border-radius:5px; padding:1px 6px; }
+#engine-banner .eb-err { display:block; font-size:11px; color:#B45050; font-family:ui-monospace,Menlo,monospace; }
+
+/* 有诊断的积木：红色描边（点诊断行也会跳转选中） */
+.block.blk-err { box-shadow:0 0 0 2px #EC5959, 0 0 8px rgba(236,89,89,.5); }
+
 /* 库管理行 */
 .lib-rows { display:flex; flex-direction:column; gap:6px; }
 .lib-row { display:flex; align-items:center; gap:9px; border:1px solid var(--line); border-radius:8px;
