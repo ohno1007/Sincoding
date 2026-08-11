@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # build_apk.sh — 把一个 Sincoding 程序打包成可安装的 Android APK（签名版）
 #
-#   tools/build_apk.sh <input.sin> <out.apk> [app_label]
+#   tools/build_apk.sh [--debug] <input.sin> <out.apk> [app_label]
+#
+#   --debug  游戏内带 imgui 调试面板（变量监视/暂停逐帧/精灵检查，点左下角开关）
 #
 # 流程：sinc 转 C → NDK 交叉编 libsincoding.so（每个 ABI）→ aapt2 链接出带二进制
 # Manifest 的基础 APK → 塞入 jniLibs → zipalign → apksigner 用调试 keystore 签名。
@@ -10,7 +12,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-if [[ $# -lt 2 ]]; then echo "用法: $0 <input.sin> <out.apk> [app_label]" >&2; exit 2; fi
+DEBUG_FLAG=()
+if [[ "${1:-}" == "--debug" ]]; then DEBUG_FLAG=(--debug); shift; fi
+if [[ $# -lt 2 ]]; then echo "用法: $0 [--debug] <input.sin> <out.apk> [app_label]" >&2; exit 2; fi
 SRC="$1"; OUT="$2"; LABEL="${3:-Sincoding}"
 
 # —— 工具链定位：由 tools/toolchains.sh 自动发现（可被环境变量覆盖） ——
@@ -49,7 +53,8 @@ for ABI in $ABIS; do
     mkdir -p "$TMP/lib/$ABI"
     ANDROID_NDK="$ANDROID_NDK" ANDROID_ABI="$ABI" \
         RAYLIB_ANDROID_LIB="/usr/local/lib/android/$ABI/libraylib.a" \
-        "$ROOT/tools/build_android.sh" "$SRC" "$TMP/lib/$ABI/libsincoding.so" >/dev/null
+        "$ROOT/tools/build_android.sh" ${DEBUG_FLAG[@]+"${DEBUG_FLAG[@]}"} \
+        "$SRC" "$TMP/lib/$ABI/libsincoding.so" >/dev/null
     # 缩小体积：strip 调试符号
     "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" \
         "$TMP/lib/$ABI/libsincoding.so" 2>/dev/null || true

@@ -69,6 +69,11 @@ void sin_dbg_init(void) {
     rlImGuiSetup(true);
     const char* e = std::getenv("SIN_DBG_OPEN");
     if (e && e[0] == '1') g_open = true;
+#ifdef __ANDROID__
+    // 手机：没有 F12 也没有环境变量——默认展开面板，字体放大适配高分屏
+    g_open = true;
+    ImGui::GetIO().FontGlobalScale = 2.0f;
+#endif
 }
 void sin_dbg_shutdown(void) { rlImGuiShutdown(); }
 
@@ -79,9 +84,18 @@ void sin_dbg_frame_done(void) { g_frame++; if (g_stepOnce) { g_stepOnce = false;
 // 每帧末（EndDrawing 之前）绘制面板
 void sin_dbg_draw(int spriteCount, const float* sx, const float* sy) {
     if (IsKeyPressed(KEY_F12)) g_open = !g_open;
+#ifdef __ANDROID__
+    // 手机没有 F12：点左下角热区开关面板（raylib 把首个触点映射为鼠标）
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+        GetMouseY() > GetScreenHeight() - 56 && GetMouseX() < 220) g_open = !g_open;
+    DrawText(g_open ? "tap: hide debug" : "tap: debug panel",
+             8, GetScreenHeight() - 26, 20, Fade(GRAY, 0.7f));
+#endif
     if (!g_open) {
+#ifndef __ANDROID__
         // 收起时给个角标提示，免得用户不知道有这功能
         DrawText("F12: debug panel", 8, GetScreenHeight() - 22, 16, Fade(GRAY, 0.7f));
+#endif
         return;
     }
     rlImGuiBegin();
