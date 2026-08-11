@@ -333,7 +333,13 @@ parser → checker → codegen → serializer → wasm 重编（`tools/build_sin
 > 全部 `function*`，每条语句 `yield` 一个暂停点），驱动方 `pump()` 决定继续还是挂起——
 > 因此能在**任意语句处真正挂起**，包括步入用户函数内部；未调试时行为与原先一致。
 > 浏览器验证见 `tools/verify_debugger.js`。
-> **未做（成品期）**：原生 debug 构建的 imgui overlay（F12 面板）。
+> **✅ 成品期也已完成（imgui overlay）**：`tools/build_native.sh --debug` 编出带
+> **F12 调试面板**的原生成品 —— 当前源码行 / 帧号 / Pause·Step frame / 变量监视表 /
+> 精灵检查器 / 日志。数据来自 `sinc --debug` 注入的钩子（`sin_dbg_line`、
+> `sin_dbg_set_i/f/b/s`）。**发布构建零开销**：不生成钩子调用、不链接 imgui（有测试守着）。
+> 依赖 Dear ImGui + rlImGui，已内置进 `setup_toolchains.sh imgui`（无需用户准备）。
+> 注：面板文案用 ASCII —— raylib/imgui 默认字体不含中文字形，显示中文需另打包 CJK 字体。
+> 至此 **M5 双形态调试器完整**（编辑期 Web 断点/单步 + 成品期 imgui overlay）。
 
 ### M5 —— 调试器双形态（D6 落地，杀手级特性）
 

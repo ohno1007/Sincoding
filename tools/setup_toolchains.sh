@@ -17,6 +17,7 @@
 #   windows  Windows .exe          (MinGW-w64 + raylib-win)
 #   android  Android .so           (NDK + raylib-android)
 #   sdk      可安装 APK            (JDK + Android SDK build-tools；含 android)
+#   imgui    原生成品调试面板       (Dear ImGui + rlImGui 源码，F12 overlay 用)
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -38,7 +39,7 @@ for a in "$@"; do
         *) TARGETS+=("$a") ;;
     esac
 done
-[[ ${#TARGETS[@]} -eq 0 ]] && TARGETS=(native web windows android sdk)
+[[ ${#TARGETS[@]} -eq 0 ]] && TARGETS=(native web windows android sdk imgui)
 
 want() { local t; for t in "${TARGETS[@]}"; do [[ "$t" == "$1" ]] && return 0; done; return 1; }
 say()  { echo "[$1] ${*:2}"; }
@@ -158,6 +159,22 @@ setup_sdk() {
     [[ -x "$sdk/build-tools/$BUILD_TOOLS_VER/aapt2" ]]
 }
 
+# ---------------- imgui（原生调试面板 overlay）----------------
+setup_imgui() {
+    local d="$SRC_DIR/imgui" r="$SRC_DIR/rlImGui"
+    if [[ ! -f "$d/imgui.cpp" ]]; then
+        say imgui "获取 Dear ImGui…"
+        rm -rf "$d"
+        git clone --depth 1 -b docking https://github.com/ocornut/imgui.git "$d" >/dev/null 2>&1 || return 1
+    fi
+    if [[ ! -f "$r/rlImGui.cpp" ]]; then
+        say imgui "获取 rlImGui（raylib 绑定）…"
+        rm -rf "$r"
+        git clone --depth 1 https://github.com/raylib-extras/rlImGui.git "$r" >/dev/null 2>&1 || return 1
+    fi
+    [[ -f "$d/imgui.cpp" && -f "$r/rlImGui.cpp" ]]
+}
+
 ANDROID_ABI_DEF="${ANDROID_ABI:-arm64-v8a}"
 
 # ---- 写记录：让 build_*.sh 无需用户配置即可发现工具链 ----
@@ -183,7 +200,7 @@ report() {
     echo
     echo "工具链状态（.toolchains/ 或系统位置）："
     local ok=0 miss=0
-    for t in native web windows android apk; do
+    for t in native web windows android apk imgui; do
         if "sin_have_$t" >/dev/null 2>&1; then printf '  ✓ %-8s 就绪\n' "$t"; ok=$((ok+1))
         else printf '  ✗ %-8s 缺失 —— tools/setup_toolchains.sh %s\n' "$t" "${t/apk/sdk}"; miss=$((miss+1)); fi
     done
@@ -199,7 +216,7 @@ fi
 
 . "$ROOT/tools/toolchains.sh"
 echo "工具链安装目录: $SIN_TC"
-for t in native web windows android sdk; do
+for t in native web windows android sdk imgui; do
     want "$t" || continue
     case "$t" in
         native)  sin_have_native  && { say native  "已就绪，跳过"; continue; } ;;
@@ -207,6 +224,7 @@ for t in native web windows android sdk; do
         windows) sin_have_windows && { say windows "已就绪，跳过"; continue; } ;;
         android) sin_have_android && { say android "已就绪，跳过"; continue; } ;;
         sdk)     sin_have_apk     && { say sdk     "已就绪，跳过"; continue; } ;;
+        imgui)   sin_have_imgui   && { say imgui   "已就绪，跳过"; continue; } ;;
     esac
     if "setup_$t"; then say "$t" "完成 ✓"; else say "$t" "失败 ✗（其余目标继续）"; fi
     write_env

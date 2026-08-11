@@ -71,6 +71,15 @@ static Vector2 stage_to_screen(float sx, float sy) {
 }
 
 // ---------- 舞台 / 主循环 ----------
+#ifdef SIN_DEBUG
+// 调试面板（debug_overlay.cpp，仅 --debug 构建链接）
+void sin_dbg_init(void);
+void sin_dbg_shutdown(void);
+void sin_dbg_draw(int spriteCount, const float* sx, const float* sy);
+void sin_dbg_frame_done(void);
+bool sin_dbg_blocked(void);
+#endif
+
 void rt_stage_init(int width, int height, const char* title) {
     g_stage_w = width;
     g_stage_h = height;
@@ -79,6 +88,9 @@ void rt_stage_init(int width, int height, const char* title) {
     g_audio_inited = true;
     SetTargetFPS(60);
     // 画笔持久层（透明底）
+#ifdef SIN_DEBUG
+    sin_dbg_init();
+#endif
     g_pen = LoadRenderTexture(width, height);
     BeginTextureMode(g_pen);
     ClearBackground(BLANK);
@@ -107,11 +119,31 @@ void rt_frame_begin(void) {
 }
 
 void rt_frame_end(void) {
+#ifdef SIN_DEBUG
+    // 调试面板画在最上层（EndDrawing 之前），并把精灵坐标喂给「精灵」检查器
+    {
+        static float sx[RT_MAX_SPRITES], sy[RT_MAX_SPRITES];
+        for (int i = 0; i < g_sprite_count; i++) { sx[i] = g_sprites[i].x; sy[i] = g_sprites[i].y; }
+        sin_dbg_draw(g_sprite_count, sx, sy);
+    }
+#endif
     EndDrawing();
     g_frame_index++;
+#ifdef SIN_DEBUG
+    sin_dbg_frame_done();
+    // 「暂停」时原地空转（仍持续绘制面板），使画面冻结但 UI 可交互
+    while (sin_dbg_blocked() && !WindowShouldClose()) {
+        BeginDrawing();
+        sin_dbg_draw(g_sprite_count, NULL, NULL);
+        EndDrawing();
+    }
+#endif
 }
 
 void rt_stage_close(void) {
+#ifdef SIN_DEBUG
+    sin_dbg_shutdown();
+#endif
     for (int i = 0; i < g_sprite_count; i++)
         if (g_sprites[i].loaded) UnloadTexture(g_sprites[i].tex);
     for (int i = 0; i < g_sound_count; i++)

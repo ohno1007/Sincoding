@@ -96,6 +96,11 @@ IDE 具备 Scratch 没有的「真编程」能力：
 
 ![积木级调试器](images/debugger.png)
 
+编出来的**原生成品里也有调试面板**（`tools/build_native.sh --debug`，按 F12 呼出）：
+当前源码行、变量监视、暂停/逐帧、精灵检查器。发布构建不含这些，零开销。
+
+![原生成品调试面板](images/native_debug_overlay.png)
+
 ### 2.3 编译发布
 
 **工具链不用你自己准备**，一条命令装齐（已装过的自动跳过）：

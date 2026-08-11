@@ -74,6 +74,14 @@ sin_have_android() {
     [[ -n "$RAYLIB_ANDROID_LIB" && -n "$ANDROID_NDK" ]] &&
     [[ -x "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang" ]]
 }
+# imgui（原生成品的 F12 调试面板）：源码直接参与编译，无需预编译库
+SIN_IMGUI_DIR="${SIN_IMGUI_DIR:-$(sin_pick_dir "$SIN_TC/src/imgui")}"
+SIN_RLIMGUI_DIR="${SIN_RLIMGUI_DIR:-$(sin_pick_dir "$SIN_TC/src/rlImGui")}"
+export SIN_IMGUI_DIR SIN_RLIMGUI_DIR
+sin_have_imgui() {
+    [[ -n "$SIN_IMGUI_DIR" && -f "$SIN_IMGUI_DIR/imgui.cpp" ]] &&
+    [[ -n "$SIN_RLIMGUI_DIR" && -f "$SIN_RLIMGUI_DIR/rlImGui.cpp" ]]
+}
 sin_have_apk() {
     sin_have_android || return 1
     local bt="$ANDROID_SDK_ROOT/build-tools/${ANDROID_BUILD_TOOLS:-34.0.0}"

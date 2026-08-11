@@ -478,6 +478,28 @@ if "$ROOT/tools/build_native.sh" "$ROOT/examples/pen.sin" "$PENBIN" >/dev/null 2
     else echo "✗ pen: 运行/截图失败"; ((FAIL++)); fi
 else echo "✗ pen: 构建失败"; ((FAIL++)); fi
 
+# ---- 原生成品调试面板（imgui overlay，--debug 构建）----
+echo
+echo "=== 成品调试面板：sinc --debug + imgui overlay ==="
+if sin_have_native && sin_have_imgui && command -v xvfb-run >/dev/null 2>&1 && command -v g++ >/dev/null 2>&1; then
+    # 1) 发布构建不得含调试钩子（零开销）
+    "$SINC" "$ROOT/examples/game.sin" -o "$WORK/rel.c" >/dev/null 2>&1
+    relhooks="$(grep -c 'sin_dbg' "$WORK/rel.c" || true)"
+    # 2) --debug 构建能编出成品，且面板渲染出内容
+    if [[ "$relhooks" == "0" ]] && \
+       "$ROOT/tools/build_native.sh" --debug "$ROOT/examples/game.sin" "$WORK/gdbg" >/dev/null 2>&1; then
+        ( cd "$WORK" && LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe SIN_DBG_OPEN=1 \
+          SIN_MAX_FRAMES=12 SIN_SCREENSHOT="dbg.png" \
+          xvfb-run -a -s "-screen 0 800x600x24" "$WORK/gdbg" >/dev/null 2>&1 )
+        nb="$(python3 "$ROOT/tools/png_nonbg.py" "$WORK/dbg.png" 2>/dev/null || echo 0)"
+        if [[ "${nb:-0}" -gt 50000 ]]; then
+            echo "✓ 调试面板: --debug 成品渲染出 imgui 面板（像素 $nb），发布构建无调试钩子"; ((PASS++))
+        else echo "✗ 调试面板: 面板疑似未渲染（像素 $nb）"; ((FAIL++)); fi
+    else echo "✗ 调试面板: 构建失败或发布构建含调试钩子（$relhooks）"; ((FAIL++)); fi
+else
+    echo "○ 跳过（缺 raylib / imgui / xvfb / g++）"
+fi
+
 # ---- 碰撞检测（collide.sin：sprite_touching AABB 无头验证）----
 echo
 echo "=== 碰撞：collide.sin（sprite_touching AABB） ==="

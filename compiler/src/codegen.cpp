@@ -146,6 +146,14 @@ std::string CodeGen::generate(const Program& prog) {
     out_ << "#include <stdio.h>\n";
     out_ << "#include <stdbool.h>\n";
     out_ << "#include <string.h>\n\n";
+    if (debug_) {                        // 调试钩子由 runtime 的 debug 模块实现
+        out_ << "// --debug：调试钩子（F12 面板用）；发布构建不生成这些调用\n"
+                "extern void sin_dbg_line(long long line);\n"
+                "extern void sin_dbg_set_i(const char* n, long long v);\n"
+                "extern void sin_dbg_set_f(const char* n, double v);\n"
+                "extern void sin_dbg_set_b(const char* n, bool v);\n"
+                "extern void sin_dbg_set_s(const char* n, const char* v);\n\n";
+    }
 
     // 字符串运行时（仅在用到 '+' 拼接 / str() 时注入）：环形 arena，结果活到 arena 绕回
     if (progUsesStrRt(prog)) {
@@ -316,11 +324,33 @@ void CodeGen::emitBlock(const Block& block) {
     out_ << "}\n";
 }
 
+// 调试钩子：上报当前执行行 + 标量变量的值（仅 --debug 构建）
+void CodeGen::emitDbgLine(const Stmt& s) {
+    if (!debug_ || s.line <= 0) return;
+    indent();
+    out_ << "sin_dbg_line(" << s.line << ");\n";
+}
+void CodeGen::emitDbgVar(const std::string& name, Type t, int len) {
+    if (!debug_ || len != 0) return;             // 仅监视标量
+    const char* fn = nullptr;
+    switch (t) {
+        case Type::Int:    fn = "sin_dbg_set_i"; break;
+        case Type::Float:  fn = "sin_dbg_set_f"; break;
+        case Type::Bool:   fn = "sin_dbg_set_b"; break;
+        case Type::String: fn = "sin_dbg_set_s"; break;
+        default: return;
+    }
+    indent();
+    out_ << fn << "(\"" << name << "\", " << name << ");\n";
+}
+
 void CodeGen::emitStmt(const Stmt& s) {
+    emitDbgLine(s);
     switch (s.kind) {
         case StmtKind::Let: {
             auto& ls = static_cast<const LetStmt&>(s);
             indent();
+            varTypes_[ls.name] = { ls.declared, ls.declaredLen };
             if (ls.declaredLen == -1)
                 out_ << sliceName(ls.declared, ls.structName) << " " << ls.name;
             else if (ls.declaredLen > 0)
@@ -341,6 +371,7 @@ void CodeGen::emitStmt(const Stmt& s) {
                 }
             }
             out_ << ";\n";
+            emitDbgVar(ls.name, ls.declared, ls.declaredLen);
             break;
         }
         case StmtKind::Assign: {
@@ -352,6 +383,10 @@ void CodeGen::emitStmt(const Stmt& s) {
             out_ << " = ";
             emitExpr(*as.value);
             out_ << ";\n";
+            if (!as.index && as.field.empty()) {      // 整变量赋值才好上报
+                auto it = varTypes_.find(as.name);
+                if (it != varTypes_.end()) emitDbgVar(as.name, it->second.first, it->second.second);
+            }
             break;
         }
         case StmtKind::If: {

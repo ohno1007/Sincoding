@@ -49,6 +49,7 @@ int main(int argc, char** argv) {
     std::string output;
     std::string emit = "c";
     bool dumpTokens = false;
+    bool debugBuild = false;   // --debug：注入调试钩子
     std::string queryKind;  // 非空表示 IDE 查询模式
     int qLine = 0, qCol = 0;
     std::string qNewName;
@@ -57,6 +58,7 @@ int main(int argc, char** argv) {
         if (a == "-o" && i + 1 < argc) output = argv[++i];
         else if (a == "--emit" && i + 1 < argc) emit = argv[++i];
         else if (a == "--tokens") dumpTokens = true;
+        else if (a == "--debug") debugBuild = true;
         else if (a == "--query" && i + 3 < argc) {  // --query <hover|refs|rename> <line> <col> [newName]
             queryKind = argv[++i];
             qLine = std::atoi(argv[++i]);
@@ -122,7 +124,7 @@ int main(int argc, char** argv) {
         result = serializeBlocks(prog);
         label = "已生成积木模型";
     } else {
-        CodeGen gen;
+        CodeGen gen(debugBuild);
         result = gen.generate(prog);
         label = "已生成 C 代码";
     }

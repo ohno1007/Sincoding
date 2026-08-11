@@ -12,12 +12,18 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SINC="$ROOT/compiler/build/sinc"
 CC="${CC:-gcc}"
 
-if [[ $# -ne 2 ]]; then
-    echo "用法: $0 <input.sin> <output_bin>" >&2
+DEBUG=0
+ARGS=()
+for a in "$@"; do
+    if [[ "$a" == "--debug" ]]; then DEBUG=1; else ARGS+=("$a"); fi
+done
+if [[ ${#ARGS[@]} -ne 2 ]]; then
+    echo "用法: $0 [--debug] <input.sin> <output_bin>" >&2
+    echo "  --debug  编出带 F12 调试面板的成品（imgui overlay；发布构建零开销）" >&2
     exit 2
 fi
-SRC="$1"
-OUT="$2"
+SRC="${ARGS[0]}"
+OUT="${ARGS[1]}"
 
 if [[ ! -x "$SINC" ]]; then
     echo "找不到编译器 $SINC，请先: cmake -S compiler -B compiler/build && cmake --build compiler/build" >&2
@@ -45,13 +51,29 @@ trap 'rm -rf "$TMP"' EXIT
 GEN="$TMP/program.c"
 
 echo "[1/2] 转译 $SRC → C"
-"$SINC" "$SRC" -o "$GEN"
+if [[ "$DEBUG" == "1" ]]; then "$SINC" "$SRC" --debug -o "$GEN"; else "$SINC" "$SRC" -o "$GEN"; fi
 
-echo "[2/2] 编译链接 → $OUT"
-$CC -std=c11 -O2 \
-    "$GEN" "$ROOT/runtime/prelude.c" "$ROOT/runtime/runtime.c" \
-    -I"$ROOT/runtime" $RAYLIB_CFLAGS \
-    $RAYLIB_LIBS \
-    -o "$OUT"
+if [[ "$DEBUG" == "1" ]]; then
+    sin_have_imgui || { sin_hint "Dear ImGui" imgui; exit 1; }
+    echo "[2/2] 编译链接（含 F12 调试面板）→ $OUT"
+    # imgui 是 C++：用 g++ 链接；程序与 runtime 仍按 C 编译
+    IMGUI_SRC=("$SIN_IMGUI_DIR"/imgui.cpp "$SIN_IMGUI_DIR"/imgui_draw.cpp
+               "$SIN_IMGUI_DIR"/imgui_tables.cpp "$SIN_IMGUI_DIR"/imgui_widgets.cpp
+               "$SIN_RLIMGUI_DIR"/rlImGui.cpp "$ROOT/runtime/debug_overlay.cpp")
+    $CC -std=c11 -O2 -DSIN_DEBUG -c "$GEN" -I"$ROOT/runtime" $RAYLIB_CFLAGS -o "$TMP/program.o"
+    $CC -std=c11 -O2 -DSIN_DEBUG -c "$ROOT/runtime/prelude.c" -I"$ROOT/runtime" $RAYLIB_CFLAGS -o "$TMP/prelude.o"
+    $CC -std=c11 -O2 -DSIN_DEBUG -c "$ROOT/runtime/runtime.c" -I"$ROOT/runtime" $RAYLIB_CFLAGS -o "$TMP/runtime.o"
+    g++ -std=c++17 -O2 -DSIN_DEBUG \
+        "$TMP/program.o" "$TMP/prelude.o" "$TMP/runtime.o" "${IMGUI_SRC[@]}" \
+        -I"$ROOT/runtime" -I"$SIN_IMGUI_DIR" -I"$SIN_RLIMGUI_DIR" $RAYLIB_CFLAGS \
+        $RAYLIB_LIBS -o "$OUT"
+else
+    echo "[2/2] 编译链接 → $OUT"
+    $CC -std=c11 -O2 \
+        "$GEN" "$ROOT/runtime/prelude.c" "$ROOT/runtime/runtime.c" \
+        -I"$ROOT/runtime" $RAYLIB_CFLAGS \
+        $RAYLIB_LIBS \
+        -o "$OUT"
+fi
 
 echo "完成: $OUT"
