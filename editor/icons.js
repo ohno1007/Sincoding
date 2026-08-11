@@ -14,6 +14,7 @@
     play: '<polygon points="6 3 20 12 6 21 6 3"/>',
     stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
     flag: '<path d="M5 21V3.5"/><path d="M5 4c2.7-1.6 5.3 1.6 8 0s5.3-1.6 7 0l-2 5.5 2 5.5c-1.7-1.6-4.3 0-7 1.6s-5.3-1.6-8 0" fill="currentColor" stroke-linejoin="round"/>',
+    pause: '<line x1="9" y1="5" x2="9" y2="19"/><line x1="15" y1="5" x2="15" y2="19"/>',
     stopsign: '<polygon points="8.2 3 15.8 3 21 8.2 21 15.8 15.8 21 8.2 21 3 15.8 3 8.2" fill="currentColor" stroke-linejoin="round"/>',
     bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
     folder: '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>',

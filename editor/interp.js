@@ -147,7 +147,7 @@
       if (!hasMain) { this.onStatus("没有 main()，无法预览", "warn"); return; }
       if (this.actors.length === 0) { this.drawConsole(); this.onStatus("运行完成 ✓", "ok"); return; }
       this.onStatus(this.actors.length > 1 ?
-        (this.actors.length + " 个精灵并行运行 ▶") : "运行中 ▶（点画面用方向键/空格）", "ok");
+        (this.actors.length + " 个精灵并行运行") : "运行中（点画面用方向键/空格）", "ok");
       this.frameLoop();
     }
 

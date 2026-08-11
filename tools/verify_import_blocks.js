@@ -50,7 +50,7 @@ function freePort(){return new Promise(r=>{const s=net.createServer();s.listen(0
     await p.waitForTimeout(1200);
     const txt = await p.inputValue("#text-out");
     res.importAdded = /^import "std\/mathx"/m.test(txt);
-    res.libCats = (await p.$$eval(".cat-btn .cat-nm", e=>e.map(x=>x.textContent))).filter(c=>c.includes("📦"));
+    res.libCats = (await p.$$eval(".cat-btn .cat-nm", e=>e.map(x=>x.textContent))).filter(c=>c.includes("std/"));
   }catch(e){res.error=String(e).slice(0,180);}
   res.errors=errs;
   res.ok = res.importKept && res.importAdded && (res.libCats||[]).length>=1 && errs.length===0;

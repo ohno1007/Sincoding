@@ -60,10 +60,7 @@ header .tabs button.active { background:#fff; color:var(--ui-primary); font-weig
 .cat-nm { line-height:1.15; text-align:center; }
 .block-list { flex:1 1 auto; overflow-y:auto; overflow-x:hidden; padding:8px 12px 28px; }
 .cat-sec { scroll-margin-top:6px; }
-.cat-sec h2 { font-size:12px; color:var(--ink); margin:16px 0 10px; font-weight:700;
-  display:flex; align-items:center; gap:7px; }
-.cat-sec h2::before { content:""; width:10px; height:10px; border-radius:50%; background:var(--cc,#c2cbe0);
-  border:1px solid rgba(0,0,0,.15); }
+.cat-sec h2 { font-size:12px; color:var(--ink); margin:16px 0 10px; font-weight:700; }
 /* 积木预览：与画布同款外观，整块可点击加入（子元素不拦截点击） */
 .pal-wys { display:block; width:max-content; max-width:100%; margin:0 0 11px; cursor:pointer; }
 .pal-wys * { pointer-events:none; }
@@ -126,12 +123,11 @@ header .tabs button.active { background:#fff; color:var(--ui-primary); font-weig
 .sprite-card:hover .del { display:block; }
 #add-sprite { width:44px; height:44px; flex:0 0 auto; border-radius:50%; border:0; cursor:pointer;
   background:var(--c-motion); color:#fff; display:flex; align-items:center; justify-content:center;
-  box-shadow:0 2px 8px rgba(76,151,255,.5); }
+  box-shadow:0 1px 3px rgba(0,0,0,.2); }
 #add-sprite:hover { filter:brightness(1.08); }
 #page-tag { position:absolute; left:14px; top:12px; background:#fff; border:1px solid var(--line);
   border-radius:8px; padding:5px 12px; font-size:12.5px; font-weight:700; color:var(--ink);
   box-shadow:0 1px 4px rgba(40,40,80,.08); display:flex; align-items:center; gap:7px; z-index:2; }
-#page-tag::before { content:""; width:9px; height:9px; border-radius:50%; background:var(--c-myblocks); }
 
 /* 无限积木画布（Scratch 工作区：近白底 + 细点阵） */
 #canvas-wrap { flex:1 1 auto; overflow:hidden; position:relative; cursor:grab;
@@ -468,7 +464,7 @@ input[type=range] { accent-color:var(--c-motion); }
 .expr-slot.slot-hover { outline:2px solid #ffd21a; outline-offset:1px; border-radius:999px; background:rgba(255,210,30,.25); }
 /* 拖到调色板上=删除：调色板变红并提示 */
 #palette.delete-zone { box-shadow:inset 0 0 0 3px #ff6b6b; position:relative; }
-#palette.delete-zone::after { content:"🗑 松手删除"; position:absolute; top:8px; left:0; right:0; text-align:center;
+#palette.delete-zone::after { content:"松手删除"; position:absolute; top:8px; left:0; right:0; text-align:center;
   font-size:13px; font-weight:800; color:#e23b3b; z-index:30; pointer-events:none; }
 body.dragging-block { cursor:grabbing; }
 /* reporter 调色板项（拖入槽用） */

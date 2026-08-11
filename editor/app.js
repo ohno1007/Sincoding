@@ -249,7 +249,7 @@
           br = document.getElementById("dbg-resume");
     if (bp) bp.addEventListener("click", () => { if (preview) preview.dbgPause(); });
     if (bs) bs.addEventListener("click", () => { hidePausePanel(); if (preview) preview.dbgStep(); });
-    if (br) br.addEventListener("click", () => { hidePausePanel(); setPvStatus("运行中 ▶", "ok"); if (preview) preview.dbgResume(); });
+    if (br) br.addEventListener("click", () => { hidePausePanel(); setPvStatus("运行中", "ok"); if (preview) preview.dbgResume(); });
   }
 
   // ---------------- 调试器（M5）：断点 / 单步 / 变量面板 / 调用栈 ----------------
@@ -298,7 +298,7 @@
       node._el.scrollIntoView({ block: "center", behavior: "smooth" });
     }
     dbgBtns(true);
-    setPvStatus("已暂停 ⏸", "warn");
+    setPvStatus("已暂停", "warn");
   }
   function hidePausePanel() {
     const panel = document.getElementById("dbg-panel");
@@ -1320,7 +1320,7 @@
             const url = URL.createObjectURL(blob);
             // 立即下载一份，并给出「打开试玩」链接（点开即在浏览器里跑）
             const a = document.createElement("a"); a.href = url; a.download = name + ".html"; a.click();
-            rows.push({ label: platLabel("html"), ok: true, href: url, linkText: "▶ 打开试玩" });
+            rows.push({ label: platLabel("html"), ok: true, href: url, linkText: "打开试玩" });
           } catch (err) {
             rows.push({ label: platLabel("html") + "：失败 " + err.message, ok: false });
           }
@@ -1486,7 +1486,7 @@
       card.append(nm);
       // 当前造型名（仿 Scratch：精灵上显示其当前造型）
       const cc = (i === project.cur && ce) ? { name: ce.currentName() } : curCostume(sp);
-      if (cc && cc.name) card.append(el("div", "cos-nm", "🎨 " + cc.name));
+      if (cc && cc.name) card.append(el("div", "cos-nm", cc.name));
       if (project.sprites.length > 1) {
         const del = el("button", "del", "×");
         del.addEventListener("click", (e) => { e.stopPropagation(); delSprite(i); });
@@ -1718,10 +1718,10 @@
       const reps = fns.filter((f) => f.ret !== "void");
       const color = LIB_COLORS[ci++ % LIB_COLORS.length];
       if (stmts.length)
-        LIB_CATS.push({ id: id, name: "📦 " + mod, color: color,
+        LIB_CATS.push({ id: id, name: mod, color: color,
                         items: stmts.map((f) => ({ lib: f })) });
       if (reps.length)
-        LIB_CATS.push({ id: id + "_r", name: "📦 " + mod + " (取值)", color: color, reporter: true,
+        LIB_CATS.push({ id: id + "_r", name: mod + " (取值)", color: color, reporter: true,
                         items: reps.map((f) => ({ lib: f })) });
     });
     return JSON.stringify(LIB_CATS.map((c) => c.id + ":" + c.items.length)) !== before;

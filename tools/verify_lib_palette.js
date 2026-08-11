@@ -20,12 +20,12 @@ function freePort(){return new Promise(r=>{const s=net.createServer();s.listen(0
   try{
     await p.goto(`http://127.0.0.1:${port}/index.html`,{waitUntil:"networkidle"});
     await p.waitForFunction(()=>window.__sincReady===true,{timeout:15000});
-    res.libCatsBefore = (await p.$$eval(".cat-btn .cat-nm", e=>e.map(x=>x.textContent))).filter(c=>c.includes("📦")).length;
+    res.libCatsBefore = (await p.$$eval(".cat-btn .cat-nm", e=>e.map(x=>x.textContent))).filter(c=>c.includes("std/")).length;
     await p.evaluate(()=>{const ta=document.getElementById("text-out");
       ta.value='import "std/arrayx"\nfn main() -> int {\n    let a: int[3] = [3,1,2]\n    sort(a)\n    return sum(a)\n}';
       ta.dispatchEvent(new Event("input",{bubbles:true}));});
     await p.waitForTimeout(900);
-    res.libCats = (await p.$$eval(".cat-btn .cat-nm", e=>e.map(x=>x.textContent))).filter(c=>c.includes("📦"));
+    res.libCats = (await p.$$eval(".cat-btn .cat-nm", e=>e.map(x=>x.textContent))).filter(c=>c.includes("std/"));
     res.libBlocks = await p.$$eval('.pal-wys[data-kind^="lib:"]', e=>e.map(x=>x.dataset.kind));
     // 就地函数(void)应是语句块，取值函数应在 reporter 分类里
     res.sortIsStmt = await p.$$eval('.pal-wys[data-kind="lib:sort"]', e=>e.length>0 && !e[0].classList.contains("pal-reporter"));
