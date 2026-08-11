@@ -151,10 +151,12 @@
               <button id="dbg-pause" title="暂停（在下一条积木处停下）" data-icon="pause" data-icon-size="13"></button>
               <button id="dbg-step" title="单步执行一条积木" disabled>单步</button>
               <button id="dbg-resume" title="继续运行到下一个断点" disabled>继续</button>
+              <button id="pv-watch" title="显示/隐藏变量监视器">变量</button>
               <span id="pv-status"></span>
             </div>
             <div id="dock-body">
               <canvas id="preview-canvas" width="480" height="360" tabindex="0"></canvas>
+              <div id="pv-watchers" hidden></div>
               <div id="dbg-panel" hidden>
                 <div class="dbg-hd">已暂停 · <span id="dbg-where"></span>
                   <span class="dbg-tip">Alt+点击积木 = 设/清断点</span>

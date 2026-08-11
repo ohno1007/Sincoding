@@ -517,6 +517,12 @@ if command -v node >/dev/null 2>&1 && \
     else
         echo "✗ IDE 库积木: 验证失败（$lout）"; ((FAIL++))
     fi
+    # 舞台变量监视器：全局变量/列表实时显示 + 可开关
+    if wout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_watch.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ 变量监视器: 全局/列表实时显示 + 开关（$wout）"; ((PASS++))
+    else
+        echo "✗ 变量监视器: 验证失败（$wout）"; ((FAIL++))
+    fi
 else
     echo "○ 跳过（未检测到 node 或 playwright）"
 fi

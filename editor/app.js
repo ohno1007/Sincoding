@@ -413,6 +413,49 @@
     window._sinPreview = preview;      // 测试探针：按键映射/世界状态可观测
   }
 
+  // ---------------- 变量监视器：Scratch 式舞台叠加，实时显示全局变量 ----------------
+  (() => {
+    const btn = document.getElementById("pv-watch"), box = document.getElementById("pv-watchers");
+    if (!btn || !box) return;
+    let on = true;                       // Scratch 变量默认就显示在舞台上
+    let last = "";
+    const scalar = (v) => {
+      if (typeof v === "number" && !Number.isInteger(v) && isFinite(v))
+        return String(parseFloat(v.toPrecision(6)));   // 与 print 的 %g 一致
+      if (typeof v === "boolean") return v ? "true" : "false";
+      return String(v);
+    };
+    const fmt = (v) => {
+      if (Array.isArray(v)) {
+        const s = v.slice(0, 8).map(fmt).join(", ");
+        return "[" + s + (v.length > 8 ? ", …" : "") + "]";
+      }
+      if (v && typeof v === "object")
+        return "{" + Object.keys(v).slice(0, 4).map((k) => k + ":" + fmt(v[k])).join(", ") + "}";
+      return scalar(v);
+    };
+    function refresh() {
+      const cv = document.getElementById("preview-canvas");
+      const gs = on && cv && !cv.hidden && preview && preview.globalScope;   // 调试面板占位时让开
+      const rows = [];
+      if (gs) for (const [k, v] of gs) rows.push([k, fmt(v)]);
+      if (!rows.length) { box.hidden = true; last = ""; return; }
+      const sig = JSON.stringify(rows);
+      if (sig === last) { box.hidden = false; return; }   // 没变就不动 DOM
+      last = sig;
+      box.innerHTML = "";
+      rows.forEach(([k, val]) => {
+        const r = el("div", "watch-row");
+        r.append(el("span", "watch-nm", k), el("span", "watch-val", val));
+        box.append(r);
+      });
+      box.hidden = false;
+    }
+    setInterval(refresh, 300);
+    btn.addEventListener("click", () => { on = !on; btn.classList.toggle("off", !on); refresh(); });
+    window._sinWatch = { refresh: refresh, isOn: () => on };   // 测试探针
+  })();
+
   // ---------------- 调试器（M5）：断点 / 单步 / 变量面板 / 调用栈 ----------------
   const breakpoints = new Set();     // 跨重绘保留（存 AST 节点引用）
   function toggleBreakpoint(node, blk) {
