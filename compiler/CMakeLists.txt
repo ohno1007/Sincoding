@@ -10,7 +10,8 @@ endif()
 
 # 标准库嵌入：构建前把 std/*.sin 生成为头文件（用户无需准备任何文件）
 set(SIN_STD_HEADER ${CMAKE_CURRENT_BINARY_DIR}/generated/std_modules.h)
-file(GLOB SIN_STD_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../std/*.sin)
+# CONFIGURE_DEPENDS：新增 std/*.sin 时自动重新生成，无需手动 re-configure
+file(GLOB SIN_STD_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../std/*.sin)
 add_custom_command(
   OUTPUT ${SIN_STD_HEADER}
   COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../tools/gen_std_modules.sh ${SIN_STD_HEADER}

@@ -64,9 +64,10 @@ Type Parser::parseType(std::string& structName) {
     }
 }
 
-// 解析可选的定长数组后缀 [N]；无 '[' 时返回 0
+// 解析可选的数组后缀：[N] 定长数组返回 N；[] 切片返回 -1；无 '[' 返回 0
 int Parser::parseArraySuffix() {
     if (!match(TokKind::LBracket)) return 0;
+    if (match(TokKind::RBracket)) return -1;          // T[] —— 切片（长度在运行时随值携带）
     const Token& n = expect(TokKind::Int, "数组长度");
     int len = (int)std::strtoll(n.text.c_str(), nullptr, 10);
     expect(TokKind::RBracket, "']'");

@@ -1,0 +1,2 @@
+struct S { xs: int[] }     // 切片不能作结构体字段（会悬垂）
+fn main() -> int { return 0 }

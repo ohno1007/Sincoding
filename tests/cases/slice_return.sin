@@ -1,0 +1,5 @@
+fn f() -> int[] {          // 返回切片会悬垂，应被拒绝
+    let a: int[3] = [1,2,3]
+    return a
+}
+fn main() -> int { return 0 }

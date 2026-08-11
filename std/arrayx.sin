@@ -1,0 +1,105 @@
+// std/arrayx — 通用数组工具库（用 Sincoding 自己写的标准库）
+//
+// 用法：  import "std/arrayx"
+//
+// 关键：参数用**切片** `int[]`，于是同一份代码能处理 int[3] / int[100] 等
+// 任意长度的数组——不需要为每个长度各写一份。调用时直接传数组即可自动借用：
+//     let xs: int[5] = [5, 3, 1, 4, 2]
+//     sort(xs)                  // 就地排序（切片是视图，改的就是 xs 本身）
+//     print(sum(xs))
+//
+// 切片是**借用视图**（不拷贝），所以带 sort/reverse/fill 这类就地修改的函数
+// 会直接改到调用者的数组上；而 sum/max_of 这类只读函数不会改动它。
+
+// —— 只读查询 ——
+
+fn sum(xs: int[]) -> int {
+    let total = 0
+    for i in 0..len(xs) { total = total + xs[i] }
+    return total
+}
+
+fn max_of(xs: int[]) -> int {
+    let best = xs[0]
+    for i in 1..len(xs) {
+        if xs[i] > best { best = xs[i] }
+    }
+    return best
+}
+
+fn min_of(xs: int[]) -> int {
+    let best = xs[0]
+    for i in 1..len(xs) {
+        if xs[i] < best { best = xs[i] }
+    }
+    return best
+}
+
+// 找到 v 的下标；找不到返回 -1
+fn index_of(xs: int[], v: int) -> int {
+    for i in 0..len(xs) {
+        if xs[i] == v { return i }
+    }
+    return 0 - 1
+}
+
+fn contains(xs: int[], v: int) -> bool {
+    return index_of(xs, v) >= 0
+}
+
+fn count_of(xs: int[], v: int) -> int {
+    let n = 0
+    for i in 0..len(xs) {
+        if xs[i] == v { n = n + 1 }
+    }
+    return n
+}
+
+// —— 就地修改（改的是调用者的数组）——
+
+fn fill(xs: int[], v: int) {
+    for i in 0..len(xs) { xs[i] = v }
+}
+
+fn reverse(xs: int[]) {
+    let n = len(xs)
+    let i = 0
+    while i * 2 < n - 1 {
+        let t = xs[i]
+        xs[i] = xs[n - 1 - i]
+        xs[n - 1 - i] = t
+        i = i + 1
+    }
+}
+
+// 插入排序（升序）：数据量小时简单可靠，且无需额外内存
+fn sort(xs: int[]) {
+    let n = len(xs)
+    let i = 1
+    while i < n {
+        let key = xs[i]
+        let j = i - 1
+        while j >= 0 && xs[j] > key {
+            xs[j + 1] = xs[j]
+            j = j - 1
+        }
+        xs[j + 1] = key
+        i = i + 1
+    }
+}
+
+// —— 浮点版（元素类型不同需各写一份：本语言暂无泛型）——
+
+fn sum_f(xs: float[]) -> float {
+    let total = 0.0
+    for i in 0..len(xs) { total = total + xs[i] }
+    return total
+}
+
+fn max_of_f(xs: float[]) -> float {
+    let best = xs[0]
+    for i in 1..len(xs) {
+        if xs[i] > best { best = xs[i] }
+    }
+    return best
+}

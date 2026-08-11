@@ -132,6 +132,7 @@ struct SourceWriter {
                 out << "let " << ls.name << ": "
                     << (ls.declared == Type::Struct ? ls.structName : typeName(ls.declared));
                 if (ls.declaredLen > 0) out << "[" << ls.declaredLen << "]";
+                else if (ls.declaredLen == -1) out << "[]";
                 if (ls.init) { out << " = "; writeExpr(*ls.init); }
                 out << "\n";
                 break;
@@ -205,6 +206,7 @@ struct SourceWriter {
             const auto& f = st.fields[i];
             out << "    " << f.name << ": " << ptype(f.type, f.structName);
             if (f.len > 0) out << "[" << f.len << "]";
+            else if (f.len == -1) out << "[]";
             if (i + 1 < st.fields.size()) out << ",";
             out << "\n";
         }
@@ -222,11 +224,13 @@ struct SourceWriter {
             if (i) out << ", ";
             out << fn.params[i].name << ": " << ptype(fn.params[i].type, fn.params[i].structName);
             if (fn.params[i].len > 0) out << "[" << fn.params[i].len << "]";
+            else if (fn.params[i].len == -1) out << "[]";
         }
         out << ")";
         if (fn.ret != Type::Void) {
             out << " -> " << ptype(fn.ret, fn.retStruct);
             if (fn.retLen > 0) out << "[" << fn.retLen << "]";
+            else if (fn.retLen == -1) out << "[]";
         }
         if (fn.isExtern) {
             out << "\n";

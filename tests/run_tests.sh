@@ -66,6 +66,7 @@ run_ok struct_nested "$ROOT/examples/struct_nested.sin" $'5\n9\n42\n2.5'
 run_ok str_concat "$ROOT/examples/str_concat.sin" $'Score: 42\npi=3.14\nflag=true\nless'
 run_ok mathx "$ROOT/examples/mathx.sin" $'5\n10\n0\n7.5'
 run_ok use_std "$ROOT/examples/use_std.sin" $'5\n10\n2.5\n-1\n10\n7\n9'
+run_ok use_arrayx "$ROOT/examples/use_arrayx.sin" $'15\n60\n5\n3\n0\n1\n5\n5\n7'
 
 echo
 echo "=== 反例：类型/语义错误应被拒绝 ==="
@@ -84,6 +85,8 @@ expect_error struct_array_type "$ROOT/tests/cases/struct_array_type.sin"
 expect_error struct_self_ref   "$ROOT/tests/cases/struct_self_ref.sin"
 expect_error struct_arr_field  "$ROOT/tests/cases/struct_arr_field.sin"
 expect_error import_missing    "$ROOT/tests/cases/import_missing.sin"
+expect_error slice_return      "$ROOT/tests/cases/slice_return.sin"
+expect_error slice_field       "$ROOT/tests/cases/slice_field.sin"
 
 # roundtrip <name> <source.sin> — 验证 AST ⇄ 文本 ⇄ 积木 序列化正确
 roundtrip() {
@@ -125,6 +128,7 @@ roundtrip struct_nested "$ROOT/examples/struct_nested.sin"
 roundtrip str_concat "$ROOT/examples/str_concat.sin"
 roundtrip mathx "$ROOT/examples/mathx.sin"
 roundtrip use_std "$ROOT/examples/use_std.sin"
+roundtrip use_arrayx "$ROOT/examples/use_arrayx.sin"
 
 # ---- 模块系统：用户库（磁盘）/ 嵌套 import / extern 去重 / 循环检测 ----
 echo
@@ -155,6 +159,18 @@ if [[ "$(grep -c '^import "std/mathx"' <<<"$emitted")" == "1" ]] && \
    [[ "$(grep -c '^fn clamp' <<<"$emitted")" == "0" ]]; then
     echo "✓ import: --emit src 只写回 import 行（库源码未污染用户文件）"; ((PASS++))
 else echo "✗ import: 序列化把库源码灌进来了"; ((FAIL++)); fi
+
+# ---- 切片 T[]：一份代码覆盖任意长度 + 借用语义 ----
+SLSRC="$WORK/slice.sin"
+printf '%s\n' 'fn sum(xs: int[]) -> int {' '    let t = 0' '    for i in 0..len(xs) { t = t + xs[i] }' \
+  '    return t' '}' 'fn fill(xs: int[], v: int) { for i in 0..len(xs) { xs[i] = v } }' \
+  'fn main() -> int {' '    let a: int[3] = [1,2,3]' '    let b: int[5] = [1,2,3,4,5]' \
+  '    print(sum(a))' '    print(sum(b))' '    fill(a, 7)' '    print(sum(a))' '    return 0' '}' > "$SLSRC"
+if "$SINC" "$SLSRC" -o "$WORK/slice.c" >/dev/null 2>&1 && \
+   "$CC" -std=c11 -O2 "$WORK/slice.c" -o "$WORK/slice" -lm 2>/dev/null && \
+   [[ "$("$WORK/slice" | tr '\n' ' ')" == "6 15 21 " ]]; then
+    echo "✓ slice: 同一函数处理 int[3]/int[5] + 通过切片就地修改生效"; ((PASS++))
+else echo "✗ slice: 行为不符（$("$WORK/slice" 2>/dev/null | tr '\n' ' ')）"; ((FAIL++)); fi
 
 # ---- IDE 查询：悬停显示类型（mini-LSP）----
 echo

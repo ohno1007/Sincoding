@@ -49,11 +49,17 @@ VarType TypeChecker::lookup(const std::string& name) const {
 static std::string typeStr(Type base, int len) {
     std::string s = typeName(base);
     if (len > 0) s += "[" + std::to_string(len) + "]";
+    else if (len == -1) s += "[]";               // 切片
     return s;
 }
 // 含结构体名的类型渲染
 static std::string declTypeStr(Type base, int len, const std::string& sn) {
-    if (base == Type::Struct) return sn.empty() ? "struct" : sn;
+    if (base == Type::Struct) {
+        std::string s = sn.empty() ? "struct" : sn;
+        if (len > 0) s += "[" + std::to_string(len) + "]";
+        else if (len == -1) s += "[]";
+        return s;
+    }
     return typeStr(base, len);
 }
 
@@ -68,6 +74,8 @@ bool TypeChecker::check(Program& prog) {
         for (auto& f : st->fields) {
             if (f.type == Type::Void)
                 error(f.line, "字段 '" + f.name + "' 不能是 void");
+            else if (f.len == -1)
+                error(f.line, "字段 '" + f.name + "' 不能是切片 T[]（切片是借用视图，存进结构体会悬垂）");
             else if (f.type == Type::Struct) {
                 // 结构体字段：必须是「已在前面声明」的其它结构体（防环，满足 C 顺序）
                 if (f.len > 0)
@@ -90,6 +98,8 @@ bool TypeChecker::check(Program& prog) {
             continue;
         }
         FnSig sig;
+        if (fn->retLen == -1)
+            error(fn->line, "函数 " + fn->name + " 不能返回切片 T[]（会指向已销毁的局部数组）");
         sig.ret = {fn->ret, fn->retLen, fn->retStruct};
         if (fn->ret == Type::Struct && !structs_.count(fn->retStruct))
             error(fn->line, "未定义的结构体: " + fn->retStruct);
@@ -164,6 +174,8 @@ void TypeChecker::checkStmt(Stmt& s) {
             }
             if (ls.declared == Type::Struct && !structs_.count(ls.structName))
                 error(ls.line, "未定义的结构体: " + ls.structName);
+            if (ls.declaredLen == -1 && scopes_.size() <= 1)
+                error(ls.line, "全局变量 '" + ls.name + "' 不能是切片 T[]（切片只能作参数或局部借用）");
             if (!declare(ls.name, {ls.declared, ls.declaredLen, ls.structName}))
                 error(ls.line, "变量重复定义: " + ls.name);
             break;
@@ -454,6 +466,18 @@ Type TypeChecker::checkExpr(Expr& e) {
                 c.type = Type::Void;
                 return Type::Void;
             }
+            // 内建 len：数组/切片的长度
+            if (c.callee == "len") {
+                if (c.args.size() != 1) {
+                    error(c.line, "len 需要恰好 1 个参数");
+                } else {
+                    checkExpr(*c.args[0]);
+                    if (c.args[0]->arrayLen == 0)
+                        error(c.line, "len 只能用于数组或切片");
+                }
+                c.type = Type::Int;
+                return Type::Int;
+            }
             // 内建 str：把标量转成字符串（int/float/bool/string → string）
             if (c.callee == "str") {
                 if (c.args.size() != 1) {
@@ -482,8 +506,17 @@ Type TypeChecker::checkExpr(Expr& e) {
                 Type at = checkExpr(*c.args[i]);
                 if (i < sig.params.size()) {
                     const VarType& pt = sig.params[i];
-                    bool ok = (at == pt.base) && (c.args[i]->arrayLen == pt.len) &&
+                    int aLen = c.args[i]->arrayLen;
+                    // 切片形参：定长数组 T[N] 与切片 T[] 都可传入（前者自动借用为视图）
+                    bool lenOk = (aLen == pt.len) || (pt.len == -1 && (aLen > 0 || aLen == -1));
+                    bool ok = (at == pt.base) && lenOk &&
                               (pt.base != Type::Struct || c.args[i]->structName == pt.structName);
+                    // 定长数组借用为切片时必须是可取地址的左值（变量/字段/元素）
+                    if (ok && pt.len == -1 && aLen > 0) {
+                        ExprKind k = c.args[i]->kind;
+                        if (k != ExprKind::Var && k != ExprKind::Field && k != ExprKind::Index)
+                            error(c.line, "传给切片参数的数组必须是变量（不能是临时值）");
+                    }
                     if (at != Type::Unknown && !ok)
                         error(c.line, "函数 " + c.callee + " 第 " + std::to_string(i + 1) +
                                           " 个参数类型应为 " + declTypeStr(pt.base, pt.len, pt.structName) +

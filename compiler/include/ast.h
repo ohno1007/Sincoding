@@ -22,7 +22,7 @@ enum class ExprKind { IntLit, FloatLit, BoolLit, StringLit, Var, Unary, Binary,
 struct Expr {
     ExprKind kind;
     Type type = Type::Unknown;  // 元素/标量类型，由类型检查阶段填充
-    int arrayLen = 0;           // >0 表示该表达式是定长数组（type 为元素类型）
+    int arrayLen = 0;           // >0 定长数组，-1 切片 T[]（type 为元素类型）
     std::string structName;     // type==Struct 时的结构体名
     int line = 0;
     int col = 0;                // 标识符起始列（IDE 定位用；与 token.col 同基数）
@@ -172,7 +172,7 @@ struct ExprStmt : Stmt {
 struct Param {
     std::string name;
     Type type;
-    int len = 0;            // >0 表示定长数组参数 T[N]（按值传递，C 侧结构体包裹）
+    int len = 0;            // >0 定长数组（值语义），-1 切片 T[]（借用视图）
     std::string structName; // type==Struct 时
     int line;
     int col = 0;            // 参数名起始列

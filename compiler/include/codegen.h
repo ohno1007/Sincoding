@@ -3,6 +3,7 @@
 #include "ast.h"
 #include <sstream>
 #include <string>
+#include <unordered_map>
 
 namespace sincoding {
 
@@ -19,10 +20,13 @@ private:
     void emitExpr(const Expr& e);
     void emitPrint(const Call& c);
     void emitStr(const Call& c);   // 内建 str(x)：标量 → 字符串
+    void emitLen(const Call& c);   // 内建 len(x)：数组/切片长度
+    void emitArg(const Expr& a, const Param& p);  // 实参（定长数组传给切片时自动借用）
     void indent();
 
     std::ostringstream out_;
     int depth_ = 0;
+    std::unordered_map<std::string, const FnDecl*> fns_;  // 调用点查形参类型用
 };
 
 } // namespace sincoding

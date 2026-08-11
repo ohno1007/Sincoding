@@ -1,0 +1,27 @@
+// use_arrayx.sin — 通用数组库（切片 T[] 让一份代码覆盖任意长度）
+//
+// std/arrayx 的函数参数都是切片 int[]，所以 int[5] 和 int[3] 都能直接传进去。
+// 切片是借用视图：sort/reverse 这类会**就地改到你的数组上**。
+
+import "std/arrayx"
+
+fn main() -> int {
+    let a: int[5] = [5, 3, 1, 4, 2]
+    let b: int[3] = [10, 20, 30]
+
+    print(sum(a))            // 15  —— int[5]
+    print(sum(b))            // 60  —— int[3]，同一个 sum
+    print(max_of(a))         // 5
+    print(index_of(a, 4))    // 3   —— 下标
+    print(count_of(a, 9))    // 0   —— 不存在
+
+    sort(a)                  // 就地升序
+    print(a[0])              // 1
+    print(a[4])              // 5
+    reverse(a)               // 就地反转
+    print(a[0])              // 5
+
+    let f: float[3] = [1.5, 2.5, 3.0]
+    print(sum_f(f))          // 7
+    return 0
+}

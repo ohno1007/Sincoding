@@ -28,11 +28,18 @@ std::string arrName(Type t, const std::string& sn, int len) {
 std::string arrElemC(Type t, const std::string& sn) {
     return t == Type::Struct ? sn : typeToC(t);
 }
+// 切片 T[] 的 C 表示：{ 元素指针, 长度 } —— 借用视图，不拷贝数据
+std::string sliceName(Type t, const std::string& sn) { return "Slice_" + arrTag(t, sn); }
 
 void addArr(Type t, const std::string& sn, int len,
             std::vector<ArrType>& out, std::set<std::string>& seen) {
-    if (len <= 0) return;
+    if (len <= 0) return;                      // 0=非数组，-1=切片（另行收集）
     if (seen.insert(arrName(t, sn, len)).second) out.push_back({t, sn, len});
+}
+void addSlice(Type t, const std::string& sn, int len,
+              std::vector<ArrType>& out, std::set<std::string>& seen) {
+    if (len != -1) return;
+    if (seen.insert(sliceName(t, sn)).second) out.push_back({t, sn, -1});
 }
 void collectStmt(const Stmt& s, std::vector<ArrType>& out, std::set<std::string>& seen);
 void collectBlock(const Block& b, std::vector<ArrType>& out, std::set<std::string>& seen) {
@@ -168,10 +175,20 @@ std::string CodeGen::generate(const Program& prog) {
 "static const char* sin_str_from_bool(int b) { return b ? \"true\" : \"false\"; }\n\n";
     }
 
-    // 收集所有数组包裹类型（值语义：可赋值 / 传参 / 返回 / 作结构体字段）
-    std::vector<ArrType> arrs;
+    for (auto& fn : prog.fns) fns_[fn->name] = fn.get();   // 调用点查形参类型
+
+    // 收集所有数组包裹类型（值语义）与切片类型（借用视图）
+    std::vector<ArrType> arrs, slices;
     {
-        std::set<std::string> seen;
+        std::set<std::string> seen, sseen;
+        for (auto& fn : prog.fns) {
+            for (auto& p : fn->params) addSlice(p.type, p.structName, p.len, slices, sseen);
+            if (fn->body) {
+                // 局部切片变量（如 let s = 某切片参数）
+                std::vector<ArrType> tmp; std::set<std::string> tseen;
+                collectBlock(*fn->body, tmp, tseen);
+            }
+        }
         for (auto& st : prog.structs)
             for (auto& f : st->fields) addArr(f.type, f.structName, f.len, arrs, seen);
         for (auto& g : prog.globals) collectStmt(*g, arrs, seen);
@@ -205,6 +222,12 @@ std::string CodeGen::generate(const Program& prog) {
         out_ << "\n";
     }
     emitArrs(/*structElem=*/true);           // 3) 结构体数组（依赖结构体定义）
+    if (!slices.empty()) {                   // 4) 切片视图（元素类型此时都已声明）
+        for (auto& sl : slices)
+            out_ << "typedef struct { " << arrElemC(sl.elem, sl.structName)
+                 << "* data; long long len; } " << sliceName(sl.elem, sl.structName) << ";\n";
+        out_ << "\n";
+    }
 
     // 前向声明
     for (auto& fn : prog.fns) emitFnProto(*fn);
@@ -233,6 +256,7 @@ static std::string cType(Type t, const std::string& structName) {
 
 // 参数的 C 类型（数组用包裹结构体，按值传递）
 static std::string paramC(const Param& p) {
+    if (p.len == -1) return sliceName(p.type, p.structName);   // 切片：借用视图
     if (p.len > 0) return arrName(p.type, p.structName, p.len);
     return cType(p.type, p.structName);
 }
@@ -293,7 +317,9 @@ void CodeGen::emitStmt(const Stmt& s) {
         case StmtKind::Let: {
             auto& ls = static_cast<const LetStmt&>(s);
             indent();
-            if (ls.declaredLen > 0)
+            if (ls.declaredLen == -1)
+                out_ << sliceName(ls.declared, ls.structName) << " " << ls.name;
+            else if (ls.declaredLen > 0)
                 out_ << arrName(ls.declared, ls.structName, ls.declaredLen) << " " << ls.name;
             else
                 out_ << cType(ls.declared, ls.structName) << " " << ls.name;
@@ -415,6 +441,24 @@ void CodeGen::emitStr(const Call& c) {
     }
 }
 
+// 实参：定长数组传给切片形参时，自动构造借用视图 { 数据指针, 长度 }
+void CodeGen::emitArg(const Expr& a, const Param& p) {
+    if (p.len == -1 && a.arrayLen > 0) {
+        out_ << "(" << sliceName(p.type, p.structName) << "){ ";
+        emitExpr(a);
+        out_ << ".data, " << a.arrayLen << " }";
+        return;
+    }
+    emitExpr(a);
+}
+
+// len(x)：切片取运行时长度，定长数组编译期即知
+void CodeGen::emitLen(const Call& c) {
+    const Expr& a = *c.args[0];
+    if (a.arrayLen == -1) { out_ << "("; emitExpr(a); out_ << ").len"; }
+    else out_ << a.arrayLen << "LL";
+}
+
 void CodeGen::emitExpr(const Expr& e) {
     switch (e.kind) {
         case ExprKind::IntLit:
@@ -527,10 +571,14 @@ void CodeGen::emitExpr(const Expr& e) {
             auto& c = static_cast<const Call&>(e);
             if (c.callee == "print") { emitPrint(c); break; }
             if (c.callee == "str") { emitStr(c); break; }
+            if (c.callee == "len") { emitLen(c); break; }
+            auto fit = fns_.find(c.callee);
+            const FnDecl* callee = (fit == fns_.end()) ? nullptr : fit->second;
             out_ << c.callee << "(";
             for (size_t i = 0; i < c.args.size(); i++) {
                 if (i) out_ << ", ";
-                emitExpr(*c.args[i]);
+                if (callee && i < callee->params.size()) emitArg(*c.args[i], callee->params[i]);
+                else emitExpr(*c.args[i]);
             }
             out_ << ")";
             break;

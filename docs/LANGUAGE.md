@@ -96,7 +96,41 @@ c = b                                // 整体赋值
 > 想「就地更新一个数组」时，用「返回新数组再赋回」的写法（`a = update(a)`）。
 > 实现上 C 侧把 `T[N]` 包成 `struct { T data[N]; }`，故可赋值/传参/返回。
 
-- 当前不支持：嵌套数组、结构体数组、对数组整体做运算或 `print`。
+- 当前不支持：嵌套数组、对数组整体做运算或 `print`。
+
+### 3.5.1 切片 `T[]`（写通用数组函数）
+
+定长数组的长度属于类型（`int[3]` 与 `int[5]` 不同），所以 `fn sum(xs: int[3])`
+只能收三个元素的数组。**切片 `T[]` 解决这个问题**：它是一个「借用视图」
+（元素指针 + 长度），任意长度的数组都能传进去。
+
+```rust
+fn sum(xs: int[]) -> int {              // 一份代码，任意长度
+    let total = 0
+    for i in 0..len(xs) { total = total + xs[i] }
+    return total
+}
+fn fill(xs: int[], v: int) {            // 通过切片就地修改调用者的数组
+    for i in 0..len(xs) { xs[i] = v }
+}
+
+let a: int[3] = [1, 2, 3]
+let b: int[5] = [1, 2, 3, 4, 5]
+print(sum(a))     // 6   —— 传 int[3] 自动借用为 int[]
+print(sum(b))     // 15  —— 同一个函数
+fill(a, 7)        // a 变成 [7,7,7]
+```
+
+- `len(x)` 取长度：切片取运行时长度，定长数组编译期即知。
+- **借用 ≠ 拷贝**：定长数组按值传递（改副本不影响调用者），
+  切片是**视图**——通过它修改会改到调用者的数组上。这正是 `sort/reverse/fill`
+  能就地工作的原因，用时请留意这点区别。
+- 为杜绝悬垂，切片**只能作参数或局部借用**，以下一律拒绝：
+  作返回类型、作结构体字段、作全局变量、借用一个临时值（实参必须是变量）。
+
+标准库 [`std/arrayx`](../std/arrayx.sin) 正是基于切片写的通用数组库：
+`sum / max_of / min_of / index_of / contains / count_of`（只读）与
+`fill / reverse / sort`（就地），外加浮点版 `sum_f / max_of_f`。
 
 ## 3.6 结构体（简单 / 标量字段）
 
@@ -221,8 +255,11 @@ fn main() -> int {
 `std/mathx` 现有：`clamp / lerp / sign / dist / dist2`（浮点）与
 `abs_i / min_i / max_i / clamp_i`（整数）。
 
-> **已知限制**：数组类型含长度（`int[8]` 与 `int[16]` 是不同类型），且暂无泛型，
-> 因此通用的数组工具库（排序/查找）尚无法用一份代码覆盖各种长度——这是下一步的语言课题。
+`std/arrayx` 提供通用数组工具（基于**切片** `T[]`，见 §3.5.1）：
+`sum / max_of / min_of / index_of / contains / count_of / fill / reverse / sort`。
+
+> 元素类型不同仍需各写一份（`sum` 对 `int[]`、`sum_f` 对 `float[]`）——
+> 本语言暂无泛型，这是后续课题；但长度维度已由切片解决。
 
 ## 5. 控制流
 

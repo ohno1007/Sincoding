@@ -29,6 +29,7 @@ std::string jesc(const std::string& s) {
 std::string typeStr(Type t, int len, const std::string& sn) {
     std::string base = (t == Type::Struct) ? (sn.empty() ? "struct" : sn) : typeName(t);
     if (len > 0) base += "[" + std::to_string(len) + "]";
+    else if (len == -1) base += "[]";        // 切片
     return base;
 }
 std::string exprType(const Expr& e) { return typeStr(e.type, e.arrayLen, e.structName); }
