@@ -82,6 +82,48 @@ void sin_dbg_shutdown(void) { rlImGuiShutdown(); }
 bool sin_dbg_blocked(void) { return g_paused && !g_stepOnce; }
 void sin_dbg_frame_done(void) { g_frame++; if (g_stepOnce) { g_stepOnce = false; g_paused = true; } }
 
+#ifdef __ANDROID__
+// raylib 自绘保底面板：个别 GLES 驱动上 imgui 一无所出时顶上，
+// 功能同款（行/帧号、暂停·逐帧触屏按钮、变量监视、精灵坐标）。
+static bool g_fb_touchPrev = false;
+static void sin_dbg_fallback_panel(int spriteCount, const float* sx, const float* sy) {
+    Rectangle panel = { 8, 76, 640, (float)GetScreenHeight() * 0.66f };
+    DrawRectangleRounded(panel, 0.04f, 8, Fade(BLACK, 0.72f));
+    int x = (int)panel.x + 20, y = (int)panel.y + 16;
+    DrawText("Sincoding Debugger", x, y, 30, RAYWHITE); y += 44;
+    DrawText(TextFormat("line: %lld   frame: %lld   %s", g_line, g_frame,
+                        g_paused ? "paused" : "running"), x, y, 24, LIGHTGRAY); y += 40;
+    Rectangle bPause = { (float)x, (float)y, 210, 64 };
+    Rectangle bStep  = { (float)x + 230, (float)y, 210, 64 };
+    bool touched = GetTouchPointCount() > 0;
+    Vector2 tp = touched ? GetTouchPosition(0) : (Vector2){ -1, -1 };
+    bool tap = touched && !g_fb_touchPrev;      // 按下边沿：一次触摸只触发一次
+    DrawRectangleRounded(bPause, 0.2f, 6, Fade(DARKBLUE, 0.9f));
+    DrawText(g_paused ? "Resume" : "Pause", (int)bPause.x + 44, (int)bPause.y + 18, 28, RAYWHITE);
+    DrawRectangleRounded(bStep, 0.2f, 6, Fade(DARKGREEN, 0.9f));
+    DrawText("Step", (int)bStep.x + 66, (int)bStep.y + 18, 28, RAYWHITE);
+    if (tap && CheckCollisionPointRec(tp, bPause)) g_paused = !g_paused;
+    if (tap && CheckCollisionPointRec(tp, bStep)) { g_stepOnce = true; g_paused = false; }
+    y += 84;
+    DrawText("Variables:", x, y, 24, SKYBLUE); y += 34;
+    int shown = 0;
+    for (auto& v : g_vars) {
+        if (shown++ >= 12) { DrawText("...", x + 12, y, 24, GRAY); y += 30; break; }
+        DrawText(TextFormat("%s = %s", v.name.c_str(), v.value.c_str()), x + 12, y, 24, RAYWHITE);
+        y += 30;
+    }
+    if (g_vars.empty()) { DrawText("(no scalar variables yet)", x + 12, y, 24, GRAY); y += 30; }
+    y += 8;
+    DrawText(TextFormat("Sprites: %d", spriteCount), x, y, 24, SKYBLUE); y += 34;
+    for (int i = 0; i < spriteCount && i < 6; i++) {
+        DrawText(TextFormat("#%d  x=%.1f  y=%.1f", i, sx ? sx[i] : 0.f, sy ? sy[i] : 0.f),
+                 x + 12, y, 24, RAYWHITE);
+        y += 30;
+    }
+    g_fb_touchPrev = touched;
+}
+#endif
+
 // 每帧末（EndDrawing 之前）绘制面板
 void sin_dbg_draw(int spriteCount, const float* sx, const float* sy) {
     if (IsKeyPressed(KEY_F12)) g_open = !g_open;
@@ -149,6 +191,28 @@ void sin_dbg_draw(int spriteCount, const float* sx, const float* sy) {
     }
     ImGui::End();
     rlImGuiEnd();
+
+#ifdef __ANDROID__
+    // —— 真机诊断 + 保底 ——
+    // imgui 在个别 GLES 驱动上会一无所出（draw data 空/被裁光）。这里检测
+    // 顶点数：连续为 0 就换用 raylib 自绘的保底面板（功能同款：变量/行号/
+    // 暂停/逐帧，触屏按钮），并把关键量打进 logcat（tag: raylib）定位根因。
+    {
+        ImDrawData* dd = ImGui::GetDrawData();
+        int vtx = dd ? dd->TotalVtxCount : -1;
+        static int diagFrames = 0;
+        if (diagFrames < 5) {
+            diagFrames++;
+            TraceLog(LOG_INFO, "SIN_DBG diag: vtx=%d lists=%d disp=%.0fx%.0f scr=%dx%d scale=%.2f",
+                     vtx, dd ? dd->CmdListsCount : -1,
+                     ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y,
+                     GetScreenWidth(), GetScreenHeight(), GetWindowScaleDPI().y);
+        }
+        static int emptyStreak = 0;
+        emptyStreak = (vtx <= 0) ? emptyStreak + 1 : 0;
+        if (emptyStreak >= 3) sin_dbg_fallback_panel(spriteCount, sx, sy);
+    }
+#endif
 }
 
 void sin_dbg_log(const char* msg) {
