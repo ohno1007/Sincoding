@@ -85,7 +85,8 @@ window.SIN_BLOCKS = {
             }
           }
         }
-      ]
+      ],
+      "pre": [" fib.sin — 斐波那契：同时验证递归与迭代两种写法"]
     },
     {
       "block": "fn",
@@ -240,7 +241,8 @@ window.SIN_BLOCKS = {
                 ]
               }
             ]
-          }
+          },
+          "tail": " 递归: 55"
         },
         {
           "block": "expr",
@@ -259,7 +261,8 @@ window.SIN_BLOCKS = {
                 ]
               }
             ]
-          }
+          },
+          "tail": " 迭代: 55"
         },
         {
           "block": "return",

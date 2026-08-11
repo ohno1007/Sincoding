@@ -24,6 +24,7 @@ emcc -std=c++17 -O2 \
     "$ROOT/compiler/src/modules.cpp" \
     "$ROOT/compiler/src/generics.cpp" \
     "$ROOT/compiler/src/blockreader.cpp" \
+    "$ROOT/compiler/src/comments.cpp" \
     "$ROOT/compiler/src/wasm_api.cpp" \
     -sMODULARIZE=1 -sEXPORT_NAME=SincModule \
     -sEXPORTED_FUNCTIONS='["_sin_to_blocks","_sin_hover","_sin_references","_sin_rename","_sin_complete","_sin_runtime_decls","_sin_blocks_to_src","_malloc","_free"]' \

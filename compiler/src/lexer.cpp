@@ -157,9 +157,13 @@ std::vector<Token> Lexer::tokenize() {
         // 空白
         if (c == ' ' || c == '\t' || c == '\r' || c == '\n') { advance(); continue; }
 
-        // 行注释 //
+        // 行注释 //：不进 token 流，但要收集起来（attachComments 会挂回 AST，
+        // 序列化时原样写回——用户写的注释绝不无声丢失）
         if (c == '/' && peek(1) == '/') {
-            while (!atEnd() && peek() != '\n') advance();
+            CommentTok ct{line_, col_, ""};
+            advance(); advance();                       // 吃掉 "//"
+            while (!atEnd() && peek() != '\n') ct.text += advance();
+            comments_.push_back(std::move(ct));
             continue;
         }
 

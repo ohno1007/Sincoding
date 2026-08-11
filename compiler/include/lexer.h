@@ -12,6 +12,14 @@ struct Diagnostic {
     std::string message;
 };
 
+// 行注释（token 流之外单独收集，供 attachComments 按行挂回 AST——
+// 注释是用户的话，序列化时必须原样写回，不许无声吃掉）
+struct CommentTok {
+    int line;
+    int col;           // "//" 的起始列
+    std::string text;  // "//" 之后的原文（含前导空格），写回时输出 "//" + text
+};
+
 class Lexer {
 public:
     explicit Lexer(std::string src) : src_(std::move(src)) {}
@@ -20,6 +28,7 @@ public:
     std::vector<Token> tokenize();
 
     const std::vector<Diagnostic>& errors() const { return errors_; }
+    const std::vector<CommentTok>& comments() const { return comments_; }
     bool ok() const { return errors_.empty(); }
 
 private:
@@ -41,6 +50,7 @@ private:
     int tokStartCol_ = 1;
     std::vector<Token> tokens_;
     std::vector<Diagnostic> errors_;
+    std::vector<CommentTok> comments_;
 };
 
 } // namespace sincoding

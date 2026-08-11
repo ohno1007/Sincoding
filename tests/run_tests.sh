@@ -188,6 +188,31 @@ else
     echo "✗ 诊断列号: 未指向正确位置（$("$SINC" "$DIAGSRC" -o /dev/null 2>&1 | head -1)）"; ((FAIL++))
 fi
 
+# ---- 注释保真：--emit src 原样写回注释，且幂等 ----
+echo
+echo "=== 注释保真（文本 ⇄ AST 不丢注释） ==="
+CMTSRC="$WORK/comments.sin"
+printf '%s\n' '// 文件头说明' 'import "std/mathx"  // 数学库' '' '// 主函数' \
+  'fn main() -> int {' '    let a = 1  // 行尾注释' '    // 循环前说明' \
+  '    for i in 0..3 { a = a + i }' '    return a' '}' '// 文件尾注释' > "$CMTSRC"
+"$SINC" "$CMTSRC" --emit src > "$WORK/cmt1.sin" 2>/dev/null
+ok_cmt=1
+for c in '// 文件头说明' '// 数学库' '// 主函数' '// 行尾注释' '// 循环前说明' '// 文件尾注释'; do
+    grep -qF "$c" "$WORK/cmt1.sin" || { echo "  ✗ 丢失: $c"; ok_cmt=0; }
+done
+"$SINC" "$WORK/cmt1.sin" --emit src > "$WORK/cmt2.sin" 2>/dev/null
+if [[ "$ok_cmt" == "1" ]] && diff -q "$WORK/cmt1.sin" "$WORK/cmt2.sin" >/dev/null; then
+    echo "✓ 注释保真: 头/尾/行尾/整行注释全保留，且序列化幂等"; ((PASS++))
+else
+    echo "✗ 注释保真: 注释丢失或不幂等"; ((FAIL++))
+fi
+# rename 也不能吃注释（applyRename 走同一序列化器）
+if "$SINC" "$CMTSRC" --query rename 6 9 b 2>/dev/null | grep -qF '行尾注释'; then
+    echo "✓ 注释保真: F2 重命名后的新源码保留注释"; ((PASS++))
+else
+    echo "✗ 注释保真: rename 吃掉了注释"; ((FAIL++))
+fi
+
 # ---- IDE 查询：悬停显示类型（mini-LSP）----
 echo
 echo "=== IDE 查询：hover 显示类型 ==="
@@ -381,6 +406,12 @@ if command -v node >/dev/null 2>&1 && \
         echo "✓ 代码面板: 可关闭/重开 + CodeMirror 可选（同步/诊断/引擎补全）（$pout）"; ((PASS++))
     else
         echo "✗ 代码面板: 验证失败（$pout）"; ((FAIL++))
+    fi
+    # 信任底线三件套：改积木不丢注释 + 撤销/重做 + Ctrl拖拽复制 + 函数复制
+    if uout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_undo.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ 信任底线: 注释保真 + 撤销/重做 + 积木/函数复制（$uout）"; ((PASS++))
+    else
+        echo "✗ 信任底线: 验证失败（$uout）"; ((FAIL++))
     fi
     # 预览 = 成品：import 的库函数在预览里也能真正执行（不只是有积木）
     if pout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_lib_preview.js" "$ROOT/editor/index.html" 2>&1)"; then

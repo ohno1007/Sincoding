@@ -136,6 +136,14 @@ bool gbool(const JPtr& o, const char* key, bool def = false) {
     return (v && v->k == JVal::Bool) ? v->b : def;
 }
 
+// 注释字段回读："pre" 字符串数组 + "tail" 字符串（serializeBlocks 的 commentFields 对应物）
+void gcomments(const JPtr& o, std::vector<std::string>& pre, std::string& tail) {
+    auto p = get(o, "pre");
+    if (p && p->k == JVal::Arr)
+        for (auto& c : p->arr) if (c->k == JVal::Str) pre.push_back(c->str);
+    tail = gstr(o, "tail");
+}
+
 // 类型名 → (Type, structName)。非内置名一律当结构体名（也可能是泛型类型参数）
 void parseTypeName(const std::string& n, Type& t, std::string& sn) {
     sn.clear();
@@ -211,7 +219,13 @@ BlockPtr readBlockList(const JPtr& arr) {
     return blk;
 }
 
+StmtPtr readStmtInner(const JPtr& j);
 StmtPtr readStmt(const JPtr& j) {
+    auto n = readStmtInner(j);
+    if (n) gcomments(j, n->preComments, n->tailComment);
+    return n;
+}
+StmtPtr readStmtInner(const JPtr& j) {
     std::string b = gstr(j, "block");
     if (b == "let") {
         auto n = mk<LetStmt>(j); n->name = gstr(j, "name");
@@ -273,6 +287,7 @@ FnPtr readFn(const JPtr& j) {
     parseTypeName(gstr(j, "ret", "void"), fn->ret, fn->retStruct);
     fn->retLen = (int)gnum(j, "retLen", 0);
     if (!fn->isExtern) fn->body = readBlockList(get(j, "body"));
+    gcomments(j, fn->preComments, fn->tailComment);
     return fn;
 }
 
@@ -289,6 +304,17 @@ Program blocksToProgram(const std::string& json, bool& ok, std::string& err) {
         if (imports && imports->k == JVal::Arr)
             for (auto& im : imports->arr)
                 if (im->k == JVal::Str) { ImportDecl d; d.name = im->str; prog.imports.push_back(d); }
+        // import 行的注释（与 imports 对齐的数组；文件头注释挂在第一个 import 上）
+        auto ipre = get(root, "importsPre");
+        if (ipre && ipre->k == JVal::Arr)
+            for (size_t i = 0; i < ipre->arr.size() && i < prog.imports.size(); i++)
+                if (ipre->arr[i]->k == JVal::Arr)
+                    for (auto& c : ipre->arr[i]->arr)
+                        if (c->k == JVal::Str) prog.imports[i].preComments.push_back(c->str);
+        auto itail = get(root, "importsTail");
+        if (itail && itail->k == JVal::Arr)
+            for (size_t i = 0; i < itail->arr.size() && i < prog.imports.size(); i++)
+                if (itail->arr[i]->k == JVal::Str) prog.imports[i].tailComment = itail->arr[i]->str;
 
         auto structs = get(root, "structs");
         if (structs && structs->k == JVal::Arr)
@@ -303,8 +329,10 @@ Program blocksToProgram(const std::string& json, bool& ok, std::string& err) {
                         parseTypeName(gstr(f, "type"), sf.type, sf.structName);
                         sf.len = (int)gnum(f, "len", 0);
                         sf.line = 0;
+                        gcomments(f, sf.preComments, sf.tailComment);
                         sd->fields.push_back(sf);
                     }
+                gcomments(st, sd->preComments, sd->tailComment);
                 prog.structs.push_back(std::move(sd));
             }
 
@@ -315,6 +343,11 @@ Program blocksToProgram(const std::string& json, bool& ok, std::string& err) {
         auto program = get(root, "program");
         if (program && program->k == JVal::Arr)
             for (auto& f : program->arr) prog.fns.push_back(readFn(f));
+
+        auto tails = get(root, "tailComments");
+        if (tails && tails->k == JVal::Arr)
+            for (auto& c : tails->arr)
+                if (c->k == JVal::Str) prog.tailComments.push_back(c->str);
     } catch (const std::exception& e) {
         ok = false; err = e.what();
     }

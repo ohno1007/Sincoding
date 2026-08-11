@@ -63,4 +63,8 @@ private:
     bool noStructLit_ = false; // 在 if/while/for 条件中禁止 `Name { }` 结构体字面量（消歧义）
 };
 
+// 把词法收集的行注释挂回 AST（见 comments.cpp）。在 parseProgram 之后、
+// resolveImports 之前调用——彼时 AST 里只有用户自己的节点。
+void attachComments(Program& prog, const std::vector<CommentTok>& comments);
+
 } // namespace sincoding

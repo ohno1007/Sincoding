@@ -93,6 +93,7 @@ int main(int argc, char** argv) {
     Parser parser(std::move(tokens));
     Program prog = parser.parseProgram();
     if (!parser.ok() && !tolerant) { printDiags(input, parser.errors()); return 1; }
+    attachComments(prog, lexer.comments());   // 注释挂回 AST（--emit src / rename 原样写回）
 
     // 2.5) 解析 import：把模块声明合并进来（内置标准库 + 同目录 + SINCODING_PATH）
     {

@@ -14,6 +14,12 @@ struct SourceWriter {
 
     void indent() { for (int i = 0; i < depth; i++) out << "    "; }
 
+    // 注释写回：pre = 节点前的整行注释；tail = 行尾注释（紧跟在语句后）
+    void preComments(const std::vector<std::string>& cs) {
+        for (auto& c : cs) { indent(); out << "//" << c << "\n"; }
+    }
+    void tailComment(const std::string& c) { if (!c.empty()) out << "  //" << c; }
+
     void writeExpr(const Expr& e) {
         switch (e.kind) {
             case ExprKind::IntLit:
@@ -115,8 +121,10 @@ struct SourceWriter {
         }
     }
 
-    void writeBlock(const Block& b) {
-        out << "{\n";
+    void writeBlock(const Block& b, const std::string& tail = "") {
+        out << "{";
+        tailComment(tail);
+        out << "\n";
         depth++;
         for (auto& s : b.stmts) writeStmt(*s);
         depth--;
@@ -125,6 +133,7 @@ struct SourceWriter {
     }
 
     void writeStmt(const Stmt& s) {
+        preComments(s.preComments);
         indent();
         switch (s.kind) {
             case StmtKind::Let: {
@@ -137,6 +146,7 @@ struct SourceWriter {
                     else if (ls.declaredLen == -1) out << "[]";
                 }
                 if (ls.init) { out << " = "; writeExpr(*ls.init); }
+                tailComment(s.tailComment);
                 out << "\n";
                 break;
             }
@@ -147,6 +157,7 @@ struct SourceWriter {
                 if (!as.field.empty()) out << "." << as.field;
                 out << " = ";
                 writeExpr(*as.value);
+                tailComment(s.tailComment);
                 out << "\n";
                 break;
             }
@@ -155,7 +166,7 @@ struct SourceWriter {
                 out << "if ";
                 writeExpr(*is.cond);
                 out << " ";
-                writeBlock(*is.thenBlock);
+                writeBlock(*is.thenBlock, s.tailComment);
                 if (is.elseBlock) {
                     out << " else ";
                     writeBlock(*is.elseBlock);
@@ -168,7 +179,7 @@ struct SourceWriter {
                 out << "while ";
                 writeExpr(*ws.cond);
                 out << " ";
-                writeBlock(*ws.body);
+                writeBlock(*ws.body, s.tailComment);
                 out << "\n";
                 break;
             }
@@ -179,7 +190,7 @@ struct SourceWriter {
                 out << "..";
                 writeExpr(*fs.end);
                 out << " ";
-                writeBlock(*fs.body);
+                writeBlock(*fs.body, s.tailComment);
                 out << "\n";
                 break;
             }
@@ -187,12 +198,14 @@ struct SourceWriter {
                 auto& rs = static_cast<const ReturnStmt&>(s);
                 out << "return";
                 if (rs.value) { out << " "; writeExpr(*rs.value); }
+                tailComment(s.tailComment);
                 out << "\n";
                 break;
             }
             case StmtKind::ExprStmt: {
                 auto& es = static_cast<const ExprStmt&>(s);
                 writeExpr(*es.expr);
+                tailComment(s.tailComment);
                 out << "\n";
                 break;
             }
@@ -204,13 +217,18 @@ struct SourceWriter {
     }
 
     void writeStruct(const StructDecl& st) {
-        out << "struct " << st.name << " {\n";
+        preComments(st.preComments);
+        out << "struct " << st.name << " {";
+        tailComment(st.tailComment);
+        out << "\n";
         for (size_t i = 0; i < st.fields.size(); i++) {
             const auto& f = st.fields[i];
+            for (auto& c : f.preComments) out << "    //" << c << "\n";
             out << "    " << f.name << ": " << ptype(f.type, f.structName);
             if (f.len > 0) out << "[" << f.len << "]";
             else if (f.len == -1) out << "[]";
             if (i + 1 < st.fields.size()) out << ",";
+            tailComment(f.tailComment);
             out << "\n";
         }
         out << "}\n";
@@ -221,6 +239,7 @@ struct SourceWriter {
     }
 
     void writeFn(const FnDecl& fn) {
+        preComments(fn.preComments);
         if (fn.isExtern) out << "extern ";
         out << "fn " << fn.name;
         if (!fn.typeParams.empty()) {                 // 泛型模板：写回 <T, U>
@@ -245,10 +264,11 @@ struct SourceWriter {
             else if (fn.retLen == -1) out << "[]";
         }
         if (fn.isExtern) {
+            tailComment(fn.tailComment);
             out << "\n";
         } else {
             out << " ";
-            writeBlock(*fn.body);
+            writeBlock(*fn.body, fn.tailComment);
             out << "\n";
         }
     }
@@ -260,7 +280,12 @@ std::string serializeSource(const Program& prog) {
     SourceWriter w;
     // 导入：只写回 import 行本身；被导入的声明（module 非空）一律跳过，
     // 否则库源码会被灌进用户文件，破坏「源码 → AST → 源码」的幂等。
-    for (auto& im : prog.imports) w.out << "import \"" << im.name << "\"\n";
+    for (auto& im : prog.imports) {
+        w.preComments(im.preComments);
+        w.out << "import \"" << im.name << "\"";
+        w.tailComment(im.tailComment);
+        w.out << "\n";
+    }
     if (!prog.imports.empty()) w.out << "\n";
 
     for (auto& st : prog.structs)
@@ -276,6 +301,7 @@ std::string serializeSource(const Program& prog) {
         first = false;
         w.writeFn(*fn);
     }
+    for (auto& c : prog.tailComments) w.out << "//" << c << "\n";
     return w.out.str();
 }
 
@@ -306,6 +332,16 @@ struct JsonWriter {
 
     // "key": value 形式的字段，由调用方控制逗号
     void key(const char* k) { str(k); out << ": "; }
+
+    // 注释字段（pre: 整行注释数组；tail: 行尾注释）——非空才写，保持模型精简
+    void commentFields(const std::vector<std::string>& pre, const std::string& tail) {
+        if (!pre.empty()) {
+            out << ","; nl(); key("pre"); out << "[";
+            for (size_t i = 0; i < pre.size(); i++) { if (i) out << ", "; str(pre[i]); }
+            out << "]";
+        }
+        if (!tail.empty()) { out << ","; nl(); key("tail"); str(tail); }
+    }
 
     void expr(const Expr& e) {
         out << "{"; depth++;
@@ -472,6 +508,7 @@ struct JsonWriter {
                 break;
             }
         }
+        commentFields(s.preComments, s.tailComment);
         depth--; nl(); out << "}";
     }
 
@@ -509,6 +546,7 @@ struct JsonWriter {
         if (!f.isExtern) {
             out << ","; nl(); key("body"); stmtList(f.body->stmts);
         }
+        commentFields(f.preComments, f.tailComment);
         depth--; nl(); out << "}";
     }
 };
@@ -539,6 +577,31 @@ std::string serializeBlocks(const Program& prog) {
         w.out << "]";
     }
     w.out << ",";
+    // import 行的注释（与 imports 对齐的数组；文件头注释就挂在第一个 import 上，
+    // 不带走它们的话，积木编辑一次就会把文件头说明洗掉）
+    {
+        bool any = false;
+        for (auto& im : prog.imports) if (!im.preComments.empty() || !im.tailComment.empty()) any = true;
+        if (any) {
+            w.nl(); w.key("importsPre"); w.out << "[";
+            for (size_t i = 0; i < prog.imports.size(); i++) {
+                if (i) w.out << ", ";
+                w.out << "[";
+                for (size_t j = 0; j < prog.imports[i].preComments.size(); j++) {
+                    if (j) w.out << ", ";
+                    w.str(prog.imports[i].preComments[j]);
+                }
+                w.out << "]";
+            }
+            w.out << "],";
+            w.nl(); w.key("importsTail"); w.out << "[";
+            for (size_t i = 0; i < prog.imports.size(); i++) {
+                if (i) w.out << ", ";
+                w.str(prog.imports[i].tailComment);
+            }
+            w.out << "],";
+        }
+    }
     // 被导入函数的签名 —— 编辑器据此**自动生成积木**（导入即得积木）。
     // 只给签名：参数名/类型决定槽位，返回类型决定是语句块还是 reporter。
     w.nl(); w.key("libs");
@@ -616,11 +679,13 @@ std::string serializeBlocks(const Program& prog) {
                     w.str(st.fields[j].type == Type::Struct ? st.fields[j].structName
                                                             : typeName(st.fields[j].type));
                     if (st.fields[j].len > 0) { w.out << ","; w.nl(); w.key("len"); w.out << st.fields[j].len; }
+                    w.commentFields(st.fields[j].preComments, st.fields[j].tailComment);
                     w.depth--; w.nl(); w.out << "}";
                 }
                 w.depth--; w.nl();
             }
             w.out << "]";
+            w.commentFields(st.preComments, st.tailComment);
             w.depth--; w.nl(); w.out << "}";
         }
         w.depth--; w.nl(); w.out << "]";
@@ -639,6 +704,11 @@ std::string serializeBlocks(const Program& prog) {
         w.depth--; w.nl(); w.out << "]";
     }
     w.out << ",";
+    if (!prog.tailComments.empty()) {
+        w.nl(); w.key("tailComments"); w.out << "[";
+        for (size_t i = 0; i < prog.tailComments.size(); i++) { if (i) w.out << ", "; w.str(prog.tailComments[i]); }
+        w.out << "],";
+    }
     w.nl(); w.key("program"); w.out << "[";
     if (!fns.empty()) {
         w.depth++;

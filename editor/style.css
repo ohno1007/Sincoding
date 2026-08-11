@@ -232,6 +232,7 @@ header .tabs button.active { background:#fff; color:var(--c-motion); font-weight
   font-size:13px; font-weight:600; padding:7px 12px; border-radius:8px;
   border:1px solid var(--line); background:#fff; color:var(--ink); }
 .hdr-actions button:hover { background:#F2F6FC; }
+.hdr-actions button.icon-only { padding:7px 8px; }
 .hdr-actions button.primary { background:#ffab19; color:#20160a; border-color:#ffab19; }
 .hdr-actions button.primary:hover { filter:brightness(1.06); background:#ffab19; }
 

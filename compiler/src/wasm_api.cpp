@@ -56,6 +56,7 @@ const char* sin_to_blocks(const char* src) {
     auto tokens = lexer.tokenize();
     Parser parser(std::move(tokens));
     Program prog = parser.parseProgram();
+    attachComments(prog, lexer.comments());
     std::vector<Diagnostic> modDiags;
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
     injectBuiltinModule(prog, "std/stage");   // 运行时 API 隐式可见（见 std/stage.sin）
@@ -81,6 +82,7 @@ const char* sin_hover(const char* src, int line, int col) {
     Lexer lexer(source);
     Parser parser(lexer.tokenize());
     Program prog = parser.parseProgram();
+    attachComments(prog, lexer.comments());
     std::vector<Diagnostic> modDiags;
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
     injectBuiltinModule(prog, "std/stage");   // 运行时 API 隐式可见（见 std/stage.sin）
@@ -96,6 +98,7 @@ const char* sin_references(const char* src, int line, int col) {
     Lexer lexer(source);
     Parser parser(lexer.tokenize());
     Program prog = parser.parseProgram();
+    attachComments(prog, lexer.comments());
     std::vector<Diagnostic> modDiags;
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
     injectBuiltinModule(prog, "std/stage");   // 运行时 API 隐式可见（见 std/stage.sin）
@@ -111,6 +114,7 @@ const char* sin_complete(const char* src, int line, int col) {
     Lexer lexer(source);
     Parser parser(lexer.tokenize());
     Program prog = parser.parseProgram();
+    attachComments(prog, lexer.comments());
     std::vector<Diagnostic> modDiags;
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
     injectBuiltinModule(prog, "std/stage");   // 运行时 API 隐式可见（见 std/stage.sin）
@@ -126,6 +130,7 @@ const char* sin_rename(const char* src, int line, int col, const char* newName) 
     Lexer lexer(source);
     Parser parser(lexer.tokenize());
     Program prog = parser.parseProgram();
+    attachComments(prog, lexer.comments());
     std::vector<Diagnostic> modDiags;
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
     injectBuiltinModule(prog, "std/stage");   // 运行时 API 隐式可见（见 std/stage.sin）

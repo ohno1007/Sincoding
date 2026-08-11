@@ -111,6 +111,10 @@ struct Stmt {
     int line = 0;
     int col = 0;                // 主标识符起始列（let/assign/for 的变量名，IDE 定位用）
     std::string module;         // 非空 = 来自 import 的模块（序列化时跳过，只写 import 行）
+    // 注释保真：语句前的整行注释 + 行尾注释（"//" 之后的原文）。
+    // 由 attachComments 填充，serializeSource / serializeBlocks 原样写回。
+    std::vector<std::string> preComments;
+    std::string tailComment;
     virtual ~Stmt() = default;
 protected:
     explicit Stmt(StmtKind k) : kind(k) {}
@@ -195,6 +199,8 @@ struct FnDecl {
     int line = 0;
     int col = 0;            // 函数名起始列
     std::string module;     // 非空 = 来自 import 的模块
+    std::vector<std::string> preComments;
+    std::string tailComment;
 };
 using FnPtr = std::unique_ptr<FnDecl>;
 
@@ -207,6 +213,8 @@ struct StructField {
     std::string structName;  // type==Struct 时的结构体名
     int line;
     int col = 0;             // 字段名起始列
+    std::vector<std::string> preComments;   // 字段前整行注释
+    std::string tailComment;                // 字段行尾注释
 };
 struct StructDecl {
     std::string name;
@@ -214,6 +222,8 @@ struct StructDecl {
     int line = 0;
     int col = 0;             // 结构体名起始列
     std::string module;      // 非空 = 来自 import 的模块
+    std::vector<std::string> preComments;
+    std::string tailComment;
 };
 using StructPtr = std::unique_ptr<StructDecl>;
 
@@ -222,6 +232,8 @@ struct ImportDecl {
     std::string name;
     int line = 0;
     int col = 0;
+    std::vector<std::string> preComments;
+    std::string tailComment;
 };
 
 struct Program {
@@ -229,6 +241,7 @@ struct Program {
     std::vector<StructPtr> structs;  // 结构体声明
     std::vector<StmtPtr> globals;    // 顶层全局变量（LetStmt）
     std::vector<FnPtr> fns;
+    std::vector<std::string> tailComments;  // 最后一个声明之后的孤立注释
 };
 
 } // namespace sincoding

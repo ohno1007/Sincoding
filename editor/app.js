@@ -138,8 +138,14 @@
   function fullModel() {
     // imports / structs / globals 都是项目级共享状态，program 来自当前精灵。
     // imports 必须带上——漏掉会让积木写回时把用户的 import 行整行删掉。
-    return { imports: project.imports || [], structs: project.structs || [],
-             globals: project.globals || [], program: sprite().program };
+    // importsPre/importsTail/tailComments 是注释（文件头注释挂在第一个 import 上），
+    // 同理漏掉就等于把用户写的注释无声洗掉。
+    const m = { imports: project.imports || [], structs: project.structs || [],
+                globals: project.globals || [], program: sprite().program };
+    if (project.importsPre) m.importsPre = project.importsPre;
+    if (project.importsTail) m.importsTail = project.importsTail;
+    if (project.tailComments) m.tailComments = project.tailComments;
+    return m;
   }
   function setTextValue(v) {
     textOut.value = v; syncHighlight();
@@ -778,6 +784,12 @@
       // Alt+点击 = 设/清断点。必须拦住冒泡：否则外层每个控制积木的同款监听器
       // 也会各设一个断点（嵌套越深误设越多）
       if (e.altKey) { e.stopPropagation(); toggleBreakpoint(node, blk); return; }
+      // Ctrl+拖拽 = 复制积木（连同嵌套子积木），像从调色板拖出一个新块
+      if (e.ctrlKey && list) {
+        e.stopPropagation();
+        startStmtDrag({ node: cloneModel(node), fromList: null, blockEl: null, srcEl: blk, e });
+        return;
+      }
       if (list) startStmtDrag({ node, fromList: list, blockEl: blk, e });
     });
     if (breakpoints.has(node)) blk.classList.add("bp");          // 重绘后保持断点标记
@@ -789,6 +801,87 @@
     });
     return blk;
   }
+
+  // ---------------- 撤销 / 重做（快照式）与积木复制 ----------------
+  // 深拷贝模型节点：剥掉 _el（DOM 反向引用），其余（含 _x/_y 摆位）原样保留
+  function cloneModel(node) {
+    return JSON.parse(JSON.stringify(node, (k, v) => (k === "_el" ? undefined : v)));
+  }
+  // 撤销覆盖：积木/代码模型、共享状态、精灵名与增删。造型内容不进快照（太重），
+  // 被删精灵的造型暂存在 graveyard，撤销删除时按名字找回。
+  const undo = { stack: [], redo: [], last: null, restoring: false, graveyard: [] };
+  function undoableState() {
+    return JSON.stringify({
+      imports: project.imports || [], importsPre: project.importsPre || null,
+      importsTail: project.importsTail || null, tailComments: project.tailComments || null,
+      structs: project.structs || [], globals: project.globals || [],
+      cur: project.cur,
+      sprites: project.sprites.map((sp) => ({ name: sp.name, icon: sp.icon, program: sp.program })),
+    }, (k, v) => (k === "_el" ? undefined : v));
+  }
+  function recordUndo() {
+    if (undo.restoring) return;
+    const s = undoableState();
+    if (undo.last === null) { undo.last = s; return; }
+    if (s === undo.last) return;
+    undo.stack.push(undo.last);
+    if (undo.stack.length > 60) undo.stack.shift();
+    undo.redo.length = 0;
+    undo.last = s;
+  }
+  function applyUndoState(s) {
+    undo.restoring = true;
+    try {
+      const st = JSON.parse(s);
+      project.imports = st.imports; project.importsPre = st.importsPre;
+      project.importsTail = st.importsTail; project.tailComments = st.tailComments;
+      project.structs = st.structs; project.globals = st.globals;
+      // 精灵：按快照重建 name/icon/program，造型尽量沿用现有对象；
+      // 撤销「删除精灵」时从 graveyard 按名字找回造型
+      const old = project.sprites;
+      project.sprites = st.sprites.map((snap, i) => {
+        const keep = old.find((o, j) => o.name === snap.name && j === i) || old[i];
+        let costumes = keep ? keep.costumes : null;
+        if (!costumes || !costumes.length) {
+          const g = undo.graveyard.find((x) => x.name === snap.name);
+          if (g) costumes = g.costumes;
+        }
+        return { name: snap.name, icon: snap.icon, program: snap.program, costumes: costumes || [],
+                 _stageX: keep && keep._stageX, _stageY: keep && keep._stageY };
+      });
+      project.cur = Math.min(st.cur, project.sprites.length - 1);
+      if (ce) ce.setStore(sprite().costumes);
+      selected = sprite().program[0] || null;
+      undo.last = s;
+      renderSpriteBar(); render();
+    } finally { undo.restoring = false; }
+  }
+  function doUndo() {
+    if (!undo.stack.length) { setPvStatus("没有可撤销的操作", "warn"); return; }
+    undo.redo.push(undo.last);
+    applyUndoState(undo.stack.pop());
+  }
+  function doRedo() {
+    if (!undo.redo.length) return;
+    undo.stack.push(undo.last);
+    applyUndoState(undo.redo.pop());
+  }
+  window.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    // 焦点在文本类控件里：让浏览器/CodeMirror 自己的撤销工作
+    const a = document.activeElement;
+    if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable ||
+              (a.closest && a.closest("#cm-host")))) return;
+    const k = e.key.toLowerCase();
+    if (k === "z" && !e.shiftKey) { e.preventDefault(); doUndo(); }
+    else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); doRedo(); }
+  });
+  window._sinUndo = { undo: doUndo, redo: doRedo, depth: () => undo.stack.length };  // 测试探针
+  (() => {
+    const bu = document.getElementById("btn-undo"), br = document.getElementById("btn-redo");
+    if (bu) bu.addEventListener("click", doUndo);
+    if (br) br.addEventListener("click", doRedo);
+  })();
 
   // ---------------- 积木拖拽（语句重排 / 从调色板拖入 / 拖到调色板删除 / 表达式嵌套） ----------------
   let drag = null;
@@ -983,6 +1076,18 @@
     if (fn.body) { const m = el("div", "mouth"); m.append(renderStmtList(fn.body, collectScope(fn))); blk.append(m); }
     script.append(blk);
 
+    // 右键函数头 = 复制整个函数（Scratch 的 duplicate；配合撤销可放心试）
+    hdr.addEventListener("contextmenu", (e) => {
+      if (e.target.classList.contains("field") || e.target.closest(".param")) return;
+      e.preventDefault(); e.stopPropagation();
+      const copy = cloneModel(fn);
+      let base = fn.name.replace(/_\d+$/, ""), n = 2;
+      while (sprite().program.some((f) => f.name === base + "_" + n)) n++;
+      copy.name = base + "_" + n;
+      copy._x = (fn._x || 40) + 48; copy._y = (fn._y || 40) + 48;
+      sprite().program.push(copy);
+      selected = copy; render();
+    });
     hdr.addEventListener("pointerdown", (e) => {
       if (e.target.classList.contains("field")) return;
       selected = fn; markSelected();
@@ -1094,7 +1199,7 @@
     const tag = document.getElementById("page-tag");
     if (tag) tag.textContent = sprite().name + " 的积木";
   }
-  function render() { renderCanvas(); refreshText(); }
+  function render() { renderCanvas(); refreshText(); recordUndo(); }
 
   // ---------------- 反向同步：文本 → 积木（wasm 编译器） ----------------
   let sincMod = null;
@@ -1126,6 +1231,9 @@
     placeFns(prog);
     // 结构体/全局写回到项目级共享状态（编辑任一精灵的文本都更新共享状态）
     project.imports = blk.imports || [];
+    project.importsPre = blk.importsPre || null;     // import 行注释（含文件头注释）
+    project.importsTail = blk.importsTail || null;
+    project.tailComments = blk.tailComments || null; // 文件尾孤立注释
     project.structs = blk.structs || [];
     project.globals = blk.globals || [];
     sprite().program = prog;
@@ -1134,6 +1242,7 @@
     if (rebuildLibCats(blk.libs)) buildPalette();
     project.libImpl = blk.libImpl || [];   // 库函数实现：不进画布，但预览要靠它执行
     renderCanvas(); // 不回写文本，避免打断输入
+    recordUndo();
     const diags = res.diags || [];
     renderDiags(diags);
     setTextStatus(diags.length ? (diags.length + " 个问题") : "已同步 ✓", diags.length ? "warn" : "ok");
@@ -1674,6 +1783,7 @@
       card.addEventListener("click", () => selectSprite(i));
       list.append(card);
     });
+    recordUndo();
   }
 
   function selectSprite(i) {
@@ -1708,6 +1818,11 @@
 
   function delSprite(i) {
     if (project.sprites.length <= 1) return;
+    const dead = project.sprites[i];
+    if (dead && dead.costumes && dead.costumes.length) {   // 撤销删除时按名字找回造型
+      undo.graveyard.push({ name: dead.name, costumes: dead.costumes });
+      if (undo.graveyard.length > 10) undo.graveyard.shift();
+    }
     project.sprites.splice(i, 1);
     if (project.cur >= project.sprites.length) project.cur = project.sprites.length - 1;
     if (ce) ce.setStore(sprite().costumes);
