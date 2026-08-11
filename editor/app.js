@@ -204,6 +204,77 @@
     preview.onStep = (node) => glowNode(node);
     // 控制台：print 输出实时打到舞台控制台
     preview.onPrint = (text) => conLog(text);
+    // 调试：断点集合共用；暂停时弹出现场面板
+    preview.breakpoints = breakpoints;
+    preview.onPause = (node, env, stack) => showPausePanel(node, env, stack);
+    const bp = document.getElementById("dbg-pause"), bs = document.getElementById("dbg-step"),
+          br = document.getElementById("dbg-resume");
+    if (bp) bp.addEventListener("click", () => { if (preview) preview.dbgPause(); });
+    if (bs) bs.addEventListener("click", () => { hidePausePanel(); if (preview) preview.dbgStep(); });
+    if (br) br.addEventListener("click", () => { hidePausePanel(); setPvStatus("运行中 ▶", "ok"); if (preview) preview.dbgResume(); });
+  }
+
+  // ---------------- 调试器（M5）：断点 / 单步 / 变量面板 / 调用栈 ----------------
+  const breakpoints = new Set();     // 跨重绘保留（存 AST 节点引用）
+  function toggleBreakpoint(node, blk) {
+    if (breakpoints.has(node)) { breakpoints.delete(node); blk.classList.remove("bp"); }
+    else { breakpoints.add(node); blk.classList.add("bp"); }
+    if (preview) preview.breakpoints = breakpoints;   // 解释器与 UI 共用同一个集合
+  }
+  function dbgBtns(paused) {
+    const st = document.getElementById("dbg-step"), rs = document.getElementById("dbg-resume");
+    if (st) st.disabled = !paused;
+    if (rs) rs.disabled = !paused;
+  }
+  function showPausePanel(node, env, stack) {
+    const panel = document.getElementById("dbg-panel");
+    const canvas = document.getElementById("preview-canvas");
+    if (!panel) return;
+    panel.hidden = false;
+    if (canvas) canvas.hidden = true;                 // 暂停时用面板占位，便于查看现场
+    const where = document.getElementById("dbg-where");
+    if (where) where.textContent = (stack.length ? stack[stack.length - 1] + "()" : "main()") +
+                                   " · " + (node.block || "?");
+    // 变量
+    const vars = document.getElementById("dbg-vars");
+    if (vars) {
+      vars.innerHTML = "";
+      preview.dbgVars(env).forEach((v) => {
+        const row = el("div", "dbg-row");
+        row.append(el("span", "n", v.name), el("span", "v", fmtVal(v.value)), el("span", "sc", v.scope));
+        vars.append(row);
+      });
+      if (!vars.children.length) vars.append(el("div", "dbg-frame", "（无）"));
+    }
+    // 调用栈（内层在上）
+    const sk = document.getElementById("dbg-stack");
+    if (sk) {
+      sk.innerHTML = "";
+      const frames = stack.length ? stack.slice().reverse() : [];
+      frames.concat(["main"]).forEach((f) => sk.append(el("div", "dbg-frame", f + "()")));
+    }
+    // 高亮当前暂停的积木
+    document.querySelectorAll(".block.paused-at").forEach((b) => b.classList.remove("paused-at"));
+    if (node._el && node._el.isConnected) {
+      node._el.classList.add("paused-at");
+      node._el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+    dbgBtns(true);
+    setPvStatus("已暂停 ⏸", "warn");
+  }
+  function hidePausePanel() {
+    const panel = document.getElementById("dbg-panel");
+    const canvas = document.getElementById("preview-canvas");
+    if (panel) panel.hidden = true;
+    if (canvas) canvas.hidden = false;
+    document.querySelectorAll(".block.paused-at").forEach((b) => b.classList.remove("paused-at"));
+    dbgBtns(false);
+  }
+  function fmtVal(v) {
+    if (Array.isArray(v)) return "[" + v.map(fmtVal).join(", ") + "]";
+    if (v && typeof v === "object") return "{" + Object.entries(v).map(([k, x]) => k + ": " + fmtVal(x)).join(", ") + "}";
+    if (typeof v === "string") return JSON.stringify(v);
+    return String(v);
   }
 
   // ---------------- 执行高亮（运行到哪个积木就高亮哪个） ----------------
@@ -505,8 +576,10 @@
     // 拖拽重排：按住语句积木拖动，可在各 stack（函数体 / 控制块嘴巴）间移动；拖到调色板=删除
     blk.addEventListener("pointerdown", (e) => {
       if (e.target.classList.contains("field")) return;
+      if (e.altKey) { toggleBreakpoint(node, blk); return; }   // Alt+点击 = 设/清断点
       if (list) startStmtDrag({ node, fromList: list, blockEl: blk, e });
     });
+    if (breakpoints.has(node)) blk.classList.add("bp");          // 重绘后保持断点标记
     // 右键删除积木
     blk.addEventListener("contextmenu", (e) => {
       if (!list) return;

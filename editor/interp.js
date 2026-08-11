@@ -25,6 +25,13 @@
       this.assetBase = "";
       // 运行可观测：onStep(node) 用于「执行到哪个积木就高亮」；onPrint(text) 输出到控制台
       this.onStep = null;
+      // ---- 调试器状态（M5：断点 / 单步 / 变量面板 / 调用栈）----
+      this.breakpoints = new Set();   // 断点：积木节点对象（引用相等）
+      this.stepMode = false;          // 单步：下一条语句就停
+      this.paused = false;
+      this.stack = [];                // 调用栈（函数名）
+      this.onPause = null;            // (node, env, stack) => void
+      this.pending = null;            // 暂停处的现场：{ai, gen}
       this.onPrint = null;
       canvas.tabIndex = 0;
       canvas.addEventListener("keydown", (e) => {
@@ -107,7 +114,7 @@
       this.globalScope = new Map();
       this.fns = {};
       (shared && shared.globals || []).forEach((g) => {
-        this.globalScope.set(g.name, g.value !== undefined ? this.eval(g.value, [this.globalScope]) : this.defaultVal(g));
+        this.globalScope.set(g.name, g.value !== undefined ? this.runToEnd(this.eval(g.value, [this.globalScope])) : this.defaultVal(g));
       });
       this.actors = [];
       let hasMain = false;
@@ -124,9 +131,9 @@
         this.fns = fns;
         try {
           if (loopIdx < 0) {
-            this.execList(body, env);            // 无主循环：跑到结束
+            this.runToEnd(this.execList(body, env));   // 无主循环：跑到结束
           } else {
-            for (let i = 0; i < loopIdx; i++) this.execStmt(body[i], env);  // 初始化
+            for (let i = 0; i < loopIdx; i++) this.runToEnd(this.execStmt(body[i], env));  // 初始化
             this.actors.push({ fns, env, loop: body[loopIdx], post: body.slice(loopIdx + 1) });
           }
         } catch (e) {
@@ -143,16 +150,24 @@
     frameLoop() {
       const wd = this.world;
       if (!wd || !wd.running) {
-        (this.actors || []).forEach((a) => { this.fns = a.fns; try { for (const s of a.post) this.execStmt(s, a.env); } catch (e) {} });
+        (this.actors || []).forEach((a) => { this.fns = a.fns; try { for (const s of a.post) this.runToEnd(this.execStmt(s, a.env)); } catch (e) {} });
         if (wd) this.onStatus("已结束", "ok");
         return;
       }
-      wd.frameCleared = false;
-      wd.broadcasts = wd.nextBroadcasts; wd.nextBroadcasts = new Set();
-      for (const a of this.actors) {
+      if (this.paused) return;                       // 调试暂停中：不推进
+      // 从上次暂停处续跑；否则开新的一帧
+      let startIdx = 0;
+      if (this.pending) { startIdx = this.pending.ai; }
+      else { wd.frameCleared = false; wd.broadcasts = wd.nextBroadcasts; wd.nextBroadcasts = new Set(); }
+      for (let ai = startIdx; ai < this.actors.length; ai++) {
+        const a = this.actors[ai];
         this.fns = a.fns;
-        try { this.execList(a.loop.body, a.env); }
-        catch (e) {
+        const gen = (this.pending && this.pending.ai === ai) ? this.pending.gen
+                                                            : this.execList(a.loop.body, a.env);
+        this.pending = null;
+        try {
+          if (!this.pump(gen, ai)) return;           // 命中断点/单步 → 挂起，等用户操作
+        } catch (e) {
           if (e instanceof ReturnSignal) a.done = true;
           else { this.onStatus("运行出错: " + e.message, "warn"); return; }
         }
@@ -163,51 +178,51 @@
       this.raf = requestAnimationFrame(() => this.frameLoop());
     }
 
-    // ---- 语句 ----
-    execList(list, env) {
+    // ---- 语句（生成器：每条语句 yield 一次，便于断点/单步真正挂起）----
+    *execList(list, env) {
       env.push(new Map());
-      try { for (const s of list) this.execStmt(s, env); }
+      try { for (const s of list) yield* this.execStmt(s, env); }
       finally { env.pop(); }
     }
 
-    execStmt(node, env) {
+    *execStmt(node, env) {
       const w = this.world;
-      if (this.onStep) this.onStep(node);   // 执行到该积木 → 高亮回调
+      yield { node: node, env: env };       // 暂停点：驱动方决定继续还是停下
       switch (node.block) {
         case "let": {
-          let v = node.value !== undefined ? this.eval(node.value, env) : this.defaultVal(node);
+          let v = node.value !== undefined ? yield* this.eval(node.value, env) : this.defaultVal(node);
           env[env.length - 1].set(node.name, v);
           break;
         }
         case "assign": {
-          if (node.field) { const o = this.lookup(env, node.name); if (o) o[node.field] = this.eval(node.value, env); }
-          else if (node.index) { const a = this.lookup(env, node.name); a[this.eval(node.index, env)] = this.eval(node.value, env); }
-          else this.setVar(env, node.name, this.eval(node.value, env));
+          if (node.field) { const o = this.lookup(env, node.name); if (o) o[node.field] = yield* this.eval(node.value, env); }
+          else if (node.index) { const a = this.lookup(env, node.name); const ix = yield* this.eval(node.index, env); a[ix] = yield* this.eval(node.value, env); }
+          else this.setVar(env, node.name, yield* this.eval(node.value, env));
           break;
         }
         case "if":
-          if (this.eval(node.cond, env)) this.execList(node.then, env);
-          else if (node.else) this.execList(node.else, env);
+          if (yield* this.eval(node.cond, env)) yield* this.execList(node.then, env);
+          else if (node.else) yield* this.execList(node.else, env);
           break;
         case "while": {
           let g = 0;
-          while (this.eval(node.cond, env)) {
-            this.execList(node.body, env);
+          while (yield* this.eval(node.cond, env)) {
+            yield* this.execList(node.body, env);
             if (++g > 2000000) throw new Error("循环次数过多");
           }
           break;
         }
         case "for": {
-          const a = this.eval(node.start, env), b = this.eval(node.end, env);
+          const a = yield* this.eval(node.start, env), b = yield* this.eval(node.end, env);
           env.push(new Map());
-          try { for (let i = a; i < b; i++) { env[env.length - 1].set(node.var, i); this.execList(node.body, env); } }
+          try { for (let i = a; i < b; i++) { env[env.length - 1].set(node.var, i); yield* this.execList(node.body, env); } }
           finally { env.pop(); }
           break;
         }
         case "return":
-          throw new ReturnSignal(node.value !== undefined ? this.eval(node.value, env) : 0);
+          throw new ReturnSignal(node.value !== undefined ? yield* this.eval(node.value, env) : 0);
         case "expr":
-          this.eval(node.expr, env);
+          yield* this.eval(node.expr, env);
           break;
       }
     }
@@ -221,18 +236,33 @@
     }
 
     // ---- 表达式 ----
-    eval(node, env) {
+    *eval(node, env) {
       switch (node.block) {
         case "int": case "float": case "bool": return node.value;
         case "string": return node.value;
         case "var": return this.lookup(env, node.name);
-        case "unary": { const v = this.eval(node.operand, env); return node.op === "-" ? -v : !v; }
-        case "binary": return this.binop(node.op, this.eval(node.lhs, env), this.eval(node.rhs, env));
-        case "call": return this.callFn(node.callee, node.args.map((a) => this.eval(a, env)));
-        case "index": return this.eval(node.arr, env)[this.eval(node.idx, env)];
-        case "array": return node.elems.map((e) => this.eval(e, env));
-        case "field": { const o = this.eval(node.obj, env); const v = o ? o[node.name] : undefined; return v === undefined ? 0 : v; }
-        case "structlit": { const o = {}; node.fields.forEach((f) => { o[f.name] = this.eval(f.value, env); }); return o; }
+        case "unary": { const v = yield* this.eval(node.operand, env); return node.op === "-" ? -v : !v; }
+        case "binary": {
+          const l = yield* this.eval(node.lhs, env), r = yield* this.eval(node.rhs, env);
+          return this.binop(node.op, l, r);
+        }
+        case "call": {
+          const args = [];
+          for (const a of node.args) args.push(yield* this.eval(a, env));
+          return yield* this.callFn(node.callee, args);
+        }
+        case "index": { const a = yield* this.eval(node.arr, env); const i = yield* this.eval(node.idx, env); return a[i]; }
+        case "array": {
+          const out = [];
+          for (const e of node.elems) out.push(yield* this.eval(e, env));
+          return out;
+        }
+        case "field": { const o = yield* this.eval(node.obj, env); const v = o ? o[node.name] : undefined; return v === undefined ? 0 : v; }
+        case "structlit": {
+          const o = {};
+          for (const f of node.fields) o[f.name] = yield* this.eval(f.value, env);
+          return o;
+        }
       }
       return 0;
     }
@@ -252,16 +282,71 @@
     lookup(env, name) { for (let i = env.length - 1; i >= 0; i--) if (env[i].has(name)) return env[i].get(name); return 0; }
     setVar(env, name, v) { for (let i = env.length - 1; i >= 0; i--) if (env[i].has(name)) { env[i].set(name, v); return; } env[env.length - 1].set(name, v); }
 
-    callFn(name, args) {
+    *callFn(name, args) {
       const b = this.BUILTINS[name];
       if (b) return b.call(this, args);
       const fn = this.fns[name];
       if (!fn) throw new Error("未定义函数 " + name);
       const scope = new Map();
       (fn.params || []).forEach((p, i) => scope.set(p.name, args[i]));
-      try { this.execList(fn.body, [scope]); }
+      this.stack.push(name);                      // 调用栈（调试面板显示）
+      try { yield* this.execList(fn.body, [scope]); }
       catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; }
+      finally { this.stack.pop(); }
       return 0;
+    }
+
+    // 把生成器一路跑完，忽略暂停点（用于全局初始化等不可调试的场合）
+    runToEnd(gen) { let r = gen.next(); while (!r.done) r = gen.next(); return r.value; }
+
+    // 把生成器泵到完成；命中断点/单步时挂起并返回 false
+    pump(gen, ai) {
+      for (;;) {
+        const r = gen.next();
+        if (r.done) return true;
+        const { node, env } = r.value;
+        if (this.onStep) this.onStep(node);           // 执行高亮（原有行为）
+        if (this.stepMode || this.breakpoints.has(node)) {
+          this.paused = true;
+          this.stepMode = false;
+          this.pending = { ai: ai, gen: gen };
+          if (this.onPause) this.onPause(node, env, this.stack.slice());
+          return false;
+        }
+      }
+    }
+
+    // ---- 调试控制（供编辑器 UI 调用）----
+    dbgToggleBreakpoint(node) {
+      if (this.breakpoints.has(node)) this.breakpoints.delete(node);
+      else this.breakpoints.add(node);
+      return this.breakpoints.has(node);
+    }
+    dbgResume() {                                     // 继续运行到下一个断点
+      if (!this.paused) return;
+      this.paused = false;
+      this.frameLoop();
+    }
+    dbgStep() {                                       // 单步：执行下一条语句就停
+      if (!this.paused) return;
+      this.paused = false;
+      this.stepMode = true;
+      this.frameLoop();
+    }
+    dbgPause() { this.stepMode = true; }               // 请求在下一条语句处停下
+
+    // 暂停现场的变量快照（由内向外合并作用域，内层遮蔽外层）
+    dbgVars(env) {
+      const out = [];
+      const seen = new Set();
+      for (let i = env.length - 1; i >= 0; i--) {
+        for (const [k, v] of env[i]) {
+          if (seen.has(k)) continue;
+          seen.add(k);
+          out.push({ name: k, value: v, scope: i === 0 ? "全局" : "局部" });
+        }
+      }
+      return out;
     }
 
     // 舞台坐标（中心原点、y 向上）→ 画布坐标

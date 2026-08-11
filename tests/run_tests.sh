@@ -258,6 +258,12 @@ if command -v node >/dev/null 2>&1 && \
     else
         echo "✗ IDE mini-LSP: 验证失败（$rout）"; ((FAIL++))
     fi
+    # 积木级调试器：断点 → 暂停 → 变量/调用栈 → 单步
+    if dout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_debugger.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ IDE 调试器: 断点命中 + 变量面板 + 调用栈 + 单步（$dout）"; ((PASS++))
+    else
+        echo "✗ IDE 调试器: 验证失败（$dout）"; ((FAIL++))
+    fi
     # 导入即得积木：import 库后调色板自动出现该库分类（积木由签名生成）
     if lout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_lib_palette.js" "$ROOT/editor/index.html" 2>&1)"; then
         echo "✓ IDE 库积木: import 后调色板自动出现库分类（$lout）"; ((PASS++))

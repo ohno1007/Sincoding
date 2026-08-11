@@ -313,6 +313,15 @@ parser → checker → codegen → serializer → wasm 重编（`tools/build_sin
 **验收**：新建项目 → 导入 `algo.sinlib` → 调色板出现「算法」分类 →
 拖「BFS 寻路」积木跑通一个网格寻路 demo → 一键发布可玩。
 
+> **M5 编辑期部分已完成**：积木级调试器落地 ——
+> **Alt+点击积木设/清断点**（积木上显示红点）、命中即**暂停**（当前积木橙色描边）、
+> **变量面板**（按作用域由内向外合并，显示值与作用域）、**调用栈**、**单步/继续**。
+> 实现要点：解释器 `interp.js` 改造为**生成器**（`execStmt`/`execList`/`eval`/`callFn`
+> 全部 `function*`，每条语句 `yield` 一个暂停点），驱动方 `pump()` 决定继续还是挂起——
+> 因此能在**任意语句处真正挂起**，包括步入用户函数内部；未调试时行为与原先一致。
+> 浏览器验证见 `tools/verify_debugger.js`。
+> **未做（成品期）**：原生 debug 构建的 imgui overlay（F12 面板）。
+
 ### M5 —— 调试器双形态（D6 落地，杀手级特性）
 
 **编辑期（Web IDE，interp.js 升级）：**

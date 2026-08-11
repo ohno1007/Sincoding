@@ -93,10 +93,22 @@
               <button class="pv-tab" data-dock="console"><span data-icon="code" data-icon-size="13"></span>控制台</button>
               <button id="pv-run" title="重新运行" data-icon="play" data-icon-size="14"></button>
               <button id="pv-stop" title="停止" data-icon="stop" data-icon-size="14"></button>
+              <button id="dbg-pause" title="暂停（在下一条积木处停下）">⏸</button>
+              <button id="dbg-step" title="单步执行一条积木" disabled>⤼ 单步</button>
+              <button id="dbg-resume" title="继续运行到下一个断点" disabled>▶ 继续</button>
               <span id="pv-status"></span>
             </div>
             <div id="dock-body">
               <canvas id="preview-canvas" width="480" height="360" tabindex="0"></canvas>
+              <div id="dbg-panel" hidden>
+                <div class="dbg-hd">已暂停 · <span id="dbg-where"></span>
+                  <span class="dbg-tip">Alt+点击积木 = 设/清断点</span>
+                </div>
+                <div class="dbg-cols">
+                  <div><h4>变量</h4><div id="dbg-vars"></div></div>
+                  <div><h4>调用栈</h4><div id="dbg-stack"></div></div>
+                </div>
+              </div>
               <div id="dock-console" hidden>
                 <div class="dock-con-bar">
                   <button id="dock-print-info">打印积木信息</button>
