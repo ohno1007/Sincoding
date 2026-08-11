@@ -721,6 +721,27 @@
     if (slotEl && canvas.contains(slotEl)) { slotEl.classList.add("slot-hover"); drag.slotEl = slotEl; drag.slot = slotEl._slot; }
   }
 
+  // 参数/返回类型的文本表示：int / float[3] / int[]（len: 0 标量, >0 定长, -1 切片）
+  function typeText(p) {
+    return (p.type || "int") + (p.len === -1 ? "[]" : (p.len > 0 ? "[" + p.len + "]" : ""));
+  }
+  function applyTypeText(p, v) {
+    const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(\[\s*(\d*)\s*\])?\s*$/.exec(v || "");
+    if (!m) return;                                   // 写法不合法就保持原样
+    p.type = m[1];
+    p.len = m[2] ? (m[3] === "" ? -1 : parseInt(m[3], 10)) : 0;
+  }
+  function retText(fn) {
+    const t = fn.ret || "void";
+    return t + (fn.retLen > 0 ? "[" + fn.retLen + "]" : "");
+  }
+  function applyRetText(fn, v) {
+    const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(\[\s*(\d+)\s*\])?\s*$/.exec(v || "");
+    if (!m) return;
+    fn.ret = m[1];
+    fn.retLen = m[2] ? parseInt(m[3], 10) : 0;
+  }
+
   function renderFn(fn) {
     const script = el("div", "script");
     script.style.left = fn._x + "px"; script.style.top = fn._y + "px";
@@ -728,8 +749,35 @@
     const hdr = el("div", "hdr");
     hdr.append(el("span", "label", (fn.block === "extern_fn" ? "外部" : "定义")));
     hdr.append(field(() => fn.name, (s) => { fn.name = s || "f"; }));
-    fn.params.forEach((p) => hdr.append(el("span", "param", p.name + ": " + p.type)));
-    if (fn.ret && fn.ret !== "void") hdr.append(el("span", "kw", "→ " + fn.ret));
+    // 泛型类型参数 <T, U>（点击可编辑；留空即取消泛型）
+    if (fn.typeParams && fn.typeParams.length)
+      hdr.append(field(() => "<" + fn.typeParams.join(", ") + ">",
+                       (v) => { fn.typeParams = v.replace(/[<>]/g, "").split(",")
+                                  .map((x) => x.trim()).filter(Boolean); }, "kw"));
+    // 参数：可点改名字与类型，右键删除；类型含长度（T[N] / T[]）
+    fn.params.forEach((p, i) => {
+      const wrap = el("span", "param");
+      wrap.append(field(() => p.name, (v) => { p.name = v || ("a" + i); }));
+      wrap.append(el("span", "kw", ":"));
+      wrap.append(field(() => typeText(p), (v) => applyTypeText(p, v)));
+      wrap.addEventListener("contextmenu", (e) => {      // 右键删参数
+        e.preventDefault(); e.stopPropagation();
+        fn.params.splice(i, 1); render();
+      });
+      hdr.append(wrap);
+    });
+    const addP = el("button", "add-param", "+参数");
+    addP.title = "添加参数（类型可写 int / float[3] / int[] / 结构体名）";
+    addP.addEventListener("pointerdown", (e) => e.stopPropagation());
+    addP.addEventListener("click", (e) => {
+      e.stopPropagation();
+      fn.params.push({ name: "a" + (fn.params.length + 1), type: "int", len: 0 });
+      render();
+    });
+    hdr.append(addP);
+    // 返回类型也可编辑（含 void / T[N]）
+    hdr.append(el("span", "kw", "→"));
+    hdr.append(field(() => retText(fn), (v) => applyRetText(fn, v), "kw"));
     blk.append(hdr);
     if (fn.body) { const m = el("div", "mouth"); m.append(renderStmtList(fn.body, collectScope(fn))); blk.append(m); }
     script.append(blk);

@@ -271,6 +271,12 @@ if command -v node >/dev/null 2>&1 && \
     else
         echo "✗ IDE mini-LSP: 验证失败（$rout）"; ((FAIL++))
     fi
+    # 函数签名可从积木编辑（加参数 / 切片类型 / 返回类型）
+    if fout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_fn_signature.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ 函数签名积木: 加参数 + 切片类型 + 改返回类型（$fout）"; ((PASS++))
+    else
+        echo "✗ 函数签名积木: 验证失败（$fout）"; ((FAIL++))
+    fi
     # import 在积木侧不丢失 + 可从调色板可视化添加
     if iout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_import_blocks.js" "$ROOT/editor/index.html" 2>&1)"; then
         echo "✓ import 积木: 编辑积木不丢 import + 调色板可添加（$iout）"; ((PASS++))

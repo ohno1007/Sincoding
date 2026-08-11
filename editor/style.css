@@ -442,3 +442,11 @@ body.dragging-block { cursor:grabbing; }
 .dbg-frame { font-family: ui-monospace, monospace; padding: 3px 0; }
 #dbg-pause, #dbg-step, #dbg-resume { font-size: 12px; padding: 2px 8px; }
 #dbg-step:disabled, #dbg-resume:disabled { opacity: .4; cursor: default; }
+
+/* 函数头的「+参数」按钮（积木侧编辑函数签名） */
+.block.hat .add-param {
+  margin-left: 6px; padding: 1px 7px; font-size: 12px; line-height: 1.5;
+  border: none; border-radius: 10px; cursor: pointer;
+  background: rgba(255, 255, 255, .28); color: #fff;
+}
+.block.hat .add-param:hover { background: rgba(255, 255, 255, .45); }
