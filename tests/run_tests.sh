@@ -192,6 +192,20 @@ else
     echo "✗ 诊断列号: 未指向正确位置（$("$SINC" "$DIAGSRC" -o /dev/null 2>&1 | head -1)）"; ((FAIL++))
 fi
 
+# ---- 字符串库（UTF-8 码点） + .sinlib 打包/解包 ----
+echo
+echo "=== 字符串库 + .sinlib 库包 ==="
+STRSRC="$WORK/strs.sin"
+printf '%s\n' 'fn main() -> int {' '    let s = "你好，Sincoding 世界"'   '    print(str_len(s))' '    print(str_sub(s, 3, 9))' '    print(str_find(s, "世界"))'   '    print(str_contains(s, "coding"))' '    print(str_to_int("42abc"))' '    return 0' '}' > "$STRSRC"
+if "$SINC" "$STRSRC" -o "$WORK/strs.c" 2>/dev/null && "$CC" -std=c11 "$WORK/strs.c" -o "$WORK/strs" -lm 2>/dev/null &&    [[ "$("$WORK/strs" | tr '\n' ' ')" == "15 Sincoding 13 true 42 " ]]; then
+    echo "✓ 字符串: 按 UTF-8 码点计数/取子串/查找（中文=1 个字）"; ((PASS++))
+else echo "✗ 字符串: 输出不符（$("$WORK/strs" 2>/dev/null | tr '\n' ' ')）"; ((FAIL++)); fi
+SLDIR="$WORK/sinlib"; mkdir -p "$SLDIR"
+printf '%s\n' '// veclib' 'import "std/mathx"' 'struct Vec { x: float, y: float }'   'fn vec_len(v: Vec) -> float { return dist(0.0, 0.0, v.x, v.y) }' > "$SLDIR/veclib.sin"
+if python3 "$ROOT/tools/sinlib.py" pack -n test -o "$SLDIR/t.sinlib" "$SLDIR/veclib.sin" >/dev/null &&    rm "$SLDIR/veclib.sin" &&    python3 "$ROOT/tools/sinlib.py" unpack "$SLDIR/t.sinlib" -o "$SLDIR" >/dev/null &&    printf '%s\n' 'import "veclib"' 'extern fn sqrt(x: float) -> float' 'fn main() -> int {'      '    print(vec_len(Vec { x: 3.0, y: 4.0 }))' '    return 0' '}' > "$SLDIR/use.sin" &&    "$SINC" "$SLDIR/use.sin" -o "$SLDIR/use.c" 2>/dev/null &&    "$CC" -std=c11 "$SLDIR/use.c" -o "$SLDIR/use" -lm 2>/dev/null &&    [[ "$("$SLDIR/use")" == "5" ]]; then
+    echo "✓ sinlib: pack → unpack → import → 编译运行"; ((PASS++))
+else echo "✗ sinlib: 打包/解包链路失败"; ((FAIL++)); fi
+
 # ---- 数组越界保护 + 列表运行时错误 ----
 echo
 echo "=== 越界保护：运行时报行号并终止（比 UB 友好） ==="
@@ -447,6 +461,12 @@ if command -v node >/dev/null 2>&1 && \
         echo "✓ 信任底线: 注释保真 + 撤销/重做 + 积木/函数复制（$uout）"; ((PASS++))
     else
         echo "✗ 信任底线: 验证失败（$uout）"; ((FAIL++))
+    fi
+    # 字符串库 + .sinlib 用户库：码点语义、安装/导入/预览/持久化/删除
+    if lout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_sinlib.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ 字符串/库包: UTF-8 码点 + .sinlib 安装→import→预览→持久化（$lout）"; ((PASS++))
+    else
+        echo "✗ 字符串/库包: 验证失败（$lout）"; ((FAIL++))
     fi
     # 事件驱动 + 示例模板：模板零诊断、事件帽渲染、无 main 预览、调色板事件帽
     if eout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_events.js" "$ROOT/editor/index.html" 2>&1)"; then

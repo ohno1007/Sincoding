@@ -550,6 +550,33 @@ Type TypeChecker::checkExpr(Expr& e) {
                 c.type = Type::String;
                 return Type::String;
             }
+            // 内建字符串库（按 UTF-8 码点计数——"你好" 长度是 2 不是 6）
+            {
+                struct StrFn { const char* name; int argc; Type args[3]; Type ret; };
+                static const StrFn STRFNS[] = {
+                    {"str_len", 1, {Type::String}, Type::Int},
+                    {"str_at", 2, {Type::String, Type::Int}, Type::String},
+                    {"str_sub", 3, {Type::String, Type::Int, Type::Int}, Type::String},
+                    {"str_find", 2, {Type::String, Type::String}, Type::Int},
+                    {"str_contains", 2, {Type::String, Type::String}, Type::Bool},
+                    {"str_to_int", 1, {Type::String}, Type::Int},
+                    {"str_to_float", 1, {Type::String}, Type::Float},
+                };
+                for (auto& sf : STRFNS) {
+                    if (c.callee != sf.name) continue;
+                    if ((int)c.args.size() != sf.argc)
+                        error(c.line, std::string(sf.name) + " 需要 " + std::to_string(sf.argc) + " 个参数");
+                    for (size_t i = 0; i < c.args.size(); i++) {
+                        Type at = checkExpr(*c.args[i]);
+                        if ((int)i < sf.argc && at != Type::Unknown &&
+                            (at != sf.args[i] || c.args[i]->arrayLen != 0))
+                            errorAt(*c.args[i], std::string(sf.name) + " 第 " + std::to_string(i + 1) +
+                                                 " 个参数应为 " + typeName(sf.args[i]));
+                    }
+                    c.type = sf.ret;
+                    return c.type;
+                }
+            }
             // 内建列表操作：push(xs,v) / pop(xs) / insert(xs,i,v) / remove_at(xs,i) / clear(xs)
             // 第一个参数必须是列表（T[*]）变量——列表按值整体拷贝没有意义，增删要打在本体上
             if (c.callee == "push" || c.callee == "pop" || c.callee == "insert" ||

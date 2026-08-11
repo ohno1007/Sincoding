@@ -27,7 +27,7 @@ emcc -std=c++17 -O2 \
     "$ROOT/compiler/src/comments.cpp" \
     "$ROOT/compiler/src/wasm_api.cpp" \
     -sMODULARIZE=1 -sEXPORT_NAME=SincModule \
-    -sEXPORTED_FUNCTIONS='["_sin_to_blocks","_sin_hover","_sin_references","_sin_rename","_sin_complete","_sin_runtime_decls","_sin_blocks_to_src","_malloc","_free"]' \
+    -sEXPORTED_FUNCTIONS='["_sin_to_blocks","_sin_hover","_sin_references","_sin_rename","_sin_complete","_sin_runtime_decls","_sin_lib_clear","_sin_lib_add","_sin_blocks_to_src","_malloc","_free"]' \
     -sEXPORTED_RUNTIME_METHODS='["ccall","cwrap","UTF8ToString"]' \
     -sALLOW_MEMORY_GROWTH=1 \
     -sSTACK_SIZE=4194304 \

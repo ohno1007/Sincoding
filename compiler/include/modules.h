@@ -27,6 +27,10 @@ bool resolveImports(Program& prog, const std::string& baseDir, std::vector<Diagn
 // 与主程序重名的 extern 原型自动跳过。返回是否找到该模块。
 bool injectBuiltinModule(Program& prog, const std::string& name);
 
+// 注册/清空内存用户库（.sinlib 安装流程；findModule 在内置库之后、磁盘之前查它）
+void registerMemoryModule(const std::string& name, const std::string& src);
+void clearMemoryModules();
+
 // 取内置模块的源码（编辑器导出 .sin 时用它补运行时声明，避免前端另抄一份）。
 // 找不到返回 false。
 bool builtinModuleSource(const std::string& name, std::string& out);

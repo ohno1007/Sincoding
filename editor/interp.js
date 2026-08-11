@@ -510,6 +510,21 @@
       l.splice(i, 1);
     },
     clear(a) { a[0].length = 0; },
+    // ---- 字符串库：按码点（与生成的 C 的 UTF-8 实现同语义）----
+    str_len(a) { return [...String(a[0])].length; },
+    str_at(a) { const cp = [...String(a[0])], i = a[1]; return i >= 0 && i < cp.length ? cp[i] : ""; },
+    str_sub(a) {
+      const cp = [...String(a[0])];
+      const st = Math.max(0, a[1]), n = Math.max(0, a[2]);
+      return cp.slice(st, st + n).join("");
+    },
+    str_find(a) {
+      const s = String(a[0]), bi = s.indexOf(String(a[1]));
+      return bi < 0 ? -1 : [...s.slice(0, bi)].length;
+    },
+    str_contains(a) { return String(a[0]).includes(String(a[1])); },
+    str_to_int(a) { const n = parseInt(String(a[0]), 10); return isNaN(n) ? 0 : n; },
+    str_to_float(a) { const n = parseFloat(String(a[0])); return isNaN(n) ? 0 : n; },
     key_pressed_space() { return this.pressedNow.has(32); },
     key_pressed_left()  { return this.pressedNow.has(263); },
     key_pressed_right() { return this.pressedNow.has(262); },

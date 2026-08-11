@@ -133,6 +133,18 @@ def do_publish(payload):
         src = os.path.join(work, "program.sin")
         with open(src, "w") as f:
             f.write(source)
+        # .sinlib 用户库：落盘成 <模块名>.sin 放在源码旁——sinc 的 import 解析
+        # 会先查同目录，浏览器里装的库因此在原生编译时同样可见
+        for lib in (payload.get("libs") or []):
+            lname, lsrc = lib.get("name"), lib.get("src")
+            if not lname or not isinstance(lsrc, str):
+                continue
+            if ".." in lname or lname.startswith("/"):   # 路径穿越防护
+                continue
+            lpath = os.path.join(work, lname + ".sin")   # 模块名可含子目录（如 mylib/vec）
+            os.makedirs(os.path.dirname(lpath) or work, exist_ok=True)
+            with open(lpath, "w") as f:
+                f.write(lsrc)
         assets_dir = os.path.join(work, "assets")
         has_assets = _write_assets(assets, assets_dir)
         logo_path = None

@@ -85,6 +85,7 @@ bool exprUsesStrRt(const Expr& e) {
         case ExprKind::Call: {
             auto& c = static_cast<const Call&>(e);
             if (c.callee == "str") return true;
+            if (c.callee.rfind("str_", 0) == 0) return true;   // 内建字符串库
             return anyUsesStrRt(c.args);
         }
         case ExprKind::Unary:  return exprUsesStrRt(*static_cast<const Unary&>(e).operand);
@@ -190,7 +191,35 @@ std::string CodeGen::generate(const Program& prog) {
 "    char buf[40]; int k = snprintf(buf, sizeof(buf), \"%g\", f);\n"
 "    return sin_str_take(buf, (size_t)k, \"\", 0);\n"
 "}\n"
-"static const char* sin_str_from_bool(int b) { return b ? \"true\" : \"false\"; }\n\n";
+"static const char* sin_str_from_bool(int b) { return b ? \"true\" : \"false\"; }\n"
+"// \u5b57\u7b26\u4e32\u5e93\uff1a\u6309 UTF-8 \u7801\u70b9\u8ba1\u6570\uff08\"\u4f60\u597d\"\u957f\u5ea6\u662f 2\uff09\n"
+"static long long sin_u8_step(const char* s, long long i) {\n"
+"    unsigned char c = (unsigned char)s[i];\n"
+"    return c < 0x80 ? 1 : c < 0xE0 ? 2 : c < 0xF0 ? 3 : 4;\n"
+"}\n"
+"static long long str_len(const char* s) {\n"
+"    long long n = 0, i = 0;\n"
+"    while (s[i]) { i += sin_u8_step(s, i); n++; }\n"
+"    return n;\n"
+"}\n"
+"static const char* str_sub(const char* s, long long start, long long count) {\n"
+"    long long i = 0, k = 0;\n"
+"    while (s[i] && k < start) { i += sin_u8_step(s, i); k++; }\n"
+"    long long b = i, taken = 0;\n"
+"    while (s[i] && taken < count) { i += sin_u8_step(s, i); taken++; }\n"
+"    return sin_str_take(s + b, (size_t)(i - b), \"\", 0);\n"
+"}\n"
+"static const char* str_at(const char* s, long long i) { return str_sub(s, i, 1); }\n"
+"static long long str_find(const char* s, const char* sub) {\n"
+"    const char* p = strstr(s, sub);\n"
+"    if (!p) return -1;\n"
+"    long long n = 0, i = 0, byte = (long long)(p - s);\n"
+"    while (i < byte) { i += sin_u8_step(s, i); n++; }\n"
+"    return n;\n"
+"}\n"
+"static bool str_contains(const char* s, const char* sub) { return strstr(s, sub) != NULL; }\n"
+"static long long str_to_int(const char* s) { return atoll(s); }\n"
+"static double str_to_float(const char* s) { return atof(s); }\n\n";
     }
 
     // 泛型模板只是模板（含类型变量），不参与代码生成——只生成它的具体实例
@@ -296,9 +325,11 @@ std::string CodeGen::generate(const Program& prog) {
         }
     }
 
-    // 全局变量（文件作用域）
+    // 全局变量（文件作用域——调试钩子是语句，不能发射在这里）
     if (!prog.globals.empty()) {
+        atGlobal_ = true;
         for (auto& g : prog.globals) emitStmt(*g);
+        atGlobal_ = false;
         out_ << "\n";
     }
 
@@ -419,12 +450,12 @@ void CodeGen::emitBlock(const Block& block) {
 
 // 调试钩子：上报当前执行行 + 标量变量的值（仅 --debug 构建）
 void CodeGen::emitDbgLine(const Stmt& s) {
-    if (!debug_ || s.line <= 0) return;
+    if (!debug_ || s.line <= 0 || atGlobal_) return;   // 文件作用域不能放语句
     indent();
     out_ << "sin_dbg_line(" << s.line << ");\n";
 }
 void CodeGen::emitDbgVar(const std::string& name, Type t, int len) {
-    if (!debug_ || len != 0) return;             // 仅监视标量
+    if (!debug_ || len != 0 || atGlobal_) return;   // 仅监视标量；全局声明处没有可执行语句
     const char* fn = nullptr;
     switch (t) {
         case Type::Int:    fn = "sin_dbg_set_i"; break;

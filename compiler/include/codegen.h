@@ -31,6 +31,7 @@ private:
     void emitDbgVar(const std::string& n, Type t, int len); // --debug: 上报标量变量
 
     bool debug_ = false;
+    bool atGlobal_ = false;   // 正在发射文件作用域全局（不得发射调试钩子语句）
     std::ostringstream out_;
     int depth_ = 0;
     std::unordered_map<std::string, const FnDecl*> fns_;  // 调用点查形参类型

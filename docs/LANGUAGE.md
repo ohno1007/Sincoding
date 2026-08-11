@@ -211,6 +211,21 @@ print(e.trail[1])              // 数组字段下标
 - 结构体字面量 `Name { f: v, ... }` 需给全所有字段。
 - 在 `if/while/for` 的条件里直接写 `Name { }` 会与代码块歧义，必要时用括号 `(Name { ... })`。
 
+## 3.7 字符串库（内建，按 UTF-8 码点）
+
+无需 import，直接可用；中文一个字算 1（不是 3 个字节）：
+
+```rust
+let s = "你好，Sincoding 世界"
+print(str_len(s))               // 15
+print(str_at(s, 0))             // 你
+print(str_sub(s, 3, 9))         // Sincoding（从第 3 个字取 9 个字）
+print(str_find(s, "世界"))       // 13（找不到返回 -1）
+print(str_contains(s, "coding")) // true
+print(str_to_int("42abc"))       // 42
+print(str_to_float("3.5"))       // 3.5
+```
+
 ## 4. 函数
 
 ```rust
@@ -343,6 +358,18 @@ fn on_key_space() { }            // 当按下空格（刚按下的边沿，不�
 
 可用事件：`on_start` / `on_frame` / `on_key_space|left|right|up|down` / `on_click`。
 事件函数必须无参、无返回值。写了 `main` 则一切照旧（事件函数不会被自动调用）。
+
+### 4.5.1 `.sinlib` 库包
+
+把若干 `.sin` 模块打成**单文件 JSON 库包**分发：
+
+```bash
+tools/sinlib.py pack -n "向量库" -o vec.sinlib veclib.sin   # 打包
+tools/sinlib.py unpack vec.sinlib -o mylibs/                # 解包（原生编译用）
+```
+
+编辑器里「模块 / 库 → 库管理…」安装 `.sinlib` 后 `import "veclib"` 即用
+（类型检查/积木生成/预览全链路生效），库随 `.sinproj` 项目保存，发布时自动带上。
 
 ## 5. 控制流
 

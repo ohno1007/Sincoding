@@ -236,6 +236,18 @@ header .tabs button.active { background:#fff; color:var(--c-motion); font-weight
 .hdr-actions button.primary { background:#ffab19; color:#20160a; border-color:#ffab19; }
 .hdr-actions button.primary:hover { filter:brightness(1.06); background:#ffab19; }
 
+/* 库管理行 */
+.lib-rows { display:flex; flex-direction:column; gap:6px; }
+.lib-row { display:flex; align-items:center; gap:9px; border:1px solid var(--line); border-radius:8px;
+  padding:7px 11px; font-size:12.5px; background:#fff; }
+.lib-row .lib-nm { font-weight:700; color:#3B4351; font-family:ui-monospace,Menlo,monospace; }
+.lib-row .lib-ds { color:#8a92a5; font-size:11.5px; flex:1 1 auto; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; }
+.lib-row button { border:1px solid var(--line); background:#fff; color:var(--ink); font-size:11.5px;
+  font-weight:600; padding:3px 9px; border-radius:6px; cursor:pointer; }
+.lib-row button:hover { background:#F2F6FC; }
+.lib-row button.danger:hover { background:#FDECEC; border-color:#EC5959; color:#C33; }
+
 /* 示例模板卡片 */
 .tpl-list { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .tpl-card { border:1px solid var(--line); border-radius:10px; padding:12px; cursor:pointer;

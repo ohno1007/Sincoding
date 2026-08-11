@@ -574,6 +574,8 @@
     key_pressed_up: "刚按下↑?", key_pressed_down: "刚按下↓?", mouse_clicked: "刚点击?",
     push: "添加到列表", pop: "取出末项", insert: "插入到列表",
     remove_at: "删除列表第", clear: "清空列表",
+    str_len: "字数", str_at: "第i个字", str_sub: "取子串", str_find: "查找位置",
+    str_contains: "包含?", str_to_int: "文字转整数", str_to_float: "文字转小数",
   };
   // 事件函数：约定名 → 帽子块的中文标签（渲染成 Scratch 式事件帽，名字仍是唯一真相）
   const EVENT_LABELS = {
@@ -1284,7 +1286,7 @@
   if (window.SincModule) {
     // 引擎就绪前 modelToSource 只能返回 null（文本视图是引擎序列化的，无 JS 镜像），
     // 所以首屏渲染时文本框是空的——引擎到位后必须补一次渲染，否则用户不动积木就一直空着。
-    window.SincModule().then((m) => { sincMod = m; window.__sincReady = true; refreshText(); })
+    window.SincModule().then((m) => { sincMod = m; window.__sincReady = true; syncLibsToEngine(); refreshText(); })
       .catch(() => setTextStatus("反向解析不可用（请用 HTTP 打开）", "warn"));
   }
 
@@ -1560,6 +1562,7 @@
     return {
       format: "sincoding-project", version: 1,
       cur: project.cur,
+      userLibs: project.userLibs || [],
       structs: project.structs || [], globals: project.globals || [],
       publish: project.publish || null,
       sprites: project.sprites.map((sp) => ({
@@ -1604,6 +1607,8 @@
     project.cur = Math.min(obj.cur || 0, sprites.length - 1);
     project.structs = obj.structs || []; project.globals = obj.globals || [];
     project.publish = obj.publish || null;
+    project.userLibs = obj.userLibs || [];          // .sinlib 安装的用户库随项目走
+    syncLibsToEngine();
     selected = sprite().program[0] || null;
     if (ce) ce.setStore(sprite().costumes);
     renderSpriteBar(); render(); schedulePreview();
@@ -1696,7 +1701,8 @@
           try {
             const resp = await fetch("api/publish", {
               method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name, pkg, platforms: serverPlats, source, logo: logoDataURL, assets: collectAssets() }),
+              body: JSON.stringify({ name, pkg, platforms: serverPlats, source, logo: logoDataURL,
+                                     assets: collectAssets(), libs: project.userLibs || [] }),
             });
             if (!resp.ok) throw new Error("HTTP " + resp.status);
             const out = await resp.json();
@@ -1997,6 +2003,11 @@
     r_mouse_x: () => C("mouse_x"), r_mouse_y: () => C("mouse_y"), r_mouse_down: () => C("mouse_down"),
     r_timer: () => C("timer"), r_touch_mouse: () => C("sprite_touching_mouse", Vr("s")),
     r_pop: () => C("pop", Vr("xs")), r_len: () => C("len", Vr("xs")),
+    r_str_len: () => C("str_len", S("你好")), r_str_at: () => C("str_at", S("你好"), I(0)),
+    r_str_sub: () => C("str_sub", S("你好"), I(0), I(1)),
+    r_str_find: () => C("str_find", S("你好"), S("好")),
+    r_str_contains: () => C("str_contains", S("你好"), S("好")),
+    r_str_to_int: () => C("str_to_int", S("42")), r_str_to_float: () => C("str_to_float", S("3.5")),
     r_key: () => C("key_down", C("key_left")), r_received: () => C("received", S("go")),
     r_sprite_x: () => C("sprite_x", Vr("s")), r_sprite_y: () => C("sprite_y", Vr("s")),
   };
@@ -2073,6 +2084,9 @@
     { id: "stage", name: "舞台", color: "#FFAB19", items: ["stage_init", "game_loop", "frame_begin", "frame_end", "stage_close"] },
     { id: "motion", name: "运动", color: "#4C97FF", items: ["sprite_new", "sprite_move_to", "sprite_move", "sprite_turn", "sprite_point", "sprite_scale", "sprite_bounce", "sprite_show", "sprite_hide", "sprite_x", "sprite_y"] },
     { id: "looks", name: "外观", color: "#9966FF", items: ["sprite_load", "sprite_draw", "say", "draw_text", "draw_number"] },
+    { id: "strings", name: "文字 (拖入槽)", color: "#59C059", reporter: true,
+      items: ["r_str_len", "r_str_at", "r_str_sub", "r_str_find", "r_str_contains",
+              "r_str_to_int", "r_str_to_float"] },
     { id: "pen", name: "画笔", color: "#0FBD8C", items: ["pen_clear", "pen_color", "pen_size", "pen_line", "pen_dot"] },
     { id: "platform", name: "平台", color: "#5CB1D6", items: ["if_mouse", "let_mouse_x", "let_mouse_y", "let_random", "let_screen_w", "timer_reset"] },
     { id: "events", name: "事件 / 声音", color: "#FFBF00", items: [
@@ -2085,11 +2099,103 @@
       items: [{ special: "addStruct", label: "新建结构体" },
               { special: "addGlobal", label: "新建全局变量" }] },
     { id: "modules", name: "模块 / 库", color: "#CF63CF",
-      items: [{ special: "addImport", label: "导入库…" }] },
+      items: [{ special: "addImport", label: "导入库…" },
+              { special: "libManager", label: "库管理…" }] },
   ];
 
   // 内置标准库清单（供「导入库」快捷选择；也可手输任意模块名）
   const STD_MODULES = ["std/mathx", "std/arrayx"];
+  // ---------------- .sinlib 用户库：安装 → 注册进引擎 → import 即用 ----------------
+  // 库包是单文件 JSON：{"format":"sinlib","name":..,"desc":..,"modules":[{"name","src"},..]}
+  // 模块源码注册进 wasm 引擎内存后，import "模块名" 在浏览器内解析——
+  // 类型检查 / 导入即得积木 / 预览执行全部走既有链路，没有第二套机制。
+  function syncLibsToEngine() {
+    if (!sincMod) return;
+    try {
+      sincMod.ccall("sin_lib_clear", null, [], []);
+      (project.userLibs || []).forEach((m) =>
+        sincMod.ccall("sin_lib_add", null, ["string", "string"], [m.name, m.src]));
+    } catch (e) { /* 注册失败不阻断编辑 */ }
+  }
+  function installSinlib(obj) {
+    if (!obj || obj.format !== "sinlib" || !Array.isArray(obj.modules)) return "不是有效的 .sinlib 文件";
+    project.userLibs = project.userLibs || [];
+    let n = 0;
+    for (const m of obj.modules) {
+      if (!m || !m.name || typeof m.src !== "string") continue;
+      const old = project.userLibs.findIndex((x) => x.name === m.name);
+      if (old >= 0) project.userLibs.splice(old, 1);          // 重装 = 覆盖同名模块
+      project.userLibs.push({ name: m.name, src: m.src, pkg: obj.name || "" });
+      n++;
+    }
+    syncLibsToEngine();
+    onTextEdited();                                            // 重新解析：诊断/积木/预览联动
+    return n ? null : "包里没有可用模块";
+  }
+  function removeUserLib(name) {
+    project.userLibs = (project.userLibs || []).filter((m) => m.name !== name);
+    syncLibsToEngine();
+    onTextEdited();
+  }
+  window._sinLibs = { install: installSinlib, remove: removeUserLib,
+                      list: () => (project.userLibs || []).map((m) => m.name) };  // 测试探针
+
+  function openLibManager() {
+    const modal = document.getElementById("lib-modal");
+    const stdEl = document.getElementById("lib-std"), userEl = document.getElementById("lib-user");
+    if (!modal) return;
+    const row = (nm, desc, actions) => {
+      const r = el("div", "lib-row");
+      r.append(el("span", "lib-nm", nm), el("span", "lib-ds", desc));
+      actions.forEach((a) => r.append(a));
+      return r;
+    };
+    const importBtn = (nm) => {
+      const b = el("button", null, "导入到项目");
+      b.addEventListener("click", () => {
+        project.imports = project.imports || [];
+        if (!project.imports.includes(nm)) {
+          project.imports.push(nm);
+          render();
+        }
+        modal.hidden = true;
+      });
+      return b;
+    };
+    stdEl.innerHTML = "";
+    [["std/stage", "舞台/精灵/输入等运行时 API（编辑器已隐式加载）"],
+     ["std/mathx", "数学工具：clamp/lerp/dist/abs_i…"],
+     ["std/arrayx", "数组工具（泛型+切片）：sort/sum/max_of…"]].forEach(([nm, ds]) =>
+      stdEl.append(row(nm, ds, [importBtn(nm)])));
+    userEl.innerHTML = "";
+    if (!(project.userLibs || []).length) userEl.append(el("div", "hint", "还没有安装用户库"));
+    (project.userLibs || []).forEach((m) => {
+      const del = el("button", "danger", "删除");
+      del.addEventListener("click", () => { removeUserLib(m.name); openLibManager(); });
+      userEl.append(row(m.name, m.pkg ? "来自库包 " + m.pkg : "", [importBtn(m.name), del]));
+    });
+    modal.hidden = false;
+  }
+  (() => {
+    const modal = document.getElementById("lib-modal");
+    if (!modal) return;
+    document.getElementById("lib-close").addEventListener("click", () => { modal.hidden = true; });
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.hidden = true; });
+    const btn = document.getElementById("lib-install-btn"), inp = document.getElementById("lib-install-input");
+    btn.addEventListener("click", () => inp.click());
+    inp.addEventListener("change", () => {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const err = installSinlib(JSON.parse(r.result));
+          if (err) alert(err); else openLibManager();   // 刷新面板显示新库
+        } catch (e) { alert("解析 .sinlib 失败: " + e.message); }
+      };
+      r.readAsText(f); inp.value = "";
+    });
+  })();
+
   function addImport() {
     const cur = (project.imports || []).join("、") || "（无）";
     const name = (prompt("导入哪个库？\n内置：" + STD_MODULES.join(" / ") +
@@ -2155,6 +2261,13 @@
       const row = el("div", "hdr");
       row.append(el("span", "label", sp.special === "addStruct" ? "结构体" : "全局"),
                  el("span", "param", sp.special === "addStruct" ? "新建…" : "新变量"));
+      blk.append(row);
+      return blk;
+    }
+    if (sp.special === "libManager") {
+      const blk = el("div", "block import-blk");
+      const row = el("div", "hdr");
+      row.append(el("span", "label", "库管理"), el("span", "param", "安装 .sinlib…"));
       blk.append(row);
       return blk;
     }
@@ -2279,6 +2392,7 @@
               else if (it.special === "addEvent") addEventFn(it.ev);
               else if (it.special === "addList") addList();
               else if (it.special === "addImport") addImport();
+              else if (it.special === "libManager") openLibManager();
               else if (it.special === "addStruct") addStruct();
               else if (it.special === "addGlobal") addGlobal();
             }

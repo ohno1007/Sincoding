@@ -139,6 +139,13 @@ const char* sin_rename(const char* src, int line, int col, const char* newName) 
     return result.c_str();
 }
 
+// 用户库注册（.sinlib 安装）：编辑器把每个模块逐个注册进引擎内存，
+// 之后 import "该模块名" 在浏览器内即可解析（类型检查/积木生成/预览全链路生效）。
+void sin_lib_clear(void) { clearMemoryModules(); }
+void sin_lib_add(const char* name, const char* src) {
+    if (name && src) registerMemoryModule(name, src);
+}
+
 // 运行时 API 的语言侧声明源码（std/stage.sin 原文）。
 // 编辑器导出 .sin 时把它补在文件头部，使程序可独立编译——
 // 声明只此一份，前端不再另抄一张表。

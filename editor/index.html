@@ -72,6 +72,28 @@
   </div>
 </div>
 
+<!-- 库管理：安装 .sinlib（单文件 JSON 库包），模块注册进引擎后 import 即用 -->
+<div id="lib-modal" class="modal-overlay" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <span data-icon="folder" data-icon-size="18"></span>
+      <h2>库管理</h2>
+      <button id="lib-close" class="modal-x" title="关闭">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fld"><span>内置标准库（随编译器提供）</span>
+        <div id="lib-std" class="lib-rows"></div></div>
+      <div class="fld"><span>已安装的用户库</span>
+        <div id="lib-user" class="lib-rows"></div></div>
+      <div class="logo-row">
+        <button id="lib-install-btn" type="button"><span data-icon="download" data-icon-size="14"></span>安装 .sinlib 文件</button>
+        <span class="hint">库包随项目保存（.sinproj 内），换机器打开不丢</span>
+        <input id="lib-install-input" type="file" accept=".sinlib,application/json" hidden>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 示例模板：每个模板是一段真实源码，载入走引擎解析（与手写文本同一条路径） -->
 <div id="tpl-modal" class="modal-overlay" hidden>
   <div class="modal">

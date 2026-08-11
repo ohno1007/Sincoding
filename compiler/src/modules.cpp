@@ -6,10 +6,17 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <map>
 #include <unordered_set>
 
 namespace sincoding {
 namespace {
+
+// 内存注册的用户库（.sinlib 安装后由编辑器注入；浏览器里没有磁盘可查）
+std::map<std::string, std::string>& memModules() {
+    static std::map<std::string, std::string> m;
+    return m;
+}
 
 // 内置标准库查表
 bool builtinModule(const std::string& name, std::string& out) {
@@ -31,6 +38,8 @@ bool readFile(const std::string& path, std::string& out) {
 bool findModule(const std::string& name, const std::string& baseDir,
                 std::string& src, std::string& dir) {
     if (builtinModule(name, src)) { dir = ""; return true; }   // 内置：无目录
+    { auto it = memModules().find(name);                        // .sinlib 安装的用户库
+      if (it != memModules().end()) { src = it->second; dir = ""; return true; } }
 
     auto tryPath = [&](const std::string& d) {
         if (d.empty()) return false;
@@ -140,6 +149,11 @@ bool resolveImports(Program& prog, const std::string& baseDir, std::vector<Diagn
 bool builtinModuleSource(const std::string& name, std::string& out) {
     return builtinModule(name, out);
 }
+
+void registerMemoryModule(const std::string& name, const std::string& src) {
+    memModules()[name] = src;
+}
+void clearMemoryModules() { memModules().clear(); }
 
 bool injectBuiltinModule(Program& prog, const std::string& name) {
     std::string src;
