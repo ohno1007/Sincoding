@@ -13,6 +13,8 @@
     move: '<polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/>',
     play: '<polygon points="6 3 20 12 6 21 6 3"/>',
     stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+    flag: '<path d="M5 21V3.5"/><path d="M5 4c2.7-1.6 5.3 1.6 8 0s5.3-1.6 7 0l-2 5.5 2 5.5c-1.7-1.6-4.3 0-7 1.6s-5.3-1.6-8 0" fill="currentColor" stroke-linejoin="round"/>',
+    stopsign: '<polygon points="8.2 3 15.8 3 21 8.2 21 15.8 15.8 21 8.2 21 3 15.8 3 8.2" fill="currentColor" stroke-linejoin="round"/>',
     bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
     folder: '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>',
     save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',

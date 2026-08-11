@@ -79,6 +79,11 @@
           <div id="canvas"></div>
           <div id="zoom-hint"><span data-icon="move" data-icon-size="14"></span><span class="zt"></span></div>
           <div id="page-tag"></div>
+          <div id="zoom-ctrl">
+            <button id="zoom-in" title="放大">＋</button>
+            <button id="zoom-out" title="缩小">－</button>
+            <button id="zoom-reset" title="回到 100%">⌖</button>
+          </div>
         </div>
         <div id="text-pane">
           <div id="text-edit">
@@ -91,8 +96,8 @@
             <div class="pv-bar">
               <button class="pv-tab active" data-dock="preview"><span data-icon="play" data-icon-size="13"></span>预览</button>
               <button class="pv-tab" data-dock="console"><span data-icon="code" data-icon-size="13"></span>控制台</button>
-              <button id="pv-run" title="重新运行" data-icon="play" data-icon-size="14"></button>
-              <button id="pv-stop" title="停止" data-icon="stop" data-icon-size="14"></button>
+              <button id="pv-run" title="运行（绿旗）" data-icon="flag" data-icon-size="16"></button>
+              <button id="pv-stop" title="停止" data-icon="stopsign" data-icon-size="15"></button>
               <button id="dbg-pause" title="暂停（在下一条积木处停下）">⏸</button>
               <button id="dbg-step" title="单步执行一条积木" disabled>⤼ 单步</button>
               <button id="dbg-resume" title="继续运行到下一个断点" disabled>▶ 继续</button>
@@ -121,7 +126,12 @@
         </div>
       </div>
       <div id="sprite-bar">
-        <div class="sb-label">精灵</div>
+        <div id="sprite-props">
+          <label>精灵 <input id="sp-name" type="text" spellcheck="false"></label>
+          <label>x <input id="sp-x" type="number" step="10"></label>
+          <label>y <input id="sp-y" type="number" step="10"></label>
+          <span id="sp-costumes"></span>
+        </div>
         <div id="sprite-list"></div>
         <button id="add-sprite" data-icon="plus" data-icon-size="16" title="新建精灵"></button>
       </div>

@@ -1,62 +1,85 @@
+/* Sincoding 编辑器样式 — 视觉语言对齐 Scratch 3.0（scratch-gui / scratch-blocks）
+ *
+ * 设计要点（与 Scratch 一致）：
+ *  - 积木是**扁平填充 + 1px 加深描边**（不是渐变浮雕）；文字白色 12px
+ *  - 帽子块只有头部，函数体积木栈**悬挂在下方**（不是包进一块大色板）
+ *  - 控制块是真正的 C 形：上臂 + 左脊 + 下臂，嘴巴露出画布底色
+ *  - 布尔运算是六边形，取值运算是圆角椭圆，字面量/输入槽是白色椭圆
+ *  - 相邻积木用下凸榫头咬合
+ *  - UI 主紫 #855CD6，面板白底 + #D9D9D9 发丝线，文字 #575E75
+ */
 :root {
-  /* Scratch 风格分类配色 */
-  --c-motion:#4C97FF; --c-looks:#9966FF; --c-sound:#CF63CF;
-  --c-events:#FFBF00; --c-control:#FFAB19; --c-operators:#59C059;
-  --c-variables:#FF8C1A; --c-myblocks:#FF6680;
-  --ink:#2b3a4b; --bg:#f0f3fa; --panel:#fff; --line:#e3e8f2;
+  /* Scratch 分类配色（填充 / 描边 = 加深一档） */
+  --c-motion:#4C97FF;    --b-motion:#3373CC;
+  --c-looks:#9966FF;     --b-looks:#774DCB;
+  --c-sound:#CF63CF;     --b-sound:#BD42BD;
+  --c-events:#FFBF00;    --b-events:#CC9900;
+  --c-control:#FFAB19;   --b-control:#CF8B17;
+  --c-sensing:#5CB1D6;   --b-sensing:#2E8EB8;
+  --c-operators:#59C059; --b-operators:#389438;
+  --c-variables:#FF8C1A; --b-variables:#DB6E00;
+  --c-myblocks:#FF6680;  --b-myblocks:#FF3355;
+  /* UI 基色（Scratch 界面） */
+  --ui-primary:#855CD6;
+  --ink:#575E75; --bg:#E9F0FC; --panel:#fff; --line:#D9D9D9; --pane-bg:#F9F9F9;
   font-family:"Helvetica Neue", -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 * { box-sizing:border-box; }
 html,body { margin:0; height:100%; }
 body { display:flex; flex-direction:column; background:var(--bg); color:var(--ink); }
 
-/* ---------- 顶栏 ---------- */
-header { flex:0 0 auto; display:flex; align-items:center; gap:12px; padding:9px 16px;
-  background:linear-gradient(180deg,#5b32a3,#4c2889); color:#fff;
-  box-shadow:0 2px 6px rgba(40,18,80,.25); z-index:5; }
+/* ---------- 顶栏（Scratch 主紫，扁平） ---------- */
+header { flex:0 0 auto; display:flex; align-items:center; gap:12px; padding:6px 14px;
+  background:var(--ui-primary); color:#fff;
+  box-shadow:0 1px 0 rgba(0,0,0,.15); z-index:5; }
 header .logo { display:flex; align-items:center; gap:9px; }
-header .logo svg { color:#ffd21a; }
+header .logo svg { color:#fff; }
 header h1 { font-size:16px; margin:0; font-weight:700; letter-spacing:.3px; }
 header .sub { font-size:11.5px; opacity:.78; }
-header .tabs { margin-left:auto; display:flex; gap:6px; background:rgba(0,0,0,.18);
-  padding:4px; border-radius:10px; }
+header .tabs { margin-left:auto; display:flex; gap:4px; background:rgba(0,0,0,.15);
+  padding:3px; border-radius:8px; }
 header .tabs button { display:flex; align-items:center; gap:7px; background:transparent;
-  color:#dfd3f5; border:0; padding:7px 14px; border-radius:7px; cursor:pointer;
+  color:#e6dcf7; border:0; padding:6px 13px; border-radius:6px; cursor:pointer;
   font-size:13px; font-weight:600; transition:.12s; }
-header .tabs button:hover { color:#fff; }
-header .tabs button.active { background:#fff; color:#4c2889; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+header .tabs button:hover { color:#fff; background:rgba(255,255,255,.12); }
+header .tabs button.active { background:#fff; color:var(--ui-primary); font-weight:700;
+  box-shadow:0 1px 3px rgba(0,0,0,.2); }
 
 #main { flex:1 1 auto; display:flex; min-height:0; }
 
-/* ---------- 调色板 ---------- */
-/* 仿 Scratch：左分类导航 + 右「所见即所得」积木区 */
-#palette { width:262px; flex:0 0 auto; background:var(--panel); border-right:1px solid var(--line);
+/* ---------- 调色板（Scratch：左分类彩点栏 + 右连续积木流） ---------- */
+#palette { width:252px; flex:0 0 auto; background:var(--pane-bg); border-right:1px solid var(--line);
   display:flex; min-height:0; }
-.cat-rail { width:62px; flex:0 0 auto; background:#f4f6fb; border-right:1px solid var(--line);
-  overflow-y:auto; padding:6px 0; display:flex; flex-direction:column; gap:2px; }
-.cat-btn { display:flex; flex-direction:column; align-items:center; gap:3px; border:0; background:transparent;
-  cursor:pointer; padding:7px 2px; font-size:10px; font-weight:700; color:#6b7790; border-radius:8px; }
-.cat-btn:hover { background:#e9eef8; }
-.cat-btn.active { background:#e3ebfb; color:#2b3a4b; }
-.cat-dot { width:22px; height:22px; border-radius:50%; box-shadow:inset 0 0 0 3px rgba(255,255,255,.65), 0 1px 3px rgba(0,0,0,.18); }
-.cat-nm { line-height:1.1; text-align:center; }
-.block-list { flex:1 1 auto; overflow-y:auto; overflow-x:hidden; padding:6px 10px 24px; }
+.cat-rail { width:60px; flex:0 0 auto; background:#fff; border-right:1px solid var(--line);
+  overflow-y:auto; padding:4px 0; display:flex; flex-direction:column; gap:0; }
+.cat-btn { display:flex; flex-direction:column; align-items:center; gap:4px; border:0; background:transparent;
+  cursor:pointer; padding:8px 2px; font-size:10px; font-weight:600; color:var(--ink); border-radius:0; }
+.cat-btn:hover { background:#F2F6FC; }
+.cat-btn.active { background:#E9F0FC; font-weight:700; }
+.cat-dot { width:20px; height:20px; border-radius:50%; border:1px solid rgba(0,0,0,.18); }
+.cat-nm { line-height:1.15; text-align:center; }
+.block-list { flex:1 1 auto; overflow-y:auto; overflow-x:hidden; padding:8px 12px 28px; }
 .cat-sec { scroll-margin-top:6px; }
-.cat-sec h2 { font-size:11.5px; color:#46546b; margin:14px 2px 8px; font-weight:800;
+.cat-sec h2 { font-size:12px; color:var(--ink); margin:16px 0 10px; font-weight:700;
   display:flex; align-items:center; gap:7px; }
-.cat-sec h2::before { content:""; width:5px; height:14px; border-radius:3px; background:var(--cc,#c2cbe0); }
+.cat-sec h2::before { content:""; width:10px; height:10px; border-radius:50%; background:var(--cc,#c2cbe0);
+  border:1px solid rgba(0,0,0,.15); }
 /* 积木预览：与画布同款外观，整块可点击加入（子元素不拦截点击） */
-.pal-wys { display:block; width:max-content; max-width:100%; margin:0 0 9px; cursor:pointer; }
+.pal-wys { display:block; width:max-content; max-width:100%; margin:0 0 11px; cursor:pointer; }
 .pal-wys * { pointer-events:none; }
 .pal-wys .block { cursor:pointer; }
 /* 调色板里积木不换行：超出宽度直接截断，靠 hover 弹出看完整 */
 .pal-wys .hdr { flex-wrap:nowrap; }
 .pal-wys .block, .pal-hover .block { white-space:nowrap; }
-.pal-wys .mouth { display:none; }   /* 预览不展开控制块嘴巴，保持紧凑一行 */
+.pal-wys .mouth { display:none; }        /* 预览不展开嘴巴，保持紧凑一行 */
+.pal-wys .block.ctrl::after { display:none; }               /* 也不展开 C 形下臂 */
+.pal-wys .block.ctrl > .hdr { border-radius:6px; }
+.pal-wys .block.var::after, .pal-wys .block.ev::after { display:none; }
+.pal-wys .block.hat.fn > .hdr::after { display:none; }
 
 /* 悬停弹出的完整积木（浮在画布之上，不被调色板宽度截断） */
 .pal-hover { position:fixed; z-index:55; pointer-events:none; background:#fff; border:1px solid var(--line);
-  border-radius:11px; padding:6px 7px; box-shadow:0 12px 34px rgba(20,15,50,.32); }
+  border-radius:10px; padding:6px 7px; box-shadow:0 12px 34px rgba(20,15,50,.28); }
 .pal-hover[hidden] { display:none; }
 .pal-hover .hdr { flex-wrap:nowrap; }
 
@@ -69,44 +92,65 @@ header .tabs button.active { background:#fff; color:#4c2889; box-shadow:0 1px 3p
 #blocks-view { flex-direction:column; }
 #blocks-top { flex:1 1 auto; display:flex; min-height:0; }
 
-/* 精灵栏（多精灵 / 多页积木） */
-#sprite-bar { flex:0 0 auto; height:118px; background:var(--panel); border-top:1px solid var(--line);
-  display:flex; align-items:center; gap:10px; padding:10px 12px; overflow-x:auto; }
-#sprite-bar .sb-label { font-size:11px; color:#9aa3b5; font-weight:700; letter-spacing:.6px;
-  writing-mode:vertical-rl; text-orientation:upright; padding:2px 0; }
-#sprite-list { display:flex; gap:10px; }
-.sprite-card { width:88px; height:98px; flex:0 0 auto; border:2px solid var(--line); border-radius:12px;
+/* 精灵栏（Scratch 精灵面板的横条版：卡片 + 蓝色浮动加号） */
+#sprite-bar { flex:0 0 auto; height:112px; background:#fff; border-top:1px solid var(--line);
+  display:flex; align-items:center; gap:12px; padding:9px 12px; overflow-x:auto; }
+/* 精灵属性行（Scratch 的名称/x/y 仪表盘）：名称一行，x/y 一行 */
+#sprite-props { flex:0 0 auto; display:grid; grid-template-columns:auto auto; gap:7px 10px;
+  font-size:12px; color:var(--ink); padding-right:14px; border-right:1px solid var(--line);
+  align-items:center; }
+#sprite-props label { display:flex; align-items:center; gap:6px; font-weight:600; }
+#sprite-props label:first-child { grid-column:1 / 3; }
+#sprite-props input { font:inherit; font-weight:500; border:1px solid var(--line); border-radius:999px;
+  padding:3px 10px; color:var(--ink); background:#fff; outline:none; }
+#sprite-props input:focus { border-color:var(--c-motion); box-shadow:0 0 0 2px rgba(76,151,255,.25); }
+#sprite-props #sp-name { width:132px; }
+#sprite-props #sp-x, #sprite-props #sp-y { width:58px; }
+#sprite-props #sp-costumes { grid-column:1 / 3; font-size:11px; color:#8a92a5; font-weight:600; }
+#sprite-list { display:flex; gap:8px; }
+.sprite-card { width:84px; height:92px; flex:0 0 auto; border:2px solid var(--line); border-radius:8px;
   background:#fff; cursor:pointer; position:relative; display:flex; flex-direction:column;
   align-items:center; justify-content:flex-start; overflow:hidden; transition:.1s; }
-.sprite-card:hover { border-color:#b9c6e0; }
-.sprite-card.sel { border-color:var(--c-motion); box-shadow:0 0 0 3px rgba(76,151,255,.18); }
-.sprite-card .thumb { width:100%; height:52px; background:#f4f6fb center/contain no-repeat;
+.sprite-card:hover { border-color:#B9D0F0; }
+.sprite-card.sel { border-color:var(--c-motion); background:#E9F0FC;
+  box-shadow:0 0 0 1px var(--c-motion); }
+.sprite-card .thumb { width:100%; height:50px; background:transparent center/contain no-repeat;
   display:flex; align-items:center; justify-content:center; font-size:24px; color:#c2cbe0; }
-.sprite-card .nm { font-size:11px; font-weight:600; color:#46546b; padding:3px 4px; width:100%;
+.sprite-card .nm { font-size:11px; font-weight:600; color:var(--ink); padding:3px 4px 0; width:100%;
   text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.sprite-card .del { position:absolute; top:2px; right:3px; width:16px; height:16px; border:0;
-  border-radius:50%; background:rgba(0,0,0,.25); color:#fff; font-size:11px; line-height:1; cursor:pointer;
-  display:none; }
+.sprite-card.sel .nm { color:#fff; background:var(--c-motion); border-radius:0; padding:2px 4px;
+  position:absolute; left:0; right:0; bottom:0; }
+.sprite-card .del { position:absolute; top:-1px; right:-1px; width:18px; height:18px; border:0;
+  border-radius:0 6px 0 8px; background:var(--c-motion); color:#fff; font-size:11px; line-height:1;
+  cursor:pointer; display:none; }
 .sprite-card:hover .del { display:block; }
-#add-sprite { width:48px; height:48px; flex:0 0 auto; border-radius:50%; border:0; cursor:pointer;
+#add-sprite { width:44px; height:44px; flex:0 0 auto; border-radius:50%; border:0; cursor:pointer;
   background:var(--c-motion); color:#fff; display:flex; align-items:center; justify-content:center;
-  box-shadow:0 2px 6px rgba(76,151,255,.4); }
-#add-sprite:hover { filter:brightness(1.06); }
+  box-shadow:0 2px 8px rgba(76,151,255,.5); }
+#add-sprite:hover { filter:brightness(1.08); }
 #page-tag { position:absolute; left:14px; top:12px; background:#fff; border:1px solid var(--line);
-  border-radius:8px; padding:5px 12px; font-size:12.5px; font-weight:700; color:#46546b;
-  box-shadow:0 1px 4px rgba(40,40,80,.1); display:flex; align-items:center; gap:7px; }
+  border-radius:8px; padding:5px 12px; font-size:12.5px; font-weight:700; color:var(--ink);
+  box-shadow:0 1px 4px rgba(40,40,80,.08); display:flex; align-items:center; gap:7px; z-index:2; }
 #page-tag::before { content:""; width:9px; height:9px; border-radius:50%; background:var(--c-myblocks); }
 
-/* 无限积木画布 */
+/* 无限积木画布（Scratch 工作区：近白底 + 细点阵） */
 #canvas-wrap { flex:1 1 auto; overflow:hidden; position:relative; cursor:grab;
-  background-color:#e9edf7;
-  background-image:radial-gradient(#cdd5e8 1.5px, transparent 1.5px);
+  background-color:var(--pane-bg);
+  background-image:radial-gradient(#DDE3EA 1.2px, transparent 1.2px);
   background-size:24px 24px; }
 #canvas-wrap.panning { cursor:grabbing; }
 #canvas { position:absolute; left:0; top:0; transform-origin:0 0; }
-#zoom-hint { position:absolute; left:14px; bottom:12px; background:rgba(30,20,55,.62);
+#zoom-hint { position:absolute; left:14px; bottom:12px; background:rgba(87,94,117,.75);
   color:#fff; font-size:11px; padding:5px 10px; border-radius:7px; pointer-events:none;
-  display:flex; align-items:center; gap:6px; }
+  display:flex; align-items:center; gap:6px;
+  animation:zoom-hint-fade .8s ease 7s forwards; }   /* 7 秒后自动淡出（Scratch 无常驻提示） */
+@keyframes zoom-hint-fade { to { opacity:0; } }
+/* 画布角落缩放按钮（Scratch 式） */
+#zoom-ctrl { position:absolute; right:14px; bottom:14px; display:flex; flex-direction:column; gap:7px; z-index:3; }
+#zoom-ctrl button { width:36px; height:36px; border-radius:50%; border:1px solid var(--line);
+  background:#fff; color:var(--ui-primary); font-size:17px; font-weight:700; line-height:1;
+  cursor:pointer; box-shadow:0 2px 6px rgba(40,40,80,.14); }
+#zoom-ctrl button:hover { background:#F2F6FC; }
 
 #text-pane { width:348px; flex:0 0 auto; background:#1b2030; color:#d7e0f5;
   border-left:1px solid #2c3346; display:flex; flex-direction:column; }
@@ -134,7 +178,8 @@ header .tabs button.active { background:#fff; color:#4c2889; box-shadow:0 1px 3p
 .ac-item:hover { background:#2c3650; }
 .ac-k { flex:0 0 auto; width:16px; height:16px; border-radius:4px; font-size:10px; font-weight:700;
   display:inline-flex; align-items:center; justify-content:center; color:#fff; }
-.ac-kw { background:#c792ea; } .ac-ty { background:#5fb3c4; } .ac-fn { background:#4C97FF; } .ac-id { background:#FF8C1A; }
+.ac-kw { background:#c792ea; } .ac-ty { background:#5fb3c4; } .ac-fn { background:#4C97FF; }
+.ac-id, .ac-var { background:#FF8C1A; } .ac-field { background:#59C059; }
 .ac-t { font-weight:600; color:#eaf0ff; }
 .ac-d { margin-left:auto; font-size:11px; color:#8aa0cc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px; }
 
@@ -167,9 +212,9 @@ header .tabs button.active { background:#fff; color:#4c2889; box-shadow:0 1px 3p
   display:flex; align-items:center; justify-content:center; }
 .modal-overlay[hidden] { display:none; }
 .modal { width:460px; max-width:92vw; max-height:88vh; overflow:auto; background:var(--panel);
-  border-radius:16px; box-shadow:0 24px 64px rgba(0,0,0,.4); color:var(--ink); }
+  border-radius:14px; box-shadow:0 24px 64px rgba(0,0,0,.4); color:var(--ink); }
 .modal-head { display:flex; align-items:center; gap:9px; padding:16px 18px 8px; }
-.modal-head svg { color:#9966FF; }
+.modal-head svg { color:var(--ui-primary); }
 .modal-head h2 { margin:0; font-size:17px; flex:1 1 auto; }
 .modal-x { border:0; background:transparent; font-size:22px; line-height:1; cursor:pointer;
   color:#9aa6bd; padding:0 4px; }
@@ -200,27 +245,32 @@ header .tabs button.active { background:#fff; color:#4c2889; box-shadow:0 1px 3p
 .modal-foot button { font:inherit; font-weight:700; font-size:13px; padding:8px 15px; border-radius:9px;
   border:0; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
 .modal-foot button.ghost { background:#eef1f7; color:#5a6680; }
-.modal-foot button.primary { background:#9966FF; color:#fff; }
+.modal-foot button.primary { background:var(--ui-primary); color:#fff; }
 .modal-foot button.primary:disabled { opacity:.55; cursor:default; }
-#text-status { margin-left:auto; font-size:11px; }
-#text-pane .hd { display:flex; }
-#text-status.ok { color:#7fd17f; } #text-status.warn { color:#ffd21a; }
 
-/* 实时预览面板（停靠在文本下方） */
+/* 实时预览面板（停靠在文本下方）——预览条 = Scratch 舞台头（白底 + 绿旗/停止） */
 #preview-dock { flex:0 0 auto; border-top:1px solid #2c3346; background:#141822;
   display:flex; flex-direction:column; }
-.pv-bar { display:flex; align-items:center; gap:6px; padding:6px 12px; font-size:11.5px; color:#8aa0cc; }
-.pv-bar button { background:#2a3142; border:0; color:#cdd9f5; border-radius:6px; padding:3px 7px;
-  cursor:pointer; display:inline-flex; align-items:center; gap:5px; }
-.pv-bar button:hover { background:#3a445c; }
+.pv-bar { display:flex; align-items:center; gap:3px; padding:4px 8px; font-size:11.5px;
+  background:#fff; border-bottom:1px solid var(--line); color:var(--ink); flex-wrap:nowrap; }
+.pv-bar button { background:transparent; border:0; color:var(--ink); border-radius:6px; padding:4px 6px;
+  cursor:pointer; display:inline-flex; align-items:center; gap:4px; font-weight:600;
+  white-space:nowrap; flex:0 0 auto; }
+.pv-bar button:hover { background:#E9F0FC; }
+/* 绿旗 / 停止（Scratch 舞台仪式感） */
+#pv-run svg { color:#3DBF4A; }
+#pv-run:hover { background:rgba(61,191,74,.14); }
+#pv-stop svg { color:#EC5959; }
+#pv-stop:hover { background:rgba(236,89,89,.14); }
 /* 预览 / 控制台 切页 */
 .pv-tab { font-weight:700; }
-.pv-tab.active { background:#4C97FF; color:#fff; }
-.pv-tab.active:hover { background:#4C97FF; }
-#pv-run { margin-left:8px; } #pv-status { margin-left:auto; }
-#pv-status.ok { color:#7fd17f; } #pv-status.warn { color:#ffd21a; }
+.pv-tab.active { background:#E9F0FC; color:var(--c-motion); }
+.pv-tab.active:hover { background:#E9F0FC; }
+#pv-run { margin-left:6px; } #pv-status { margin-left:auto; min-width:0; flex:0 1 auto;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#pv-status.ok { color:#1f9d57; } #pv-status.warn { color:#c77b16; }
 #dock-body { position:relative; }
-#preview-canvas { width:100%; height:200px; object-fit:contain; background:#f5f5f7;
+#preview-canvas { width:100%; height:200px; object-fit:contain; background:#fff;
   display:block; cursor:pointer; outline:none; }
 #preview-canvas[hidden] { display:none; }
 #preview-canvas:focus { box-shadow:inset 0 0 0 2px var(--c-motion); }
@@ -234,77 +284,133 @@ header .tabs button.active { background:#fff; color:#4c2889; box-shadow:0 1px 3p
 #dock-con-out { flex:1 1 auto; overflow:auto; padding:8px 12px; color:#cdd7ee;
   font-family:ui-monospace,Menlo,monospace; font-size:12px; line-height:1.65; }
 
-/* ---------- 积木 ---------- */
+/* ================================================================
+   积木（Scratch 3 造型：扁平填充 + 加深描边 + 榫头 + 真 C 形）
+   ================================================================ */
 .script { position:absolute; }
 .stack { display:flex; flex-direction:column; align-items:flex-start; gap:0; }
-.block { position:relative; background:var(--c,#888); border-radius:6px; padding:7px 12px;
-  color:#fff; box-shadow:0 1px 0 rgba(0,0,0,.20), inset 0 1px rgba(255,255,255,.22); }
-/* 顶部凸起接口（拼插感） */
-.block::before { content:""; position:absolute; left:14px; top:-4px; width:18px; height:5px;
-  background:var(--c,#888); border-radius:4px 4px 0 0; }
-.block.hat { border-radius:16px 16px 7px 7px; padding-top:9px; }
-.block.hat::before { display:none; }
-.block .hdr { display:flex; align-items:center; flex-wrap:wrap; gap:7px; cursor:grab; }
-.mouth { background:rgba(0,0,0,.13); border-radius:0 6px 6px 6px; margin:2px 0 0 14px;
-  padding:5px 8px 6px; min-height:14px; display:flex; flex-direction:column; align-items:flex-start; }
-.label { font-weight:700; } .kw { opacity:.9; font-weight:600; font-size:13px; }
-.param { background:rgba(255,255,255,.24); border-radius:999px; padding:1px 9px; font-size:12px; font-weight:600; }
 
-/* 分类色 */
-.fn        { --c:var(--c-myblocks); }
-.extern_fn { --c:#ff5274; }
-.ctrl      { --c:var(--c-control); }
-.var       { --c:var(--c-variables); }
-.ret       { --c:var(--c-looks); }
-.ev        { --c:var(--c-motion); }
+/* 语句块基形：扁平色块 + 1px 加深描边（--c 填充，--cb 描边） */
+.block { position:relative; background:var(--c,#888); border:1px solid var(--cb,rgba(0,0,0,.25));
+  border-radius:5px; padding:5px 10px; color:#fff; font-size:12.5px; }
+/* 积木内容单行不折行（Scratch 惯例：块只横向生长，不长胖） */
+.block .hdr { display:flex; align-items:center; flex-wrap:nowrap; gap:6px; cursor:grab; min-height:22px;
+  white-space:nowrap; }
+.label { font-weight:600; } .kw { opacity:.92; font-weight:600; font-size:12.5px; }
+.param { background:rgba(255,255,255,.28); border-radius:999px; padding:1px 8px; font-size:12px; font-weight:600; }
 
-/* 内联表达式：药丸 */
-.pill { border-radius:999px; padding:2px 9px; font-size:12.5px; display:inline-flex;
-  align-items:center; gap:5px; color:#fff; box-shadow:inset 0 1px rgba(255,255,255,.25); }
-.pill.op { background:var(--c-operators); }
-.pill.call { background:var(--c-motion); }
-.pill.lit { background:#fff; color:#2b3a4b; box-shadow:none; border:1px solid #cdd6e6; }
-.pill.varref { background:var(--c-variables); }
-.field { background:#fff; color:#2b3a4b; border:1px solid #cdd6e6; border-radius:999px;
+/* 相邻积木的咬合榫头：块底伸出小凸舌，盖在下一块的顶边上 */
+.block.var::after, .block.ev::after {
+  content:""; position:absolute; left:10px; bottom:-4px; width:16px; height:4px; z-index:1;
+  background:var(--c); border:1px solid var(--cb); border-top:0; border-radius:0 0 4px 4px;
+}
+/* 返回块是"封口块"（后面接不了积木）：底边整体圆角、无榫头 */
+.block.ret { border-radius:5px 5px 9px 9px; }
+
+/* 分类色（填充 + 描边） */
+.fn         { --c:var(--c-myblocks);  --cb:var(--b-myblocks); }
+.extern_fn  { --c:#ff5274;            --cb:#e02a50; }
+.ctrl       { --c:var(--c-control);   --cb:var(--b-control); }
+.var        { --c:var(--c-variables); --cb:var(--b-variables); }
+.ret        { --c:var(--c-looks);     --cb:var(--b-looks); }
+.ev         { --c:var(--c-motion);    --cb:var(--b-motion); }
+.struct-blk, .pal-struct { --c:var(--c-myblocks);  --cb:var(--b-myblocks); }
+.global-blk, .pal-global { --c:var(--c-variables); --cb:var(--b-variables); }
+.import-blk { --c:var(--c-sensing);   --cb:var(--b-sensing); }
+
+/* —— 帽子块（函数定义）：只有头部是色块，函数体悬挂其下（Scratch "定义"块） —— */
+.block.hat { border-radius:14px 14px 6px 6px; padding-top:7px; }
+.block.hat.fn, .block.hat.extern_fn {
+  background:transparent; border:0; padding:0; border-radius:0;
+  display:flex; flex-direction:column; align-items:flex-start;
+}
+.block.hat.fn > .hdr, .block.hat.extern_fn > .hdr {
+  position:relative; background:var(--c); border:1px solid var(--cb);
+  border-radius:14px 14px 5px 5px; padding:7px 12px;
+  flex-wrap:nowrap; width:max-content;   /* 定义头保持一行（Scratch define 块） */
+}
+/* 帽子底部的榫头，连向第一条语句 */
+.block.hat.fn > .hdr::after {
+  content:""; position:absolute; left:10px; bottom:-4px; width:16px; height:4px; z-index:1;
+  background:var(--c); border:1px solid var(--cb); border-top:0; border-radius:0 0 4px 4px;
+}
+/* 函数体：不是"嘴巴"，就是悬挂在帽子下的积木栈 */
+.block.hat.fn > .mouth, .block.hat.extern_fn > .mouth {
+  background:transparent; border:0; margin:0; padding:3px 0 0; min-height:8px;
+}
+
+/* —— 控制块：真 C 形（上臂 + 左脊 + 下臂，嘴巴露出画布） —— */
+.block.ctrl { background:transparent; border:0; padding:0;
+  display:flex; flex-direction:column; align-items:flex-start; }
+.block.ctrl > .hdr { align-self:stretch; background:var(--c); border:1px solid var(--cb);
+  border-radius:7px 7px 0 0; padding:5px 10px; }
+/* else 等中臂：方角，上下都接着色 */
+.block.ctrl > .hdr:not(:first-child) { border-radius:0; border-top:0; min-height:24px; }
+/* C 形下臂（收口） */
+.block.ctrl::after { content:""; align-self:stretch; height:11px;
+  background:var(--c); border:1px solid var(--cb); border-top:0; border-radius:0 0 7px 7px; }
+/* 嘴巴 = C 的开口：露出画布底色，左侧是同色竖脊 */
+.mouth { position:relative; align-self:stretch; background:transparent;
+  border-left:14px solid var(--c); margin:0; padding:3px 0 3px 3px; min-height:16px;
+  display:flex; flex-direction:column; align-items:flex-start; }
+
+/* 结构体 / 全局变量（项目级共享状态）：保持整块色卡（多行字段） */
+.block.struct-blk, .block.global-blk { background:var(--c); border:1px solid var(--cb); }
+.block.struct-blk .hdr, .block.global-blk .hdr { gap:6px; }
+
+/* 内联表达式：取值=圆角椭圆，布尔=六边形（Scratch 惯例） */
+.pill { border-radius:999px; padding:2px 8px; font-size:12px; display:inline-flex;
+  align-items:center; gap:4px; color:#fff; border:1px solid rgba(0,0,0,.2); }
+.pill.op { background:var(--c-operators); border-color:var(--b-operators); }
+.pill.op.bool { border-radius:0; padding:2px 12px;
+  clip-path:polygon(9px 0, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, 9px 100%, 0 50%);
+  border:0; }
+.pill.call { background:var(--c-motion); border-color:var(--b-motion); }
+.pill.lit { background:#fff; color:var(--ink); border:1px solid #BCC6D4; }
+.pill.varref { background:var(--c-variables); border-color:var(--b-variables); padding:2px 6px; gap:3px; }
+.field { background:#fff; color:var(--ink); border:1px solid #BCC6D4; border-radius:999px;
   padding:1px 8px; font:inherit; font-size:12px; min-width:18px; text-align:center; outline:none; }
 .field:focus { border-color:var(--c-motion); box-shadow:0 0 0 2px rgba(76,151,255,.35); }
-/* 拖拽重排落点提示线 */
-.drop-indicator { height:5px; align-self:stretch; min-width:60px; border-radius:3px;
-  margin:1px 0; background:#ffd21a; box-shadow:0 0 6px rgba(255,210,26,.8); }
+
+/* 拖拽落点提示：Scratch 的"块影"（半透明灰影，高度≈被拖积木） */
+.drop-indicator { align-self:stretch; min-width:80px; border-radius:5px;
+  margin:2px 0; background:rgba(0,0,0,.16); border:1px dashed rgba(0,0,0,.22); }
 
 /* ---------- 造型画板 ---------- */
-#costume-view { background:#f0f3fa; }
+#costume-view { background:var(--bg); }
 #costume-list { width:132px; flex:0 0 auto; background:var(--panel); border-right:1px solid var(--line);
   padding:10px; overflow-y:auto; }
-#costume-list h2 { font-size:11px; color:#9aa3b5; margin:4px 2px 10px; letter-spacing:.6px;
+#costume-list h2 { font-size:11px; color:#8a92a5; margin:4px 2px 10px; letter-spacing:.6px;
   text-transform:uppercase; font-weight:700; }
 /* 造型卡片：缩略图 + 序号·名称 + 删除（仿 Scratch 造型列表，名称可见、双击改名） */
-.costume-card { position:relative; border:2px solid var(--line); border-radius:11px; margin-bottom:9px;
+.costume-card { position:relative; border:2px solid var(--line); border-radius:8px; margin-bottom:9px;
   background:#fff; cursor:pointer; overflow:hidden; transition:.1s; }
-.costume-card:hover { border-color:#b9c6e0; }
-.costume-card.sel { border-color:var(--c-motion); box-shadow:0 0 0 3px rgba(76,151,255,.18); }
+.costume-card:hover { border-color:#B9D0F0; }
+.costume-card.sel { border-color:var(--c-motion); box-shadow:0 0 0 1px var(--c-motion); }
 .costume-card .costume-thumb { width:100%; height:74px; border:0; border-radius:0; margin:0;
   background:#fff center/contain no-repeat; }
-.costume-card .costume-nm { font-size:11px; font-weight:600; color:#46546b; padding:3px 6px 5px;
+.costume-card .costume-nm { font-size:11px; font-weight:600; color:var(--ink); padding:3px 6px 5px;
   text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   border-top:1px solid var(--line); }
-.costume-card.sel .costume-nm { color:var(--c-motion); }
-.costume-del { position:absolute; top:3px; right:3px; width:17px; height:17px; border:0; border-radius:50%;
-  background:rgba(0,0,0,.28); color:#fff; font-size:12px; line-height:1; cursor:pointer; display:none; }
+.costume-card.sel .costume-nm { color:#fff; background:var(--c-motion); }
+.costume-del { position:absolute; top:-1px; right:-1px; width:18px; height:18px; border:0;
+  border-radius:0 6px 0 8px; background:var(--c-motion); color:#fff; font-size:12px; line-height:1;
+  cursor:pointer; display:none; }
 .costume-card:hover .costume-del { display:block; }
-.costume-add { width:100%; border:0; background:#59c059; color:#fff; font-weight:700; font-size:12.5px;
+.costume-add { width:100%; border:0; background:var(--c-operators); color:#fff; font-weight:700; font-size:12.5px;
   padding:9px; border-radius:10px; cursor:pointer; }
 .costume-add:hover { filter:brightness(1.05); }
 /* 精灵卡上的当前造型名 */
-.sprite-card .cos-nm { font-size:9.5px; color:#8aa0c0; padding:0 3px 2px; width:100%; text-align:center;
+.sprite-card .cos-nm { font-size:9.5px; color:#8a92a5; padding:0 3px 2px; width:100%; text-align:center;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sprite-card.sel .cos-nm { display:none; }   /* 选中卡底部被蓝色名条占用 */
 #paint-area { flex:1 1 auto; display:flex; flex-direction:column; align-items:center;
   padding:16px; gap:12px; overflow:auto; }
 #toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap;
   background:#fff; padding:8px; border-radius:12px; box-shadow:0 1px 4px rgba(40,40,80,.08); }
 #toolbar button, #toolbar label { display:inline-flex; align-items:center; gap:7px;
   background:#f4f6fb; border:1px solid var(--line); border-radius:9px; padding:7px 12px;
-  cursor:pointer; font-size:13px; font-weight:600; color:#46546b; transition:.1s; }
+  cursor:pointer; font-size:13px; font-weight:600; color:var(--ink); transition:.1s; }
 #toolbar button:hover { background:#eaeefb; }
 #toolbar button.active { background:var(--c-motion); color:#fff; border-color:var(--c-motion); }
 #toolbar .sep { width:1px; height:24px; background:var(--line); }
@@ -317,68 +423,18 @@ input[type=range] { accent-color:var(--c-motion); }
   touch-action:none; cursor:crosshair; }
 
 /* ---------- 舞台（精灵以造型为纹理） ---------- */
-#stage-view { align-items:center; justify-content:center; }
+#stage-view { align-items:center; justify-content:center; flex-direction:column; }
 #stage-wrap { flex:1 1 auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; }
-#stage { width:640px; height:480px; background:#fff; border-radius:16px; position:relative; overflow:hidden;
-  box-shadow:0 8px 36px rgba(40,40,80,.16);
+#stage { width:640px; height:480px; background:#fff; border-radius:10px; position:relative; overflow:hidden;
+  border:1px solid var(--line); box-shadow:0 8px 36px rgba(40,40,80,.14);
   background-image:radial-gradient(#eef1f8 1.5px, transparent 1.5px); background-size:26px 26px; }
-#stage-hint { font-size:12px; color:#9aa3b5; }
+#stage-hint { font-size:12px; color:#8a92a5; }
 .stage-sprite { position:absolute; width:104px; height:104px; transform:translate(-50%,-50%);
   display:flex; align-items:center; justify-content:center; font-size:48px; cursor:grab;
   background:center/contain no-repeat; user-select:none; touch-action:none; }
 .stage-sprite:hover { filter:drop-shadow(0 3px 6px rgba(0,0,0,.25)); }
 
-/* ============ Scratch 风格视觉优化（仿 scratch.mit.edu 界面） ============ */
-/* 顶栏：更柔和的渐变 + 细底光 */
-header { box-shadow:0 2px 8px rgba(60,30,120,.28); }
-header .logo h1 { text-shadow:0 1px 2px rgba(0,0,0,.25); }
-
-/* 调色板：分组标题加彩色小竖条；面板更通透 */
-#palette { width:190px; background:linear-gradient(180deg,#ffffff,#f7f9fd); }
-#palette h2 { display:flex; align-items:center; gap:7px; }
-#palette h2::before { content:""; width:4px; height:13px; border-radius:3px; background:#c2cbe0; }
-
-/* 积木：加立体渐变与更明显的拼插投影（Scratch 那种饱满感） */
-.pal-block { background-image:linear-gradient(180deg, rgba(255,255,255,.18), rgba(0,0,0,.10)); }
-.block { background-image:linear-gradient(180deg, rgba(255,255,255,.16), rgba(0,0,0,.10));
-  box-shadow:0 2px 0 rgba(0,0,0,.22), 0 3px 7px rgba(30,20,60,.16), inset 0 1px rgba(255,255,255,.28); }
-.block.hat { box-shadow:0 2px 0 rgba(0,0,0,.22), 0 4px 10px rgba(30,20,60,.2), inset 0 1px rgba(255,255,255,.3); }
-.pill { box-shadow:inset 0 1px rgba(255,255,255,.3), 0 1px 1px rgba(0,0,0,.12); }
-.pill.call { background-image:linear-gradient(180deg, rgba(255,255,255,.14), rgba(0,0,0,.08)); }
-
-/* 控制块嘴巴：左侧色脊，更像 Scratch 的 C 形包裹 */
-.mouth { border-left:3px solid rgba(255,255,255,.35); }
-
-/* 精灵卡：选中态更突出 */
-.sprite-card { box-shadow:0 1px 3px rgba(40,40,80,.08); }
-.sprite-card.sel { box-shadow:0 0 0 3px rgba(76,151,255,.22), 0 3px 8px rgba(76,151,255,.18); }
-
-/* 画布点阵更柔和 */
-#canvas-wrap { background-image:radial-gradient(#d4dcec 1.4px, transparent 1.4px); }
-
-/* 标签页按钮：选中态加底色条 */
-header .tabs button.active { font-weight:700; }
-
-/* 文本编辑器头部状态徽标 */
-#text-status { font-weight:700; padding:1px 8px; border-radius:999px; }
-#text-status.ok { background:rgba(127,209,127,.16); }
-#text-status.warn { background:rgba(255,180,84,.18); color:#ffb454; }
-
-/* ============ 执行高亮 / 控制台 / 浮动状态（本次新增） ============ */
-/* 运行到某积木就发光（Scratch 风格 glow） */
-.block.running { box-shadow:0 0 0 3px #ffe45e, 0 0 14px 3px rgba(255,210,30,.75),
-  0 2px 0 rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.28); }
-
-/* 代码编辑器右上角浮动状态徽标（替代被删掉的顶栏） */
-#text-edit { position:relative; }
-#text-status { position:absolute; top:8px; right:14px; z-index:2; font-size:11px; font-weight:700;
-  padding:2px 9px; border-radius:999px; pointer-events:none; }
-#text-status:empty { display:none; }
-#text-status.ok { background:rgba(127,209,127,.18); color:#9fe09f; }
-#text-status.warn { background:rgba(255,180,84,.2); color:#ffb454; }
-
 /* 舞台控制台：宽度与舞台一致（640），居中对齐在舞台正下方 */
-#stage-view { flex-direction:column; }
 #console-panel { flex:0 0 auto; width:640px; height:176px; margin:0 auto 18px; display:flex;
   flex-direction:column; background:#171c28; color:#cdd7ee; border:1px solid #2c3346;
   border-radius:14px; overflow:hidden; box-shadow:0 8px 28px rgba(40,40,80,.16); }
@@ -394,9 +450,20 @@ header .tabs button.active { font-weight:700; }
 .con-line { white-space:pre-wrap; word-break:break-word; border-bottom:1px solid rgba(255,255,255,.04); padding:1px 0; }
 .con-line::before { content:"› "; color:#5f6e8f; }
 
-/* ============ 拖拽体验：嵌套槽 / 落点高亮 / 删除区（本次新增） ============ */
-/* 控制块嘴巴：拖入时高亮，提示「能放进去」 */
-.mouth.drop-in { background:rgba(76,151,255,.22); box-shadow:inset 0 0 0 2px rgba(76,151,255,.55); border-radius:6px; }
+/* ============ 执行高亮 / 浮动状态 ============ */
+/* 运行到某积木就发光（drop-shadow 沿着实际着色轮廓走，C 形/悬挂体也正确） */
+.block.running { filter:drop-shadow(0 0 3px #ffe45e) drop-shadow(0 0 7px rgba(255,210,30,.8)); }
+
+/* 代码编辑器右上角浮动状态徽标 */
+#text-status { position:absolute; top:8px; right:14px; z-index:2; font-size:11px; font-weight:700;
+  padding:2px 9px; border-radius:999px; pointer-events:none; }
+#text-status:empty { display:none; }
+#text-status.ok { background:rgba(127,209,127,.18); color:#9fe09f; }
+#text-status.warn { background:rgba(255,180,84,.2); color:#ffb454; }
+
+/* ============ 拖拽体验：嵌套槽 / 落点高亮 / 删除区 ============ */
+/* 控制块嘴巴 / 函数体：拖入时高亮，提示「能放进去」 */
+.mouth.drop-in { background:rgba(76,151,255,.18); box-shadow:inset 0 0 0 2px rgba(76,151,255,.55); border-radius:6px; }
 /* 表达式槽位：拖 reporter 进来时高亮 */
 .expr-slot.slot-hover { outline:2px solid #ffd21a; outline-offset:1px; border-radius:999px; background:rgba(255,210,30,.25); }
 /* 拖到调色板上=删除：调色板变红并提示 */
@@ -408,12 +475,15 @@ body.dragging-block { cursor:grabbing; }
 .pal-reporter .expr-wrap { display:inline-block; }
 .pal-reporter { padding:1px 0; }
 
-/* 变量 / 数组 / 结构体字段下拉（积木里选作用域变量） */
+/* 变量 / 数组 / 结构体字段下拉（Scratch 下拉是块色加深底 + 白字 + 白箭头） */
 .var-select { font:inherit; font-size:12px; font-weight:600; border:0; border-radius:999px;
-  padding:1px 4px; background:#fff; color:#2b3a4b; cursor:pointer; max-width:130px;
-  outline:none; box-shadow:0 1px 1px rgba(0,0,0,.12); }
-.var-select:focus { box-shadow:0 0 0 2px rgba(76,151,255,.45); }
-.pill.varref { padding:2px 6px; gap:3px; }
+  padding:1px 16px 1px 7px; color:#fff; cursor:pointer; max-width:130px; outline:none;
+  appearance:none; -webkit-appearance:none;
+  background:rgba(0,0,0,.16)
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="5" viewBox="0 0 8 5"><path d="M0 0l4 5 4-5z" fill="white"/></svg>')
+    no-repeat right 5px center; }
+.var-select:focus { box-shadow:0 0 0 2px rgba(255,255,255,.6); }
+.var-select option { color:var(--ink); background:#fff; }
 
 /* 发布：推荐的「单文件 HTML」选项 */
 .platforms .plat-reco { font-weight:700; }
@@ -422,14 +492,13 @@ body.dragging-block { cursor:grabbing; }
 .fld code { background:#eef1f7; padding:1px 5px; border-radius:5px; font-size:11px; }
 
 /* ---------- 调试器（M5）：断点标记 + 暂停面板 ---------- */
-.block.bp { position: relative; }
 .block.bp::before {              /* 断点：积木左上角红点 */
   content: ""; position: absolute; left: -7px; top: 6px; width: 11px; height: 11px;
   border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 2px #fff, 0 1px 3px rgba(0,0,0,.35);
   z-index: 3;
 }
 .block.paused-at { outline: 3px solid #ffb224; outline-offset: 1px; }  /* 当前暂停在此 */
-#dbg-panel { padding: 10px 12px; font-size: 13px; overflow: auto; }
+#dbg-panel { padding: 10px 12px; font-size: 13px; overflow: auto; background:#fff; }
 .dbg-hd { font-weight: 600; color: #b45309; margin-bottom: 8px; }
 .dbg-tip { float: right; font-weight: 400; color: #6b7280; font-size: 12px; }
 .dbg-cols { display: flex; gap: 18px; align-items: flex-start; }
@@ -451,7 +520,7 @@ body.dragging-block { cursor:grabbing; }
 }
 .block.hat .add-param:hover { background: rgba(255, 255, 255, .45); }
 
-/* 项目级共享状态（结构体 / 全局变量）在画布上的积木 */
-.block.struct-blk { background: #FF6680; }
-.block.global-blk { background: #FF8C1A; }
-.block.struct-blk .hdr, .block.global-blk .hdr { gap: 6px; }
+/* —— 调色板/悬停预览的"单行"覆写：必须放在文件末尾，
+      否则会被上面积木区的 .block .hdr { flex-wrap:wrap } 盖掉 —— */
+.pal-wys .block .hdr, .pal-hover .block .hdr { flex-wrap:nowrap; }
+.pal-wys .block { max-width:100%; overflow:hidden; }

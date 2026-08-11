@@ -110,17 +110,27 @@
   });
   window.addEventListener("pointerup", () => { panning = null; wrap.classList.remove("panning"); });
 
-  wrap.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    const r = wrap.getBoundingClientRect();
-    const mx = e.clientX - r.left, my = e.clientY - r.top;
-    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+  function zoomAt(mx, my, factor) {
     const nk = Math.min(2.5, Math.max(0.3, view.k * factor));
     view.x = mx - (mx - view.x) * (nk / view.k);
     view.y = my - (my - view.y) * (nk / view.k);
     view.k = nk;
     applyView();
+  }
+  wrap.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const r = wrap.getBoundingClientRect();
+    zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.1 : 1 / 1.1);
   }, { passive: false });
+  // 画布角落的缩放按钮（Scratch 式 + / − / 复位）
+  (() => {
+    const zi = document.getElementById("zoom-in"), zo = document.getElementById("zoom-out"),
+          zr = document.getElementById("zoom-reset");
+    const center = () => { const r = wrap.getBoundingClientRect(); return { x: r.width / 2, y: r.height / 2 }; };
+    if (zi) zi.addEventListener("click", () => { const c = center(); zoomAt(c.x, c.y, 1.2); });
+    if (zo) zo.addEventListener("click", () => { const c = center(); zoomAt(c.x, c.y, 1 / 1.2); });
+    if (zr) zr.addEventListener("click", () => { const c = center(); zoomAt(c.x, c.y, 1 / view.k); });
+  })();
 
   // ---------------- 文本写回 ----------------
   const textOut = document.getElementById("text-out");
@@ -478,12 +488,14 @@
         break;
       }
       case "unary": {
-        out = el("span", "pill op");
+        // 布尔运算是六边形（Scratch 惯例），算术运算是圆角椭圆
+        out = el("span", "pill op" + (node.op === "!" ? " bool" : ""));
         out.append(el("span", "kw", node.op), renderExpr(node.operand, (n) => { node.operand = n; render(); }, scope));
         break;
       }
       case "binary": {
-        out = el("span", "pill op");
+        const isBool = ["==", "!=", "<", "<=", ">", ">=", "&&", "||"].includes(node.op);
+        out = el("span", "pill op" + (isBool ? " bool" : ""));
         out.append(renderExpr(node.lhs, (n) => { node.lhs = n; render(); }, scope),
           el("span", "kw", node.op),
           renderExpr(node.rhs, (n) => { node.rhs = n; render(); }, scope));
@@ -573,7 +585,10 @@
       row.append(el("span", "label", "如果"), renderExpr(node.cond, (n) => { node.cond = n; render(); }, scope), el("span", "kw", "那么"));
       blk.append(row);
       const m = el("div", "mouth"); m.append(renderStmtList(node.then, scope)); blk.append(m);
-      if (node.else) { blk.append(el("div", "hdr")); const m2 = el("div", "mouth"); m2.append(renderStmtList(node.else, scope)); blk.append(m2); }
+      if (node.else) {
+        const eh = el("div", "hdr"); eh.append(el("span", "label", "否则")); blk.append(eh);
+        const m2 = el("div", "mouth"); m2.append(renderStmtList(node.else, scope)); blk.append(m2);
+      }
     } else if (node.block === "while") {
       blk = el("div", "block ctrl");
       const row = el("div", "hdr");
@@ -628,10 +643,12 @@
   function makeGhost(srcEl, e) {
     const r = srcEl.getBoundingClientRect();
     const ghost = srcEl.cloneNode(true);
+    // Scratch 手感：拿起时不旋转，轻微放大 + 投影（像从画布上"揭起来"）
     Object.assign(ghost.style, {
       position: "fixed", left: r.left + "px", top: r.top + "px", width: r.width + "px",
-      pointerEvents: "none", opacity: ".92", zIndex: 9999, transform: "rotate(2deg)",
-      boxShadow: "0 8px 20px rgba(0,0,0,.3)", margin: 0,
+      pointerEvents: "none", opacity: ".95", zIndex: 9999,
+      transform: "scale(1.04)", transformOrigin: "top left",
+      filter: "drop-shadow(0 6px 14px rgba(0,0,0,.35))", margin: 0,
     });
     document.body.appendChild(ghost);
     return { ghost, offx: e.clientX - r.left, offy: e.clientY - r.top };
@@ -647,6 +664,9 @@
     const { ghost, offx, offy } = makeGhost(srcEl || blockEl, e);
     if (blockEl) blockEl.style.opacity = ".25";
     const indicator = el("div", "drop-indicator");
+    // Scratch 落点提示是「块影」而非细线：高度取被拖积木头部行的高度
+    const srcH = (srcEl || blockEl) ? Math.min(34, (srcEl || blockEl).getBoundingClientRect().height) : 26;
+    indicator.style.height = Math.max(18, Math.round(srcH)) + "px";
     document.body.classList.add("dragging-block");
     drag = { kind: "stmt", node, fromList, blockEl, ghost, indicator, target: null, offx, offy, lastEv: e };
     const move = (ev) => {
@@ -813,9 +833,12 @@
   }
 
   function markSelected() {
-    [...canvas.children].forEach((s) =>
-      s.firstChild && s.firstChild.style.setProperty("outline",
-        s._fn === selected ? "3px solid #ffd21a" : "none"));
+    // 高亮打在帽子块的头部条上——帽子块本体已是透明容器（身体悬挂其下），
+    // 描它的外框会把整个函数体都框进去
+    [...canvas.children].forEach((s) => {
+      const hd = s.firstChild && (s.firstChild.querySelector(":scope > .hdr") || s.firstChild);
+      if (hd) hd.style.setProperty("outline", s._fn === selected ? "3px solid #ffd21a" : "none");
+    });
   }
 
   // 结构体声明积木：名字/字段名/字段类型均可编辑，可加可删
@@ -1412,7 +1435,38 @@
     return off.toDataURL();
   }
 
+  // 精灵属性行（Scratch 的名称/x/y 仪表盘）：绑定当前精灵的真实模型字段。
+  // x/y 是舞台摆位（_stageX/_stageY），改了立即反映到舞台视图。
+  function refreshSpriteProps() {
+    const sp = sprite();
+    const nm = document.getElementById("sp-name"), sx = document.getElementById("sp-x"),
+          sy = document.getElementById("sp-y"), sc = document.getElementById("sp-costumes");
+    if (!nm) return;
+    if (document.activeElement !== nm) nm.value = sp.name;
+    if (sp._stageX === undefined) { sp._stageX = 200; sp._stageY = 240; }
+    if (document.activeElement !== sx) sx.value = Math.round(sp._stageX);
+    if (document.activeElement !== sy) sy.value = Math.round(sp._stageY);
+    if (sc) sc.textContent = "造型 " + (sp.costumes ? sp.costumes.length : 0);
+  }
+  (() => {
+    const nm = document.getElementById("sp-name"), sx = document.getElementById("sp-x"),
+          sy = document.getElementById("sp-y");
+    if (!nm) return;
+    nm.addEventListener("change", () => {
+      const v = nm.value.trim();
+      if (v) { sprite().name = v; renderSpriteBar(); renderCanvas(); } else nm.value = sprite().name;
+    });
+    const setXY = () => {
+      const sp = sprite();
+      sp._stageX = parseFloat(sx.value) || 0; sp._stageY = parseFloat(sy.value) || 0;
+      renderStage();
+    };
+    sx.addEventListener("change", setXY);
+    sy.addEventListener("change", setXY);
+  })();
+
   function renderSpriteBar() {
+    refreshSpriteProps();
     const list = document.getElementById("sprite-list");
     list.innerHTML = "";
     project.sprites.forEach((sp, i) => {
@@ -1423,6 +1477,12 @@
       else thumb.textContent = sp.icon || "🎭";
       card.append(thumb);
       const nm = el("div", "nm", sp.name);
+      nm.title = "双击重命名";
+      nm.addEventListener("dblclick", (e) => {          // 双击改名（Scratch 的精灵名字段）
+        e.stopPropagation();
+        const v = (prompt("精灵名称：", sp.name) || "").trim();
+        if (v) { sp.name = v; renderSpriteBar(); renderCanvas(); }
+      });
       card.append(nm);
       // 当前造型名（仿 Scratch：精灵上显示其当前造型）
       const cc = (i === project.cur && ce) ? { name: ce.currentName() } : curCostume(sp);
@@ -1669,7 +1729,8 @@
   // 自制积木的预览（函数定义帽子块外观）
   function specialPreview(sp) {
     if (sp.special === "addStruct" || sp.special === "addGlobal") {
-      const blk = el("div", "block");
+      // 预览不能复用 struct-blk/global-blk 类：画布断言"恰好 1 个"，调色板里再来一个就数成 2
+      const blk = el("div", "block " + (sp.special === "addStruct" ? "pal-struct" : "pal-global"));
       const row = el("div", "hdr");
       row.append(el("span", "label", sp.special === "addStruct" ? "结构体" : "全局"),
                  el("span", "param", sp.special === "addStruct" ? "新建…" : "新变量"));
@@ -1677,7 +1738,7 @@
       return blk;
     }
     if (sp.special === "addImport") {          // 导入库：显示当前已导入的模块
-      const blk = el("div", "block");
+      const blk = el("div", "block import-blk");
       const row = el("div", "hdr");
       row.append(el("span", "label", "导入"), el("span", "param", "库…"));
       blk.append(row);
