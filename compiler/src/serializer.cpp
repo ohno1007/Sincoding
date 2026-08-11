@@ -517,6 +517,41 @@ std::string serializeBlocks(const Program& prog) {
         w.out << "]";
     }
     w.out << ",";
+    // 被导入函数的签名 —— 编辑器据此**自动生成积木**（导入即得积木）。
+    // 只给签名：参数名/类型决定槽位，返回类型决定是语句块还是 reporter。
+    w.nl(); w.key("libs");
+    {
+        std::vector<const FnDecl*> libFns;
+        for (auto& fn : prog.fns)
+            if (!fn->module.empty() && !fn->isExtern) libFns.push_back(fn.get());
+        if (libFns.empty()) { w.out << "[]"; }
+        else {
+            w.out << "["; w.depth++;
+            for (size_t i = 0; i < libFns.size(); i++) {
+                if (i) w.out << ",";
+                const auto& f = *libFns[i];
+                w.nl(); w.out << "{"; w.depth++;
+                w.nl(); w.key("module"); w.str(f.module);
+                w.out << ","; w.nl(); w.key("name"); w.str(f.name);
+                w.out << ","; w.nl(); w.key("params"); w.out << "[";
+                for (size_t j = 0; j < f.params.size(); j++) {
+                    if (j) w.out << ", ";
+                    w.out << "{"; w.key("name"); w.str(f.params[j].name);
+                    w.out << ", "; w.key("type");
+                    w.str(f.params[j].type == Type::Struct ? f.params[j].structName
+                                                           : typeName(f.params[j].type));
+                    w.out << ", "; w.key("len"); w.out << f.params[j].len;
+                    w.out << "}";
+                }
+                w.out << "]";
+                w.out << ","; w.nl(); w.key("ret");
+                w.str(f.ret == Type::Struct ? f.retStruct : typeName(f.ret));
+                w.depth--; w.nl(); w.out << "}";
+            }
+            w.depth--; w.nl(); w.out << "]";
+        }
+    }
+    w.out << ",";
     // 结构体定义
     w.nl(); w.key("structs");
     if (structs.empty()) {

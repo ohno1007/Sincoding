@@ -250,7 +250,9 @@ fn main() -> int {
 - 各模块都可能 `extern fn` 借同一个 libm 函数，重复的 extern 原型自动去重，不算冲突。
 - 命名空间是**扁平**的：不同模块的同名函数/结构体会被类型检查报「重复定义」。
 - `--emit src` 只写回 `import` 行，**不会**把库源码灌进你的文件（往返幂等）；
-  积木视图同理只显示你自己的代码，模块名单独放在积木 JSON 的 `imports` 字段。
+  积木视图同理只显示你自己的代码。
+- **导入即得积木**：编辑器读积木 JSON 的 `libs` 段（被导入函数的签名），
+  自动在调色板生成该库的分类——void 函数是语句块，有返回值的是 reporter。
 
 `std/mathx` 现有：`clamp / lerp / sign / dist / dist2`（浮点）与
 `abs_i / min_i / max_i / clamp_i`（整数）。

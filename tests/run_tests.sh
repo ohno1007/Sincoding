@@ -258,6 +258,12 @@ if command -v node >/dev/null 2>&1 && \
     else
         echo "✗ IDE mini-LSP: 验证失败（$rout）"; ((FAIL++))
     fi
+    # 导入即得积木：import 库后调色板自动出现该库分类（积木由签名生成）
+    if lout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_lib_palette.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ IDE 库积木: import 后调色板自动出现库分类（$lout）"; ((PASS++))
+    else
+        echo "✗ IDE 库积木: 验证失败（$lout）"; ((FAIL++))
+    fi
 else
     echo "○ 跳过（未检测到 node 或 playwright）"
 fi

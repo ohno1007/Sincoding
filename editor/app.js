@@ -709,6 +709,8 @@
     project.globals = blk.globals || [];
     sprite().program = prog;
     selected = prog[0] || null;
+    // 导入即得积木：import 的库函数签名变了就重建调色板的库分类
+    if (rebuildLibCats(blk.libs)) buildPalette();
     renderCanvas(); // 不回写文本，避免打断输入
     const diags = res.diags || [];
     renderDiags(diags);
@@ -1372,6 +1374,11 @@
     if (!selected || !selected.body) return;
     selected.body.push(NEW[kind]()); render();
   }
+  // 直接加入一个现成节点（库积木按签名生成，没有固定 kind）
+  function addStmtNode(node) {
+    if (!selected || !selected.body) return;
+    selected.body.push(node); render();
+  }
   function addFn() {
     const fn = { block: "fn", name: "fn" + (sprite().program.length + 1), params: [], ret: "int",
       body: [{ block: "return", value: { block: "int", value: 0 } }],
@@ -1397,6 +1404,51 @@
     { id: "platform", name: "平台", color: "#5CB1D6", items: ["if_mouse", "let_mouse_x", "let_mouse_y", "let_random", "let_screen_w"] },
     { id: "events", name: "事件 / 声音", color: "#FFBF00", items: ["if_key", "if_key_right", "if_key_up", "if_key_down", "broadcast", "if_received", "play_tone", "play_sound"] },
   ];
+
+  // ---- 导入即得积木：由 import 的库函数**签名**自动生成分类 ----
+  // 参数类型决定槽位默认值，返回类型决定是语句块（void）还是 reporter（有返回值）。
+  // 只读签名，不读任何外观元数据——签名一变，积木自动跟着变。
+  const LIB_CATS = [];                 // 动态追加到 PALETTE 之后
+  const LIB_COLORS = ["#CF63CF", "#0FBD8C", "#5CB1D6", "#FF8C1A"];
+  function libSlot(p) {                // 依参数类型给一个合理的默认实参
+    if (p.len !== 0) return { block: "var", name: p.name };   // 数组/切片：变量槽
+    switch (p.type) {
+      case "float": return { block: "float", value: 0 };
+      case "bool": return { block: "bool", value: true };
+      case "string": return { block: "string", value: "" };
+      case "int": return { block: "int", value: 0 };
+      default: return { block: "var", name: p.name };          // 结构体等：变量槽
+    }
+  }
+  function libNode(f) {
+    const call = { block: "call", callee: f.name, args: (f.params || []).map(libSlot) };
+    return f.ret === "void" ? { block: "expr", expr: call } : call;
+  }
+  // 依据 blocks JSON 的 libs 段重建库分类
+  function rebuildLibCats(libs) {
+    const before = JSON.stringify(LIB_CATS.map((c) => c.id + ":" + c.items.length));
+    LIB_CATS.length = 0;
+    const byMod = new Map();
+    (libs || []).forEach((f) => {
+      if (!byMod.has(f.module)) byMod.set(f.module, []);
+      byMod.get(f.module).push(f);
+    });
+    let ci = 0;
+    byMod.forEach((fns, mod) => {
+      const id = "lib_" + mod.replace(/[^A-Za-z0-9]/g, "_");
+      // 有返回值的做成 reporter（拖进槽位），void 的做成语句块
+      const stmts = fns.filter((f) => f.ret === "void");
+      const reps = fns.filter((f) => f.ret !== "void");
+      const color = LIB_COLORS[ci++ % LIB_COLORS.length];
+      if (stmts.length)
+        LIB_CATS.push({ id: id, name: "📦 " + mod, color: color,
+                        items: stmts.map((f) => ({ lib: f })) });
+      if (reps.length)
+        LIB_CATS.push({ id: id + "_r", name: "📦 " + mod + " (取值)", color: color, reporter: true,
+                        items: reps.map((f) => ({ lib: f })) });
+    });
+    return JSON.stringify(LIB_CATS.map((c) => c.id + ":" + c.items.length)) !== before;
+  }
   // 自制积木的预览（函数定义帽子块外观）
   function specialPreview(sp) {
     if (sp.special === "addFn") {
@@ -1437,7 +1489,7 @@
       Object.entries(railBtns).forEach(([k, b]) => b.classList.toggle("active", k === id));
     }
 
-    PALETTE.forEach((cat) => {
+    PALETTE.concat(LIB_CATS).forEach((cat) => {
       // 左侧分类导航按钮（彩色圆点 + 名称）
       const rb = el("button", "cat-btn");
       const dot = el("span", "cat-dot"); dot.style.background = cat.color;
@@ -1456,9 +1508,15 @@
       cat.items.forEach((it) => {
         const wys = el("div", "pal-wys" + (isReporter ? " pal-reporter" : ""));
         const special = typeof it === "object" && it.special;
-        wys.dataset.kind = special ? it.special : it;
+        const lib = typeof it === "object" && it.lib;     // 库函数：按签名生成积木
+        wys.dataset.kind = special ? it.special : (lib ? "lib:" + it.lib.name : it);
+        const mk = lib ? () => libNode(it.lib) : null;    // 每次取用都新建一份节点
         let preview;
         if (special) preview = specialPreview(it);
+        else if (lib) {
+          if (isReporter) { preview = el("span", "expr-wrap"); preview.append(renderExpr(mk())); }
+          else preview = renderStmt(mk(), null);
+        }
         else if (isReporter) { preview = el("span", "expr-wrap"); preview.append(renderExpr(REPORTERS[it]())); }
         else preview = renderStmt(NEW[it](), null);   // 与画布同款外观
         wys.append(preview);
@@ -1473,14 +1531,16 @@
             started = true;
             window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
             if (special) return;
-            if (isReporter) startExprDrag({ node: REPORTERS[it](), srcEl: preview, e: ev });
-            else startStmtDrag({ node: NEW[it](), fromList: null, blockEl: null, srcEl: preview, e: ev });
+            const node = lib ? mk() : (isReporter ? REPORTERS[it]() : NEW[it]());
+            if (isReporter) startExprDrag({ node: node, srcEl: preview, e: ev });
+            else startStmtDrag({ node: node, fromList: null, blockEl: null, srcEl: preview, e: ev });
           };
           const up = () => {
             window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
             if (started) return;
             if (special) { if (it.special === "addFn") addFn(); }
-            else if (!isReporter) addStmt(it);   // reporter 只能拖入槽位
+            else if (lib) { if (!isReporter) addStmtNode(mk()); }  // reporter 只能拖入槽位
+            else if (!isReporter) addStmt(it);
           };
           window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
         });
