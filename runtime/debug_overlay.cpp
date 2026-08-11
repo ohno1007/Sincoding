@@ -70,9 +70,10 @@ void sin_dbg_init(void) {
     const char* e = std::getenv("SIN_DBG_OPEN");
     if (e && e[0] == '1') g_open = true;
 #ifdef __ANDROID__
-    // 手机：没有 F12 也没有环境变量——默认展开面板，字体放大适配高分屏
+    // 手机：没有 F12 也没有环境变量——默认展开面板，字体/控件放大适配高分屏
     g_open = true;
     ImGui::GetIO().FontGlobalScale = 2.0f;
+    ImGui::GetStyle().ScaleAllSizes(2.0f);
 #endif
 }
 void sin_dbg_shutdown(void) { rlImGuiShutdown(); }
@@ -85,11 +86,19 @@ void sin_dbg_frame_done(void) { g_frame++; if (g_stepOnce) { g_stepOnce = false;
 void sin_dbg_draw(int spriteCount, const float* sx, const float* sy) {
     if (IsKeyPressed(KEY_F12)) g_open = !g_open;
 #ifdef __ANDROID__
-    // 手机没有 F12：点左下角热区开关面板（raylib 把首个触点映射为鼠标）
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-        GetMouseY() > GetScreenHeight() - 56 && GetMouseX() < 220) g_open = !g_open;
-    DrawText(g_open ? "tap: hide debug" : "tap: debug panel",
-             8, GetScreenHeight() - 26, 20, Fade(GRAY, 0.7f));
+    // 手机没有 F12：右上角 DBG 按钮开关（左下角留给虚拟手柄）。
+    // 扫全部触点做边沿检测——按住手柄的同时也能用另一根手指点开面板。
+    {
+        Rectangle chip = { (float)GetScreenWidth() - 124.0f, 10.0f, 114.0f, 56.0f };
+        static bool chipPrev = false;
+        bool chipDown = false;
+        for (int t = 0; t < GetTouchPointCount(); t++)
+            if (CheckCollisionPointRec(GetTouchPosition(t), chip)) chipDown = true;
+        if (chipDown && !chipPrev) g_open = !g_open;
+        chipPrev = chipDown;
+        DrawRectangleRounded(chip, 0.3f, 8, Fade(g_open ? DARKBLUE : BLACK, 0.38f));
+        DrawText("DBG", (int)chip.x + 32, (int)chip.y + 16, 28, Fade(WHITE, 0.9f));
+    }
 #endif
     if (!g_open) {
 #ifndef __ANDROID__
@@ -99,7 +108,11 @@ void sin_dbg_draw(int spriteCount, const float* sx, const float* sy) {
         return;
     }
     rlImGuiBegin();
+#ifdef __ANDROID__
+    ImGui::SetNextWindowSize(ImVec2(560, 680), ImGuiCond_FirstUseEver);   // 2x 缩放下手指可点
+#else
     ImGui::SetNextWindowSize(ImVec2(320, 380), ImGuiCond_FirstUseEver);
+#endif
     ImGui::SetNextWindowPos(ImVec2(8, 8), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Sincoding Debugger (F12)")) {
         ImGui::Text("line: %lld    frame: %lld", g_line, g_frame);

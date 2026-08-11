@@ -107,6 +107,11 @@ static bool g_quit_requested = false;
 static bool g_in_frame = false;
 static bool g_closed = false;
 
+#ifdef __ANDROID__
+static void vpad_poll(void);   // 触屏虚拟手柄（定义在按键区）
+static void vpad_draw(void);
+#endif
+
 bool rt_stage_running(void) {
     return !g_quit_requested && !WindowShouldClose();
 }
@@ -125,9 +130,15 @@ void rt_frame_begin(void) {
         Rectangle src = { 0, 0, (float)g_pen.texture.width, -(float)g_pen.texture.height };
         DrawTextureRec(g_pen.texture, src, (Vector2){ 0, 0 }, WHITE);
     }
+#ifdef __ANDROID__
+    vpad_poll();     // 触屏手柄：帧首采样，整帧内 key_down/key_pressed 一致
+#endif
 }
 
 void rt_frame_end(void) {
+#ifdef __ANDROID__
+    vpad_draw();     // 手柄画在游戏之上、调试面板之下
+#endif
 #ifdef SIN_DEBUG
     // 调试面板画在最上层（EndDrawing 之前），并把精灵坐标喂给「精灵」检查器
     {
@@ -317,8 +328,69 @@ bool rt_touching(rt_sprite a, rt_sprite b) {
 }
 
 // ---------- 输入 ----------
-bool rt_key_down(int key) { return IsKeyDown(key); }
-bool rt_key_pressed(int key) { return IsKeyPressed(key); }   // 本帧刚按下（边沿）
+// ---------------- 安卓虚拟手柄：屏上方向键/动作键 → key_down/key_pressed ----------------
+#ifdef __ANDROID__
+// 手机没有键盘：把 ← ↑ ↓ → 和「GO」(空格) 画在屏上，触点压进按钮就算按键按下。
+// 键盘控制的游戏零改动即可在手机上玩（「预览=成品」在输入侧的延伸）。
+typedef struct { int key; Rectangle r; const char* label; bool down, prev; } RtVBtn;
+#define RT_VBTN_N 5
+static RtVBtn g_vbtn[RT_VBTN_N];
+static bool g_vbtn_ready = false;
+
+static void vpad_layout(void) {
+    float W = (float)GetScreenWidth(), H = (float)GetScreenHeight();
+    float s = H * 0.15f, m = s * 0.30f;          // 按钮边长 / 间距
+    g_vbtn[0] = (RtVBtn){ KEY_LEFT,  { m,                 H - s - m,     s, s }, "<",  false, false };
+    g_vbtn[1] = (RtVBtn){ KEY_DOWN,  { m + s + m,         H - s - m,     s, s }, "v",  false, false };
+    g_vbtn[2] = (RtVBtn){ KEY_RIGHT, { m + 2 * (s + m),   H - s - m,     s, s }, ">",  false, false };
+    g_vbtn[3] = (RtVBtn){ KEY_UP,    { m + s + m,         H - 2*s - 2*m, s, s }, "^",  false, false };
+    g_vbtn[4] = (RtVBtn){ KEY_SPACE, { W - s - m,         H - s - m,     s, s }, "GO", false, false };
+    g_vbtn_ready = true;
+}
+static void vpad_poll(void) {                     // 每帧开头：多点触控扫描（可同时按住方向+GO）
+    if (!g_vbtn_ready) vpad_layout();
+    for (int i = 0; i < RT_VBTN_N; i++) { g_vbtn[i].prev = g_vbtn[i].down; g_vbtn[i].down = false; }
+    int n = GetTouchPointCount();
+    for (int t = 0; t < n; t++) {
+        Vector2 p = GetTouchPosition(t);
+        for (int i = 0; i < RT_VBTN_N; i++)
+            if (CheckCollisionPointRec(p, g_vbtn[i].r)) g_vbtn[i].down = true;
+    }
+}
+static void vpad_draw(void) {                     // 每帧末尾：半透明按钮（按住加深）
+    for (int i = 0; i < RT_VBTN_N; i++) {
+        DrawRectangleRounded(g_vbtn[i].r, 0.28f, 8, Fade(BLACK, g_vbtn[i].down ? 0.42f : 0.20f));
+        int fs = (int)(g_vbtn[i].r.height * 0.5f);
+        int tw = MeasureText(g_vbtn[i].label, fs);
+        DrawText(g_vbtn[i].label,
+                 (int)(g_vbtn[i].r.x + (g_vbtn[i].r.width - tw) * 0.5f),
+                 (int)(g_vbtn[i].r.y + (g_vbtn[i].r.height - fs) * 0.5f),
+                 fs, Fade(WHITE, 0.85f));
+    }
+}
+static bool vpad_down(int key) {
+    for (int i = 0; i < RT_VBTN_N; i++) if (g_vbtn[i].key == key && g_vbtn[i].down) return true;
+    return false;
+}
+static bool vpad_pressed(int key) {
+    for (int i = 0; i < RT_VBTN_N; i++)
+        if (g_vbtn[i].key == key && g_vbtn[i].down && !g_vbtn[i].prev) return true;
+    return false;
+}
+#endif
+
+bool rt_key_down(int key) {
+#ifdef __ANDROID__
+    if (vpad_down(key)) return true;
+#endif
+    return IsKeyDown(key);
+}
+bool rt_key_pressed(int key) {   // 本帧刚按下（边沿）
+#ifdef __ANDROID__
+    if (vpad_pressed(key)) return true;
+#endif
+    return IsKeyPressed(key);
+}
 bool rt_mouse_clicked(void) { return IsMouseButtonPressed(MOUSE_BUTTON_LEFT); }
 
 void rt_show(rt_sprite s) { if (sprite_valid(s)) g_sprites[s].hidden = false; }
