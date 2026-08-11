@@ -225,6 +225,31 @@ extern fn fmax(a: float, b: float) -> float
 `floor/ceil`（取整）、`pow`（幂）。示例见 [`examples/mathx.sin`](../examples/mathx.sin)。
 预览解释器（`interp.js`）已内置这些函数的等价实现，编辑期即可试跑。
 
+### 泛型函数
+
+函数可以带**类型参数** `fn f<T>(...)`，编译器按调用点的实际类型**单态化**
+出具体实现（如 `total__int` / `total__float`），生成的 C 里全是具体类型，
+**零运行时开销**：
+
+```rust
+fn total<T>(xs: T[]) -> T {        // 切片 T[] 管长度，泛型 <T> 管元素类型
+    let t = xs[0]
+    for i in 1..len(xs) { t = t + xs[i] }
+    return t
+}
+
+let a: int[4] = [1, 2, 3, 4]
+let f: float[3] = [1.5, 2.5, 3.0]
+print(total(a))     // 10  T=int
+print(total(f))     // 7   T=float —— 同一个 total
+```
+
+- 类型参数**从实参推断**，调用时不用写 `<int>`。
+- 同一类型参数出现多次时，各处实参类型必须一致（否则报「推断冲突」）。
+- 类型参数必须出现在**某个参数的类型里**，否则无从推断（会报错）。
+- 泛型可以调用泛型（实例化会迭代到不动点）。
+- 泛型函数本身不生成代码，只有被调用产生的实例才会；未被调用的泛型不产出任何 C。
+
 ## 4.5 模块与标准库（import）
 
 用 `import "模块名"` 复用其它 `.sin` 文件的结构体与函数：
@@ -257,11 +282,9 @@ fn main() -> int {
 `std/mathx` 现有：`clamp / lerp / sign / dist / dist2`（浮点）与
 `abs_i / min_i / max_i / clamp_i`（整数）。
 
-`std/arrayx` 提供通用数组工具（基于**切片** `T[]`，见 §3.5.1）：
-`sum / max_of / min_of / index_of / contains / count_of / fill / reverse / sort`。
-
-> 元素类型不同仍需各写一份（`sum` 对 `int[]`、`sum_f` 对 `float[]`）——
-> 本语言暂无泛型，这是后续课题；但长度维度已由切片解决。
+`std/arrayx` 提供通用数组工具（**切片** `T[]` 管长度 + **泛型** `<T>` 管元素类型）：
+`sum / max_of / min_of / index_of / contains / count_of / fill / reverse / sort`，
+同一份代码同时服务 `int[]` 与 `float[]`。
 
 ## 5. 控制流
 

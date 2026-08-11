@@ -293,7 +293,12 @@ parser → checker → codegen → serializer → wasm 重编（`tools/build_sin
 > 任意长度数组自动借用传入，`len()` 取长度；为杜绝悬垂，切片只能作参数/局部，
 > 禁止作返回值、结构体字段、全局变量、借用临时值。
 > 据此写出真正通用的 `std/arrayx`（sum/max_of/index_of/fill/reverse/sort）。
-> **剩余课题**：元素类型维度仍需各写一份（int[] 与 float[]）——需要泛型。
+> **已解决（泛型 <T>）**：元素类型维度也打通了——`fn sum<T>(xs: T[]) -> T` 由类型检查器
+> 按调用点实参推断类型参数，**单态化**克隆出具体实例（sum__int / sum__float），
+> 迭代到不动点以支持「泛型调用泛型」；codegen 完全未改（它只看到全具体类型的程序）。
+> 关键不变量：调用点的 `callee` **不被改写**（实例名放在独立的 `resolved` 字段），
+> 因此 `--emit src` 仍写回用户手写的 `total(a)`，往返幂等不破。
+> `std/arrayx` 据此去掉了 sum_f/max_of_f 等重复，一份代码服务 int[] 与 float[]。
 
 ### M4 —— 模块系统与库生态（D5 落地）
 

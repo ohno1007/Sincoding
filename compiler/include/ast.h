@@ -70,7 +70,10 @@ struct Binary : Expr {
 };
 
 struct Call : Expr {
-    std::string callee;
+    std::string callee;      // 用户写的名字（唯一真相：序列化/IDE 查询都用它）
+    // 泛型调用经单态化解析出的具体实例名（如 total__int）。仅代码生成使用，
+    // 不参与序列化——否则会把 total(a) 写回成 total__int(a)，破坏往返幂等。
+    std::string resolved;
     std::vector<ExprPtr> args;
     Call() : Expr(ExprKind::Call) {}
 };
@@ -180,6 +183,9 @@ struct Param {
 
 struct FnDecl {
     std::string name;
+    // 泛型类型参数 fn f<T>(...)：非空表示这是泛型模板，由单态化按调用点实例化。
+    // 参数/返回/局部里以「结构体名 == 某个类型参数名」的形式引用它们。
+    std::vector<std::string> typeParams;
     std::vector<Param> params;
     Type ret = Type::Void;
     int retLen = 0;         // >0 表示返回定长数组 T[N]

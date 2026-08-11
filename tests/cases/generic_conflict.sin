@@ -1,0 +1,5 @@
+fn same<T>(a: T, b: T) -> T { return a }
+fn main() -> int {
+    let x = same(1, 2.5)   // T 推断冲突：int 与 float
+    return 0
+}

@@ -66,7 +66,8 @@ run_ok struct_nested "$ROOT/examples/struct_nested.sin" $'5\n9\n42\n2.5'
 run_ok str_concat "$ROOT/examples/str_concat.sin" $'Score: 42\npi=3.14\nflag=true\nless'
 run_ok mathx "$ROOT/examples/mathx.sin" $'5\n10\n0\n7.5'
 run_ok use_std "$ROOT/examples/use_std.sin" $'5\n10\n2.5\n-1\n10\n7\n9'
-run_ok use_arrayx "$ROOT/examples/use_arrayx.sin" $'15\n60\n5\n3\n0\n1\n5\n5\n7'
+run_ok use_arrayx "$ROOT/examples/use_arrayx.sin" $'15\n60\n7\n5\n3\n0\n1\n1.5\n5'
+run_ok generics "$ROOT/examples/generics.sin" $'10\n7\n9\n1.5'
 
 echo
 echo "=== 反例：类型/语义错误应被拒绝 ==="
@@ -87,6 +88,8 @@ expect_error struct_arr_field  "$ROOT/tests/cases/struct_arr_field.sin"
 expect_error import_missing    "$ROOT/tests/cases/import_missing.sin"
 expect_error slice_return      "$ROOT/tests/cases/slice_return.sin"
 expect_error slice_field       "$ROOT/tests/cases/slice_field.sin"
+expect_error generic_conflict  "$ROOT/tests/cases/generic_conflict.sin"
+expect_error generic_uninferable "$ROOT/tests/cases/generic_uninferable.sin"
 
 # roundtrip <name> <source.sin> — 验证 AST ⇄ 文本 ⇄ 积木 序列化正确
 roundtrip() {
@@ -129,6 +132,7 @@ roundtrip str_concat "$ROOT/examples/str_concat.sin"
 roundtrip mathx "$ROOT/examples/mathx.sin"
 roundtrip use_std "$ROOT/examples/use_std.sin"
 roundtrip use_arrayx "$ROOT/examples/use_arrayx.sin"
+roundtrip generics "$ROOT/examples/generics.sin"
 
 # ---- 模块系统：用户库（磁盘）/ 嵌套 import / extern 去重 / 循环检测 ----
 echo

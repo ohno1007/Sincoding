@@ -74,6 +74,18 @@ int Parser::parseArraySuffix() {
     return len;
 }
 
+// 解析可选的泛型类型参数表 <T, U>；无 '<' 时返回空
+std::vector<std::string> Parser::parseTypeParams() {
+    std::vector<std::string> tps;
+    if (!check(TokKind::Lt)) return tps;
+    advance();                       // '<'
+    if (!check(TokKind::Gt)) {
+        do { tps.push_back(expect(TokKind::Ident, "类型参数名").text); } while (match(TokKind::Comma));
+    }
+    expect(TokKind::Gt, "'>'");
+    return tps;
+}
+
 Program Parser::parseProgram() {
     Program prog;
     while (!check(TokKind::End)) {
@@ -135,6 +147,7 @@ FnPtr Parser::parseFn() {
     const Token& name = expect(TokKind::Ident, "函数名");
     fn->name = name.text;
     fn->col = name.col;
+    fn->typeParams = parseTypeParams();     // fn f<T>(...)
     expect(TokKind::LParen, "'('");
     if (!check(TokKind::RParen)) {
         do {

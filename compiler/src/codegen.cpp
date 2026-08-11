@@ -175,13 +175,16 @@ std::string CodeGen::generate(const Program& prog) {
 "static const char* sin_str_from_bool(int b) { return b ? \"true\" : \"false\"; }\n\n";
     }
 
-    for (auto& fn : prog.fns) fns_[fn->name] = fn.get();   // 调用点查形参类型
+    // 泛型模板只是模板（含类型变量），不参与代码生成——只生成它的具体实例
+    auto isTemplate = [](const FnDecl& f) { return !f.typeParams.empty(); };
+    for (auto& fn : prog.fns) if (!isTemplate(*fn)) fns_[fn->name] = fn.get();  // 调用点查形参类型
 
     // 收集所有数组包裹类型（值语义）与切片类型（借用视图）
     std::vector<ArrType> arrs, slices;
     {
         std::set<std::string> seen, sseen;
         for (auto& fn : prog.fns) {
+            if (isTemplate(*fn)) continue;
             for (auto& p : fn->params) addSlice(p.type, p.structName, p.len, slices, sseen);
             if (fn->body) {
                 // 局部切片变量（如 let s = 某切片参数）
@@ -193,6 +196,7 @@ std::string CodeGen::generate(const Program& prog) {
             for (auto& f : st->fields) addArr(f.type, f.structName, f.len, arrs, seen);
         for (auto& g : prog.globals) collectStmt(*g, arrs, seen);
         for (auto& fn : prog.fns) {
+            if (isTemplate(*fn)) continue;
             for (auto& p : fn->params) addArr(p.type, p.structName, p.len, arrs, seen);
             addArr(fn->ret, fn->retStruct, fn->retLen, arrs, seen);
             if (fn->body) collectBlock(*fn->body, arrs, seen);
@@ -230,7 +234,7 @@ std::string CodeGen::generate(const Program& prog) {
     }
 
     // 前向声明
-    for (auto& fn : prog.fns) emitFnProto(*fn);
+    for (auto& fn : prog.fns) if (!isTemplate(*fn)) emitFnProto(*fn);
     out_ << "\n";
 
     // 全局变量（文件作用域）
@@ -241,7 +245,7 @@ std::string CodeGen::generate(const Program& prog) {
 
     // 函数体（extern 声明无函数体，仅靠上面的原型链接到运行时）
     for (auto& fn : prog.fns) {
-        if (fn->isExtern) continue;
+        if (fn->isExtern || isTemplate(*fn)) continue;
         emitFn(*fn);
         out_ << "\n";
     }
@@ -572,9 +576,11 @@ void CodeGen::emitExpr(const Expr& e) {
             if (c.callee == "print") { emitPrint(c); break; }
             if (c.callee == "str") { emitStr(c); break; }
             if (c.callee == "len") { emitLen(c); break; }
-            auto fit = fns_.find(c.callee);
+            // 泛型调用发射单态化后的实例名；普通调用就是原名
+            const std::string& target = c.resolved.empty() ? c.callee : c.resolved;
+            auto fit = fns_.find(target);
             const FnDecl* callee = (fit == fns_.end()) ? nullptr : fit->second;
-            out_ << c.callee << "(";
+            out_ << target << "(";
             for (size_t i = 0; i < c.args.size(); i++) {
                 if (i) out_ << ", ";
                 if (callee && i < callee->params.size()) emitArg(*c.args[i], callee->params[i]);

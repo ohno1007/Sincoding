@@ -1,0 +1,2 @@
+fn mk<T>() -> T { return 0 }   // T 不出现在参数里，无法推断
+fn main() -> int { return mk() }

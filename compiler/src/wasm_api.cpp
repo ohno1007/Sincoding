@@ -3,6 +3,7 @@
 // 仅用于 wasm 构建（不参与原生 CMake 构建）。导出 sin_to_blocks：
 // 源码 → 词法/语法/类型检查（尽力而为，容错）→ 积木模型 JSON + 诊断。
 // 让编辑器用「规范引擎」做文本 → 积木 的反向同步。
+#include "generics.h"
 #include "lexer.h"
 #include "modules.h"
 #include "parser.h"
@@ -56,15 +57,15 @@ const char* sin_to_blocks(const char* src) {
     Program prog = parser.parseProgram();
     std::vector<Diagnostic> modDiags;
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
-    TypeChecker checker;
-    checker.check(prog); // 忽略返回值，尽量填充类型
+    std::vector<Diagnostic> checkDiags;
+    checkWithGenerics(prog, checkDiags);   // 尽量填充类型 + 单态化泛型
 
     bool first = true;
     std::string diags = "[";
     diags += diagsJson(lexer.errors(), first);
     diags += diagsJson(parser.errors(), first);
     diags += diagsJson(modDiags, first);
-    diags += diagsJson(checker.errors(), first);
+    diags += diagsJson(checkDiags, first);
     diags += "]";
 
     result = "{\"blocks\":" + serializeBlocks(prog) + ",\"diags\":" + diags + "}";
@@ -80,8 +81,7 @@ const char* sin_hover(const char* src, int line, int col) {
     Program prog = parser.parseProgram();
     std::vector<Diagnostic> modDiags;
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
-    TypeChecker checker;
-    checker.check(prog); // 忽略返回值，尽量填充类型
+    std::vector<Diagnostic> cd; checkWithGenerics(prog, cd);
     result = queryHover(prog, line, col);
     return result.c_str();
 }
@@ -95,8 +95,7 @@ const char* sin_references(const char* src, int line, int col) {
     Program prog = parser.parseProgram();
     std::vector<Diagnostic> modDiags;
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
-    TypeChecker checker;
-    checker.check(prog);
+    std::vector<Diagnostic> cd; checkWithGenerics(prog, cd);
     result = queryReferences(prog, line, col);
     return result.c_str();
 }
@@ -110,8 +109,7 @@ const char* sin_rename(const char* src, int line, int col, const char* newName) 
     Program prog = parser.parseProgram();
     std::vector<Diagnostic> modDiags;
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
-    TypeChecker checker;
-    checker.check(prog);
+    std::vector<Diagnostic> cd; checkWithGenerics(prog, cd);
     result = applyRename(prog, line, col, newName ? newName : "");
     return result.c_str();
 }

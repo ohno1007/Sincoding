@@ -4,6 +4,7 @@
 //   sinc <input.sin> [-o out.c]     将 Sincoding 源码转译为 C
 //   sinc <input.sin> --tokens       仅打印 token（调试用）
 #include "codegen.h"
+#include "generics.h"
 #include "lexer.h"
 #include "modules.h"
 #include "parser.h"
@@ -96,9 +97,9 @@ int main(int argc, char** argv) {
         if (!resolveImports(prog, baseDir, modDiags)) { printDiags(input, modDiags); return 1; }
     }
 
-    // 3) 类型检查
-    TypeChecker checker;
-    bool checkOk = checker.check(prog);
+    // 3) 类型检查（含泛型单态化：把泛型调用实例化成具体函数）
+    std::vector<Diagnostic> checkDiags;
+    bool checkOk = checkWithGenerics(prog, checkDiags);
 
     // IDE 查询模式：尽力而为（即使有类型错误也返回可用结果）
     if (!queryKind.empty()) {
@@ -109,7 +110,7 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    if (!checkOk) { printDiags(input, checker.errors()); return 1; }
+    if (!checkOk) { printDiags(input, checkDiags); return 1; }
 
     // 4) 按 --emit 输出
     std::string result;

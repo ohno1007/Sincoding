@@ -93,6 +93,10 @@ bool TypeChecker::check(Program& prog) {
 
     // 1) 函数签名（允许前向引用 / 互递归；参数/返回可为结构体）
     for (auto& fn : prog.fns) {
+        if (!fn->typeParams.empty()) {          // 泛型模板：留待调用点单态化
+            generics_[fn->name] = fn.get();
+            continue;
+        }
         if (fns_.count(fn->name)) {
             error(fn->line, "函数重复定义: " + fn->name);
             continue;
@@ -120,7 +124,7 @@ bool TypeChecker::check(Program& prog) {
 
     // 第二遍：检查函数体（extern 声明无函数体，跳过）
     for (auto& fn : prog.fns)
-        if (!fn->isExtern) checkFn(*fn);
+        if (!fn->isExtern && fn->typeParams.empty()) checkFn(*fn);
     popScope();
     return errors_.empty();
 }
@@ -490,6 +494,7 @@ Type TypeChecker::checkExpr(Expr& e) {
                 c.type = Type::String;
                 return Type::String;
             }
+            if (checkGenericCall(c)) return c.type;   // 泛型：推断实参类型并改写为实例
             auto it = fns_.find(c.callee);
             if (it == fns_.end()) {
                 error(c.line, "调用了未定义的函数: " + c.callee);
@@ -530,6 +535,66 @@ Type TypeChecker::checkExpr(Expr& e) {
         }
     }
     return Type::Unknown;
+}
+
+// 泛型调用：由实参类型反推类型参数，登记实例化请求，并把调用点改写成实例名。
+// 形参写作 T / T[] / T[N] 时，用实参的 (元素类型, 结构体名) 绑定 T。
+bool TypeChecker::checkGenericCall(Call& c) {
+    auto git = generics_.find(c.callee);
+    if (git == generics_.end()) return false;
+    const FnDecl& gen = *git->second;
+
+    std::map<std::string, TypeArg> subst;
+    auto isTypeParam = [&](const std::string& n) {
+        for (auto& tp : gen.typeParams) if (tp == n) return true;
+        return false;
+    };
+
+    for (size_t i = 0; i < c.args.size(); i++) {
+        Type at = checkExpr(*c.args[i]);
+        if (i >= gen.params.size()) continue;
+        const Param& p = gen.params[i];
+        if (p.type != Type::Struct || !isTypeParam(p.structName)) continue;   // 非类型变量
+        TypeArg ta;
+        ta.base = at;
+        ta.structName = c.args[i]->structName;
+        auto ins = subst.emplace(p.structName, ta);
+        if (!ins.second) {                                    // 同一类型参数出现多次：须一致
+            const TypeArg& prev = ins.first->second;
+            if (prev.base != ta.base || prev.structName != ta.structName)
+                error(c.line, "泛型参数 " + p.structName + " 推断冲突: " +
+                                  typeName(prev.base) + " 与 " + typeName(ta.base));
+        }
+    }
+    if (c.args.size() != gen.params.size())
+        error(c.line, "函数 " + c.callee + " 期望 " + std::to_string(gen.params.size()) +
+                          " 个参数，得到 " + std::to_string(c.args.size()));
+    bool inferred = true;
+    for (auto& tp : gen.typeParams)
+        if (!subst.count(tp)) {
+            error(c.line, "无法从实参推断泛型参数 " + tp + "（请让它出现在某个参数类型里）");
+            inferred = false;
+        }
+    if (!inferred) {                       // 推断失败：不要实例化，否则会再报一串派生错误
+        c.type = Type::Unknown;
+        return true;
+    }
+
+    std::string mangled = mangleName(gen.name, gen.typeParams, subst);
+    if (!instSeen_.count(mangled)) {                          // 同一实例只生成一次
+        instSeen_[mangled] = true;
+        insts_.push_back({ &gen, subst, mangled });
+    }
+    c.resolved = mangled;                                     // 代码生成时指向具体实例
+
+    // 返回类型：把类型变量换成实参
+    Type rt = gen.ret; std::string rs = gen.retStruct;
+    if (rt == Type::Struct && isTypeParam(rs)) {
+        auto it = subst.find(rs);
+        if (it != subst.end()) { rt = it->second.base; rs = it->second.structName; }
+    }
+    c.type = rt; c.structName = rs; c.arrayLen = gen.retLen;
+    return true;
 }
 
 } // namespace sincoding

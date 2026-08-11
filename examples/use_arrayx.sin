@@ -1,6 +1,8 @@
-// use_arrayx.sin — 通用数组库（切片 T[] 让一份代码覆盖任意长度）
+// use_arrayx.sin — 通用数组库：切片 T[] 覆盖任意长度，泛型 <T> 覆盖任意元素类型
 //
-// std/arrayx 的函数参数都是切片 int[]，所以 int[5] 和 int[3] 都能直接传进去。
+// std/arrayx 的函数签名形如 fn sum<T>(xs: T[]) -> T：
+//   · 切片 T[]  → int[5] / int[3] 等任意长度都能传
+//   · 泛型 <T>  → int / float 等任意元素类型共用一份代码
 // 切片是借用视图：sort/reverse 这类会**就地改到你的数组上**。
 
 import "std/arrayx"
@@ -8,20 +10,20 @@ import "std/arrayx"
 fn main() -> int {
     let a: int[5] = [5, 3, 1, 4, 2]
     let b: int[3] = [10, 20, 30]
+    let f: float[3] = [2.5, 1.5, 3.0]
 
     print(sum(a))            // 15  —— int[5]
-    print(sum(b))            // 60  —— int[3]，同一个 sum
+    print(sum(b))            // 60  —— int[3]，长度不同，同一个 sum
+    print(sum(f))            // 7   —— float[3]，元素类型不同，还是同一个 sum
     print(max_of(a))         // 5
-    print(index_of(a, 4))    // 3   —— 下标
-    print(count_of(a, 9))    // 0   —— 不存在
+    print(index_of(a, 4))    // 3
+    print(count_of(a, 9))    // 0
 
     sort(a)                  // 就地升序
     print(a[0])              // 1
-    print(a[4])              // 5
-    reverse(a)               // 就地反转
+    sort(f)                  // 泛型排序对 float 同样可用
+    print(f[0])              // 1.5
+    reverse(a)
     print(a[0])              // 5
-
-    let f: float[3] = [1.5, 2.5, 3.0]
-    print(sum_f(f))          // 7
     return 0
 }

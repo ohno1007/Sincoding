@@ -22,6 +22,7 @@ emcc -std=c++17 -O2 \
     "$ROOT/compiler/src/serializer.cpp" \
     "$ROOT/compiler/src/query.cpp" \
     "$ROOT/compiler/src/modules.cpp" \
+    "$ROOT/compiler/src/generics.cpp" \
     "$ROOT/compiler/src/wasm_api.cpp" \
     -sMODULARIZE=1 -sEXPORT_NAME=SincModule \
     -sEXPORTED_FUNCTIONS='["_sin_to_blocks","_sin_hover","_sin_references","_sin_rename","_malloc","_free"]' \

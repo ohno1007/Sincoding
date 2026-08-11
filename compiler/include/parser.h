@@ -6,6 +6,7 @@
 #include "ast.h"
 #include "lexer.h"
 #include "token.h"
+#include <string>
 #include <vector>
 
 namespace sincoding {
@@ -34,6 +35,7 @@ private:
     StructPtr parseStruct();
     Type parseType(std::string& structName);
     int parseArraySuffix();  // 解析可选的 [N]；无则返回 0（用于 let/参数/返回类型）
+    std::vector<std::string> parseTypeParams();  // 解析可选的 <T, U>
     BlockPtr parseBlock();
     StmtPtr parseStmt();
     StmtPtr parseLet();

@@ -1,0 +1,25 @@
+// generics.sin — 泛型函数：一份代码服务多种元素类型
+//
+// fn f<T>(...) 是模板；编译器按调用点的实际类型**单态化**出具体实现
+// （如 total__int / total__float），生成的 C 里全是具体类型，零运行时开销。
+
+fn total<T>(xs: T[]) -> T {          // 切片 T[] 管长度，泛型 <T> 管元素类型
+    let t = xs[0]
+    for i in 1..len(xs) { t = t + xs[i] }
+    return t
+}
+
+fn bigger<T>(a: T, b: T) -> T {      // 同一类型参数出现多次：实参类型必须一致
+    if a > b { return a }
+    return b
+}
+
+fn main() -> int {
+    let a: int[4] = [1, 2, 3, 4]
+    let f: float[3] = [1.5, 2.5, 3.0]
+    print(total(a))          // 10   T=int
+    print(total(f))          // 7    T=float，同一个 total
+    print(bigger(3, 9))      // 9
+    print(bigger(1.5, 0.5))  // 1.5
+    return 0
+}

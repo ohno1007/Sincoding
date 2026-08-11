@@ -1,6 +1,7 @@
 // type_checker.h — 静态类型检查 + 局部类型推断
 #pragma once
 #include "ast.h"
+#include "generics.h"
 #include "lexer.h" // Diagnostic
 #include <string>
 #include <unordered_map>
@@ -20,10 +21,19 @@ struct FnSig {
     VarType ret;
 };
 
+// 一次待实例化请求：泛型函数 + 类型实参 + 目标实例名
+struct InstReq {
+    const FnDecl* gen;
+    std::map<std::string, TypeArg> subst;
+    std::string mangled;
+};
+
 class TypeChecker {
 public:
     bool check(Program& prog);
     const std::vector<Diagnostic>& errors() const { return errors_; }
+    // 检查过程中发现的泛型调用（调用点已被改写为实例名，由驱动方补出实例）
+    const std::vector<InstReq>& instantiations() const { return insts_; }
 
 private:
     void error(int line, const std::string& msg);
@@ -37,6 +47,12 @@ private:
     void popScope() { scopes_.pop_back(); }
     bool declare(const std::string& name, VarType t);
     VarType lookup(const std::string& name) const;
+
+    // 泛型模板（不参与常规签名表；调用点按实参推断后实例化）
+    std::unordered_map<std::string, const FnDecl*> generics_;
+    std::vector<InstReq> insts_;
+    std::unordered_map<std::string, bool> instSeen_;
+    bool checkGenericCall(Call& c);   // 命中泛型则推断+改写调用点，返回 true
 
     std::unordered_map<std::string, FnSig> fns_;
     std::unordered_map<std::string, std::vector<StructField>> structs_; // 结构体定义

@@ -10,16 +10,19 @@
 //
 // 切片是**借用视图**（不拷贝），所以带 sort/reverse/fill 这类就地修改的函数
 // 会直接改到调用者的数组上；而 sum/max_of 这类只读函数不会改动它。
+//
+// 函数还是**泛型**的（`fn sum<T>(xs: T[])`），因此 int[] 与 float[] 共用一份代码：
+// 编译器按调用点的实际元素类型单态化出具体实现。
 
 // —— 只读查询 ——
 
-fn sum(xs: int[]) -> int {
-    let total = 0
-    for i in 0..len(xs) { total = total + xs[i] }
+fn sum<T>(xs: T[]) -> T {
+    let total = xs[0]                      // 用首元素起头，避免写死 0 / 0.0
+    for i in 1..len(xs) { total = total + xs[i] }
     return total
 }
 
-fn max_of(xs: int[]) -> int {
+fn max_of<T>(xs: T[]) -> T {
     let best = xs[0]
     for i in 1..len(xs) {
         if xs[i] > best { best = xs[i] }
@@ -27,7 +30,7 @@ fn max_of(xs: int[]) -> int {
     return best
 }
 
-fn min_of(xs: int[]) -> int {
+fn min_of<T>(xs: T[]) -> T {
     let best = xs[0]
     for i in 1..len(xs) {
         if xs[i] < best { best = xs[i] }
@@ -36,18 +39,18 @@ fn min_of(xs: int[]) -> int {
 }
 
 // 找到 v 的下标；找不到返回 -1
-fn index_of(xs: int[], v: int) -> int {
+fn index_of<T>(xs: T[], v: T) -> int {
     for i in 0..len(xs) {
         if xs[i] == v { return i }
     }
     return 0 - 1
 }
 
-fn contains(xs: int[], v: int) -> bool {
+fn contains<T>(xs: T[], v: T) -> bool {
     return index_of(xs, v) >= 0
 }
 
-fn count_of(xs: int[], v: int) -> int {
+fn count_of<T>(xs: T[], v: T) -> int {
     let n = 0
     for i in 0..len(xs) {
         if xs[i] == v { n = n + 1 }
@@ -57,11 +60,11 @@ fn count_of(xs: int[], v: int) -> int {
 
 // —— 就地修改（改的是调用者的数组）——
 
-fn fill(xs: int[], v: int) {
+fn fill<T>(xs: T[], v: T) {
     for i in 0..len(xs) { xs[i] = v }
 }
 
-fn reverse(xs: int[]) {
+fn reverse<T>(xs: T[]) {
     let n = len(xs)
     let i = 0
     while i * 2 < n - 1 {
@@ -73,7 +76,7 @@ fn reverse(xs: int[]) {
 }
 
 // 插入排序（升序）：数据量小时简单可靠，且无需额外内存
-fn sort(xs: int[]) {
+fn sort<T>(xs: T[]) {
     let n = len(xs)
     let i = 1
     while i < n {
@@ -86,20 +89,4 @@ fn sort(xs: int[]) {
         xs[j + 1] = key
         i = i + 1
     }
-}
-
-// —— 浮点版（元素类型不同需各写一份：本语言暂无泛型）——
-
-fn sum_f(xs: float[]) -> float {
-    let total = 0.0
-    for i in 0..len(xs) { total = total + xs[i] }
-    return total
-}
-
-fn max_of_f(xs: float[]) -> float {
-    let best = xs[0]
-    for i in 1..len(xs) {
-        if xs[i] > best { best = xs[i] }
-    }
-    return best
 }

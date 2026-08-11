@@ -129,10 +129,13 @@ struct SourceWriter {
         switch (s.kind) {
             case StmtKind::Let: {
                 auto& ls = static_cast<const LetStmt&>(s);
-                out << "let " << ls.name << ": "
-                    << (ls.declared == Type::Struct ? ls.structName : typeName(ls.declared));
-                if (ls.declaredLen > 0) out << "[" << ls.declaredLen << "]";
-                else if (ls.declaredLen == -1) out << "[]";
+                out << "let " << ls.name;
+                // 类型未知（泛型模板体内不做具体类型检查）时省略标注，靠初始化推断
+                if (ls.declared != Type::Unknown) {
+                    out << ": " << (ls.declared == Type::Struct ? ls.structName : typeName(ls.declared));
+                    if (ls.declaredLen > 0) out << "[" << ls.declaredLen << "]";
+                    else if (ls.declaredLen == -1) out << "[]";
+                }
                 if (ls.init) { out << " = "; writeExpr(*ls.init); }
                 out << "\n";
                 break;
@@ -219,7 +222,16 @@ struct SourceWriter {
 
     void writeFn(const FnDecl& fn) {
         if (fn.isExtern) out << "extern ";
-        out << "fn " << fn.name << "(";
+        out << "fn " << fn.name;
+        if (!fn.typeParams.empty()) {                 // 泛型模板：写回 <T, U>
+            out << "<";
+            for (size_t i = 0; i < fn.typeParams.size(); i++) {
+                if (i) out << ", ";
+                out << fn.typeParams[i];
+            }
+            out << ">";
+        }
+        out << "(";
         for (size_t i = 0; i < fn.params.size(); i++) {
             if (i) out << ", ";
             out << fn.params[i].name << ": " << ptype(fn.params[i].type, fn.params[i].structName);
