@@ -502,7 +502,10 @@
         break;
       }
       case "call": {
-        out = el("span", "pill call");
+        // Scratch 惯例：自定义函数的调用与「定义」帽子块同为粉色（My Blocks）；
+        // 运行时/内置函数保持运动蓝
+        const builtin = CALL_LABELS[node.callee] || ["print", "str", "len"].includes(node.callee);
+        out = el("span", "pill call" + (builtin ? "" : " user"));
         const label = callLabel(node.callee);
         if (!node.args.length) { out.append(el("span", "kw", label)); break; }
         out.append(el("span", "kw", label + " ("));
@@ -619,7 +622,9 @@
     // 拖拽重排：按住语句积木拖动，可在各 stack（函数体 / 控制块嘴巴）间移动；拖到调色板=删除
     blk.addEventListener("pointerdown", (e) => {
       if (e.target.classList.contains("field")) return;
-      if (e.altKey) { toggleBreakpoint(node, blk); return; }   // Alt+点击 = 设/清断点
+      // Alt+点击 = 设/清断点。必须拦住冒泡：否则外层每个控制积木的同款监听器
+      // 也会各设一个断点（嵌套越深误设越多）
+      if (e.altKey) { e.stopPropagation(); toggleBreakpoint(node, blk); return; }
       if (list) startStmtDrag({ node, fromList: list, blockEl: blk, e });
     });
     if (breakpoints.has(node)) blk.classList.add("bp");          // 重绘后保持断点标记
@@ -643,15 +648,23 @@
   function makeGhost(srcEl, e) {
     const r = srcEl.getBoundingClientRect();
     const ghost = srcEl.cloneNode(true);
-    // Scratch 手感：拿起时不旋转，轻微放大 + 投影（像从画布上"揭起来"）
+    // cloneNode 不复制 <select>/<input> 的运行时状态（选中项是 property 不是 attribute）：
+    // 不同步的话，拖「赋 a = b」手里会显示成「赋 n = n」（全部回落到第一个 option）
+    const srcSel = srcEl.querySelectorAll("select"), dstSel = ghost.querySelectorAll("select");
+    srcSel.forEach((s, i) => { if (dstSel[i]) dstSel[i].selectedIndex = s.selectedIndex; });
+    const srcIn = srcEl.querySelectorAll("input, textarea"), dstIn = ghost.querySelectorAll("input, textarea");
+    srcIn.forEach((s, i) => { if (dstIn[i]) dstIn[i].value = s.value; });
+    const offx = e.clientX - r.left, offy = e.clientY - r.top;
+    // Scratch 手感：不旋转，轻微放大 + 投影。缩放原点必须是抓取点，
+    // 否则以左上角为原点放大时，内容会从手指下向右下漂走
     Object.assign(ghost.style, {
       position: "fixed", left: r.left + "px", top: r.top + "px", width: r.width + "px",
       pointerEvents: "none", opacity: ".95", zIndex: 9999,
-      transform: "scale(1.04)", transformOrigin: "top left",
+      transform: "scale(1.04)", transformOrigin: offx + "px " + offy + "px",
       filter: "drop-shadow(0 6px 14px rgba(0,0,0,.35))", margin: 0,
     });
     document.body.appendChild(ghost);
-    return { ghost, offx: e.clientX - r.left, offy: e.clientY - r.top };
+    return { ghost, offx, offy };
   }
   function markDeleteZone(ev) {
     const pal = document.getElementById("palette");
@@ -685,6 +698,9 @@
   }
 
   function updateDropTarget(ev) {
+    // 指示器已从细线改成块影（有高度）：测量前必须先摘出文档流，
+    // 否则积木被它顶下一个块高，中点判定测的是漂移后的位置，换位滞后一格
+    if (drag.indicator.parentNode) drag.indicator.remove();
     const stacks = [...canvas.querySelectorAll(".stack")];
     let best = null;
     for (const st of stacks) {
@@ -694,7 +710,7 @@
           ev.clientY >= r.top - 22 && ev.clientY <= r.bottom + 22) { best = st; break; }
     }
     [...canvas.querySelectorAll(".mouth.drop-in")].forEach((m) => m.classList.remove("drop-in"));
-    if (!best) { drag.target = null; if (drag.indicator.parentNode) drag.indicator.remove(); return; }
+    if (!best) { drag.target = null; return; }
     if (best.parentNode && best.parentNode.classList.contains("mouth")) best.parentNode.classList.add("drop-in");
     const kids = [...best.children].filter((c) => c.classList.contains("block"));
     let idx = kids.length;
@@ -837,7 +853,7 @@
     // 描它的外框会把整个函数体都框进去
     [...canvas.children].forEach((s) => {
       const hd = s.firstChild && (s.firstChild.querySelector(":scope > .hdr") || s.firstChild);
-      if (hd) hd.style.setProperty("outline", s._fn === selected ? "3px solid #ffd21a" : "none");
+      if (hd) hd.style.boxShadow = s._fn === selected ? "0 0 0 3px rgba(255,203,55,.6)" : "";  // 柔和黄光，不用硬框
     });
   }
 
@@ -1443,7 +1459,7 @@
           sy = document.getElementById("sp-y"), sc = document.getElementById("sp-costumes");
     if (!nm) return;
     if (document.activeElement !== nm) nm.value = sp.name;
-    if (sp._stageX === undefined) { sp._stageX = 200; sp._stageY = 240; }
+    if (sp._stageX === undefined) { sp._stageX = 200 + project.cur * 150; sp._stageY = 240; }  // 与 renderStage 的默认错开一致
     if (document.activeElement !== sx) sx.value = Math.round(sp._stageX);
     if (document.activeElement !== sy) sy.value = Math.round(sp._stageY);
     if (sc) sc.textContent = "造型 " + (sp.costumes ? sp.costumes.length : 0);
@@ -1499,6 +1515,10 @@
 
   function selectSprite(i) {
     if (i === project.cur) return;
+    // 属性行输入框若正聚焦，先失焦：activeElement 保护会让它残留上一个精灵的值，
+    // 回车会把旧值写进新精灵（改错名/挪错位）
+    const act = document.activeElement;
+    if (act && act.closest && act.closest("#sprite-props")) act.blur();
     if (ce) ce.setStore(project.sprites[i].costumes); // 切换造型集（会先存回旧的）
     project.cur = i;
     selected = sprite().program[0] || null;
@@ -1623,17 +1643,29 @@
     if (!selected || !selected.body) return;
     selected.body.push(node); render();
   }
+  // 新积木的空闲落点：排在当前所有脚本右侧，绝不压在既有函数/卡片上
+  // （默认 (40,36) 恰是第一个函数的位置，新卡会被完全盖住、点不到，像没反应）
+  function freeSpot() {
+    let right = 0;
+    const seen = (arr) => (arr || []).forEach((o) => { if (o._x !== undefined) right = Math.max(right, o._x); });
+    seen(sprite().program); seen(project.structs); seen(project.globals);
+    return { x: right + 300, y: 36 - view.y / view.k + 24 };
+  }
   function addStruct() {
     project.structs = project.structs || [];
+    const p = freeSpot();
     project.structs.push({ name: "Point" + (project.structs.length + 1),
                            fields: [{ name: "x", type: "int", len: 0 },
-                                    { name: "y", type: "int", len: 0 }] });
+                                    { name: "y", type: "int", len: 0 }],
+                           _x: p.x, _y: p.y });
     render();
   }
   function addGlobal() {
     project.globals = project.globals || [];
+    const p = freeSpot();
     project.globals.push({ block: "let", name: "g" + (project.globals.length + 1),
-                           type: "int", len: 0, value: { block: "int", value: 0 } });
+                           type: "int", len: 0, value: { block: "int", value: 0 },
+                           _x: p.x, _y: p.y + 130 });
     render();
   }
   function addFn() {
@@ -1647,7 +1679,8 @@
   const PALETTE = [
     { id: "custom", name: "自制积木", color: "#FF6680", items: [{ special: "addFn", label: "新建函数" }] },
     { id: "data", name: "变量 / 数据", color: "#FF8C1A", items: ["let", "let_str", "let_arr", "set_idx"] },
-    { id: "op", name: "运算", color: "#59C059", items: ["incr", "decr", "set_op", "to_int", "to_float"] },
+    // 分类点颜色 = 该栏积木主色（本栏是赋值形态的运算，块体是变量橙，点也用橙）
+    { id: "op", name: "运算", color: "#FF8C1A", items: ["incr", "decr", "set_op", "to_int", "to_float"] },
     { id: "reporters", name: "运算块 (拖入槽)", color: "#59C059", reporter: true,
       items: ["r_var", "r_index", "r_field", "r_add", "r_sub", "r_mul", "r_div", "r_mod",
         "r_lt", "r_gt", "r_eq", "r_le", "r_ge", "r_ne", "r_and", "r_or", "r_not",
@@ -1769,6 +1802,7 @@
     const blk = wys.firstElementChild; if (!blk) return;
     const h = palHoverEl();
     h.innerHTML = ""; h.appendChild(blk.cloneNode(true));
+    h.firstChild.style.transform = "";   // 弹出层展示原尺寸（预览可能被缩放收窄过）
     const r = wys.getBoundingClientRect();
     h.style.left = r.left + "px"; h.style.top = r.top + "px";
     h.hidden = false;
@@ -1801,7 +1835,7 @@
 
       // 右侧分类区：所见即所得的积木预览（与画布上完全一致）
       const sec = el("div", "cat-sec"); sec.id = "cat-" + cat.id;
-      const h = el("h2", null, cat.name); h.style.setProperty("--cc", cat.color); sec.append(h);
+      const h = el("h2", null, cat.name); sec.append(h);
       const isReporter = cat.reporter === true;
       cat.items.forEach((it) => {
         const wys = el("div", "pal-wys" + (isReporter ? " pal-reporter" : ""));
@@ -1852,6 +1886,18 @@
         sec.append(wys);
       });
       list.append(sec);
+    });
+    // 超宽预览整体缩放收进调色板（Scratch 调色板从不拦腰截断积木）
+    requestAnimationFrame(() => {
+      list.querySelectorAll(".pal-wys").forEach((wys) => {
+        const blk = wys.firstElementChild; if (!blk) return;
+        const need = blk.scrollWidth, avail = wys.clientWidth;
+        if (need > avail && avail > 0) {
+          const k = Math.max(0.62, avail / need);
+          blk.style.transform = "scale(" + k + ")";
+          blk.style.transformOrigin = "left center";
+        }
+      });
     });
     setActiveCat(PALETTE[0].id);
     // 滚动联动：滚到哪个分类，导航就高亮哪个
@@ -1905,6 +1951,9 @@
       t.classList.add("active");
       document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
       document.getElementById(t.dataset.view).classList.add("active");
+      // 积木调色板只属于积木视图：造型/舞台页隐藏（Scratch 切 tab 即切整个工作区）
+      document.getElementById("palette").style.display =
+        t.dataset.view === "blocks-view" ? "" : "none";
       if (t.dataset.view === "stage-view") renderStage(); // 进入舞台时按最新造型渲染
     }));
   }

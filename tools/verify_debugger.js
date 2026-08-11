@@ -53,10 +53,36 @@ function freePort(){return new Promise(r=>{const s=net.createServer();s.listen(0
     await p.click("#dbg-step");
     await p.waitForTimeout(600);
     res.stillPausedAfterStep = await p.$eval("#dbg-panel", e=>!e.hidden).catch(()=>false);
+
+    // —— 无主循环程序：断点同样要生效（曾直接 runToEnd 跑完、断点被无声忽略）——
+    await p.click("#dbg-resume").catch(()=>{});
+    await p.evaluate(()=>{const ta=document.getElementById("text-out");
+      ta.value=['fn work(n: int) -> int {','    let s = 0',
+        '    for i in 0..n {','        s = s + i','    }','    return s','}',
+        'fn main() -> int {','    let r = work(10)','    print(r)','    return 0','}'].join('\n');
+      ta.dispatchEvent(new Event("input",{bubbles:true}));});
+    await p.waitForTimeout(1200);
+    // Alt+点击嵌套在 for 里的 "赋 s = s+i"：一次点击只该设 1 个断点（曾冒泡把外层也设了）
+    res.onceBp = await p.evaluate(()=>{
+      const blks=[...document.querySelectorAll("#canvas .block")];
+      const t=blks.find(b=>b.textContent.startsWith("赋"));
+      if(!t) return {set:false};
+      const r=t.getBoundingClientRect();
+      t.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,button:0,altKey:true,
+        clientX:r.left+5,clientY:r.top+5}));
+      return {set:t.classList.contains("bp"),
+              marked:document.querySelectorAll("#canvas .block.bp").length};
+    });
+    await p.click("#pv-run");            // 重新运行 → 应停在断点而不是直接跑完
+    await p.waitForTimeout(1200);
+    res.oncePaused = await p.$eval("#dbg-panel", e=>!e.hidden).catch(()=>false);
+    res.onceWhere = await p.$eval("#dbg-where", e=>e.textContent).catch(()=>"");
   }catch(e){res.error=String(e).slice(0,180);}
   res.errors=errs;
   res.ok = res.bpSet && res.paused && res.vars.includes("tick") &&
-           res.stack.length>=1 && res.pausedAt===1 && res.stillPausedAfterStep && errs.length===0;
+           res.stack.length>=1 && res.pausedAt===1 && res.stillPausedAfterStep &&
+           res.onceBp && res.onceBp.set && res.onceBp.marked===1 && res.oncePaused &&
+           errs.length===0;
   console.log(JSON.stringify(res));
   await b.close(); srv.kill();
   process.exit(res.ok?0:1);

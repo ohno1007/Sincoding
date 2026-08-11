@@ -64,12 +64,12 @@ header .tabs button.active { background:#fff; color:var(--ui-primary); font-weig
 /* 积木预览：与画布同款外观，整块可点击加入（子元素不拦截点击） */
 .pal-wys { display:block; width:max-content; max-width:100%; margin:0 0 11px; cursor:pointer; }
 .pal-wys * { pointer-events:none; }
-.pal-wys .block { cursor:pointer; }
+.pal-wys .block { cursor:pointer; max-width:100%; overflow:hidden; }
 /* 调色板里积木不换行：超出宽度直接截断，靠 hover 弹出看完整 */
 .pal-wys .hdr { flex-wrap:nowrap; }
 .pal-wys .block, .pal-hover .block { white-space:nowrap; }
 .pal-wys .mouth { display:none; }        /* 预览不展开嘴巴，保持紧凑一行 */
-.pal-wys .block.ctrl::after { display:none; }               /* 也不展开 C 形下臂 */
+.pal-wys .block.ctrl::after, .pal-wys .block.ctrl::before { display:none; }   /* 也不展开 C 形下臂/榫舌 */
 .pal-wys .block.ctrl > .hdr { border-radius:6px; }
 .pal-wys .block.var::after, .pal-wys .block.ev::after { display:none; }
 .pal-wys .block.hat.fn > .hdr::after { display:none; }
@@ -136,7 +136,7 @@ header .tabs button.active { background:#fff; color:var(--ui-primary); font-weig
   background-size:24px 24px; }
 #canvas-wrap.panning { cursor:grabbing; }
 #canvas { position:absolute; left:0; top:0; transform-origin:0 0; }
-#zoom-hint { position:absolute; left:14px; bottom:12px; background:rgba(87,94,117,.75);
+#zoom-hint { position:absolute; right:60px; bottom:14px; background:rgba(87,94,117,.75);
   color:#fff; font-size:11px; padding:5px 10px; border-radius:7px; pointer-events:none;
   display:flex; align-items:center; gap:6px;
   animation:zoom-hint-fade .8s ease 7s forwards; }   /* 7 秒后自动淡出（Scratch 无常驻提示） */
@@ -229,6 +229,7 @@ header .tabs button.active { background:#fff; color:var(--ui-primary); font-weig
 .platforms { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; }
 .platforms label { display:flex; align-items:center; gap:8px; font-weight:500; cursor:pointer; }
 .hint { font-size:11.5px; color:#94a0b8; font-weight:500; }
+.pub-results[hidden] { display:none; }
 .pub-results { display:flex; flex-direction:column; gap:7px; background:#f4f6fb; border-radius:10px;
   padding:10px 12px; font-size:12.5px; }
 .pub-results .row { display:flex; align-items:center; gap:8px; }
@@ -300,6 +301,16 @@ header .tabs button.active { background:#fff; color:var(--ui-primary); font-weig
   content:""; position:absolute; left:10px; bottom:-4px; width:16px; height:4px; z-index:1;
   background:var(--c); border:1px solid var(--cb); border-top:0; border-radius:0 0 4px 4px;
 }
+/* C 形下臂的榫舌（::after 已被下臂占用，用不参与 flex 布局的绝对定位 ::before） */
+.block.ctrl::before {
+  content:""; position:absolute; left:10px; bottom:-4px; width:16px; height:4px; z-index:1;
+  background:var(--c); border:1px solid var(--cb); border-top:0; border-radius:0 0 4px 4px;
+}
+/* 嘴巴内的**末块**不画榫舌：它下面是"否则"中臂/收口条，凸舌会压在色条上像故障
+   （Scratch 对子栈末块同样不画凸舌）。函数体末块保留——脚本末尾露榫头是 Scratch 常态 */
+.block.ctrl > .mouth > .stack > .block.var:last-child::after,
+.block.ctrl > .mouth > .stack > .block.ev:last-child::after,
+.block.ctrl > .mouth > .stack > .block.ctrl:last-child::before { display:none; }
 /* 返回块是"封口块"（后面接不了积木）：底边整体圆角、无榫头 */
 .block.ret { border-radius:5px 5px 9px 9px; }
 
@@ -330,9 +341,10 @@ header .tabs button.active { background:#fff; color:var(--ui-primary); font-weig
   content:""; position:absolute; left:10px; bottom:-4px; width:16px; height:4px; z-index:1;
   background:var(--c); border:1px solid var(--cb); border-top:0; border-radius:0 0 4px 4px;
 }
-/* 函数体：不是"嘴巴"，就是悬挂在帽子下的积木栈 */
+/* 函数体：不是"嘴巴"，就是悬挂在帽子下的积木栈。
+   padding-top 必须为 0——首块要紧贴帽底，让帽子的榫舌压进首块（Scratch 的 define 帽零缝隙咬合） */
 .block.hat.fn > .mouth, .block.hat.extern_fn > .mouth {
-  background:transparent; border:0; margin:0; padding:3px 0 0; min-height:8px;
+  background:transparent; border:0; margin:0; padding:0; min-height:8px;
 }
 
 /* —— 控制块：真 C 形（上臂 + 左脊 + 下臂，嘴巴露出画布） —— */
@@ -358,10 +370,16 @@ header .tabs button.active { background:#fff; color:var(--ui-primary); font-weig
 .pill { border-radius:999px; padding:2px 8px; font-size:12px; display:inline-flex;
   align-items:center; gap:4px; color:#fff; border:1px solid rgba(0,0,0,.2); }
 .pill.op { background:var(--c-operators); border-color:var(--b-operators); }
-.pill.op.bool { border-radius:0; padding:2px 12px;
-  clip-path:polygon(9px 0, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, 9px 100%, 0 50%);
-  border:0; }
+/* 布尔六边形：clip-path 会裁掉 border，用"深色外层 + 内缩 1px 浅色 ::before"双层模拟描边，
+   与全站"填充 + 深一档描边"一致（子元素抬到 ::before 之上） */
+.pill.op.bool { border-radius:0; padding:2px 13px; position:relative; border:0;
+  background:var(--b-operators);
+  clip-path:polygon(9px 0, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, 9px 100%, 0 50%); }
+.pill.op.bool::before { content:""; position:absolute; inset:1px; background:var(--c-operators);
+  clip-path:polygon(8.4px 0, calc(100% - 8.4px) 0, 100% 50%, calc(100% - 8.4px) 100%, 8.4px 100%, 0 50%); }
+.pill.op.bool > * { position:relative; }
 .pill.call { background:var(--c-motion); border-color:var(--b-motion); }
+.pill.call.user { background:var(--c-myblocks); border-color:var(--b-myblocks); }  /* 自定义函数调用=粉（My Blocks） */
 .pill.lit { background:#fff; color:var(--ink); border:1px solid #BCC6D4; }
 .pill.varref { background:var(--c-variables); border-color:var(--b-variables); padding:2px 6px; gap:3px; }
 .field { background:#fff; color:var(--ink); border:1px solid #BCC6D4; border-radius:999px;
@@ -490,7 +508,7 @@ body.dragging-block { cursor:grabbing; }
 /* ---------- 调试器（M5）：断点标记 + 暂停面板 ---------- */
 .block.bp::before {              /* 断点：积木左上角红点 */
   content: ""; position: absolute; left: -7px; top: 6px; width: 11px; height: 11px;
-  border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 2px #fff, 0 1px 3px rgba(0,0,0,.35);
+  border:0; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 2px #fff, 0 1px 3px rgba(0,0,0,.35);
   z-index: 3;
 }
 .block.paused-at { outline: 3px solid #ffb224; outline-offset: 1px; }  /* 当前暂停在此 */
@@ -516,7 +534,3 @@ body.dragging-block { cursor:grabbing; }
 }
 .block.hat .add-param:hover { background: rgba(255, 255, 255, .45); }
 
-/* —— 调色板/悬停预览的"单行"覆写：必须放在文件末尾，
-      否则会被上面积木区的 .block .hdr { flex-wrap:wrap } 盖掉 —— */
-.pal-wys .block .hdr, .pal-hover .block .hdr { flex-wrap:nowrap; }
-.pal-wys .block { max-width:100%; overflow:hidden; }

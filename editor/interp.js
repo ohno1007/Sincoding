@@ -135,7 +135,9 @@
         this.fns = fns;
         try {
           if (loopIdx < 0) {
-            this.runToEnd(this.execList(body, env));   // 无主循环：跑到结束
+            // 无主循环：也作为 actor 走 pump 驱动的生成器——断点/单步在这类程序里
+            // 同样生效（此前直接 runToEnd 跑完，断点被无声忽略，用户以为调试器坏了）
+            this.actors.push({ fns, env, once: this.execList(body, env) });
           } else {
             for (let i = 0; i < loopIdx; i++) this.runToEnd(this.execStmt(body[i], env));  // 初始化
             this.actors.push({ fns, env, loop: body[loopIdx], post: body.slice(loopIdx + 1) });
@@ -145,6 +147,7 @@
         }
       }
       if (!hasMain) { this.onStatus("没有 main()，无法预览", "warn"); return; }
+      this.hadLoop = this.actors.some((a) => a.loop);
       if (this.actors.length === 0) { this.drawConsole(); this.onStatus("运行完成 ✓", "ok"); return; }
       this.onStatus(this.actors.length > 1 ?
         (this.actors.length + " 个精灵并行运行") : "运行中（点画面用方向键/空格）", "ok");
@@ -166,17 +169,24 @@
       for (let ai = startIdx; ai < this.actors.length; ai++) {
         const a = this.actors[ai];
         this.fns = a.fns;
-        const gen = (this.pending && this.pending.ai === ai) ? this.pending.gen
-                                                            : this.execList(a.loop.body, a.env);
+        // 一次性程序（无主循环）续用同一个生成器；循环程序每帧新建循环体生成器
+        const gen = a.once ? a.once
+                  : (this.pending && this.pending.ai === ai) ? this.pending.gen
+                                                             : this.execList(a.loop.body, a.env);
         this.pending = null;
         try {
           if (!this.pump(gen, ai)) return;           // 命中断点/单步 → 挂起，等用户操作
+          if (a.once) a.done = true;                 // 一次性程序跑完即退场
         } catch (e) {
           if (e instanceof ReturnSignal) a.done = true;
           else { this.onStatus("运行出错: " + e.message, "warn"); return; }
         }
       }
       this.actors = this.actors.filter((a) => !a.done);
+      if (this.actors.length === 0 && !this.hadLoop) {
+        // 纯一次性程序全部跑完：画出控制台输出并收尾（与旧的同步路径同款结果）
+        this.drawConsole(); this.onStatus("运行完成 ✓", "ok"); return;
+      }
       if (this.actors.length === 0) wd.running = false;
       wd.frame++;
       this.raf = requestAnimationFrame(() => this.frameLoop());
