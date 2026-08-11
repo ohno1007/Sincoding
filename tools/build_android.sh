@@ -65,7 +65,7 @@ if [[ "$DEBUG" == "1" ]]; then
     done
     "$CXX" -shared -fPIC \
         "$TMP/program.o" "$TMP/prelude.o" "$TMP/runtime.o" "${CXX_OBJS[@]}" \
-        -u ANativeActivity_onCreate \
+        -u ANativeActivity_onCreate -Wl,--wrap=fopen \
         "$RAYLIB_ANDROID_LIB" \
         -static-libstdc++ \
         -landroid -llog -lEGL -lGLESv2 -lOpenSLES -lm \
@@ -76,7 +76,7 @@ else
     "$CC" -shared -fPIC -std=c11 -O2 \
         "${COMMON_INC[@]}" \
         "$TMP/program.c" "$ROOT/runtime/prelude.c" "$ROOT/runtime/runtime.c" \
-        -u ANativeActivity_onCreate \
+        -u ANativeActivity_onCreate -Wl,--wrap=fopen \
         "$RAYLIB_ANDROID_LIB" \
         -landroid -llog -lEGL -lGLESv2 -lOpenSLES -lm \
         -o "$OUT"
