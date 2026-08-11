@@ -755,6 +755,9 @@
       } else if (node.index) {
         row.append(el("span", "kw", "["), renderExpr(node.index, (n) => { node.index = n; render(); }, scope), el("span", "kw", "]"));
       }
+      // 元素字段赋值 xs[i].hp = v / 字段赋值 s.hp = v：显示（并可改）字段名
+      if (node.block === "assign" && node.field)
+        row.append(el("span", "kw", "."), field(() => node.field, (s) => { node.field = s || node.field; }));
       if (node.value !== undefined) row.append(el("span", "kw", "="), renderExpr(node.value, (n) => { node.value = n; render(); }, scope));
       blk.append(row);
     } else if (node.block === "if") {
@@ -786,6 +789,11 @@
       const row = el("div", "hdr");
       row.append(el("span", "label", "返回"));
       if (node.value) row.append(renderExpr(node.value, (n) => { node.value = n; render(); }, scope));
+      blk.append(row);
+    } else if (node.block === "break" || node.block === "continue") {
+      blk = el("div", "block ctrl");
+      const row = el("div", "hdr");
+      row.append(el("span", "label", node.block === "break" ? "跳出循环" : "下一轮循环"));
       blk.append(row);
     } else if (node.block === "expr") {
       blk = el("div", "block ev");
@@ -1993,6 +2001,9 @@
     for: () => ({ block: "for", var: "i", start: { block: "int", value: 0 }, end: { block: "int", value: 10 }, body: [] }),
     if_else: () => ({ block: "if", cond: { block: "bool", value: true }, then: [], else: [] }),
     return: () => ({ block: "return", value: { block: "int", value: 0 } }),
+    wait: () => Ex(C("wait", F(1))),
+    break: () => ({ block: "break" }),
+    continue: () => ({ block: "continue" }),
     print: () => ({ block: "expr", expr: { block: "call", callee: "print", args: [{ block: "int", value: 0 }] } }),
     // 运算 / 数据
     incr: () => ({ block: "assign", name: "x", value: Bn("+", Vr("x"), I(1)) }),
@@ -2219,7 +2230,7 @@
         "r_int", "r_float", "r_str", "r_true", "r_random",
         "r_mouse_x", "r_mouse_y", "r_mouse_down", "r_key", "r_received", "r_sprite_x", "r_sprite_y",
         "r_timer", "r_touch_mouse", "r_pop", "r_len"] },
-    { id: "control", name: "控制", color: "#FFAB19", items: ["if", "if_else", "while", "for", "repeat", "return", "print"] },
+    { id: "control", name: "控制", color: "#FFAB19", items: ["if", "if_else", "while", "for", "repeat", "wait", "break", "continue", "return", "print"] },
     { id: "stage", name: "舞台", color: "#FFAB19", items: ["stage_init", "game_loop", "frame_begin", "frame_end", "stage_close"] },
     { id: "motion", name: "运动", color: "#4C97FF", items: ["sprite_new", "sprite_move_to", "sprite_move", "sprite_turn", "sprite_point", "sprite_scale", "sprite_bounce", "sprite_show", "sprite_hide", "sprite_x", "sprite_y"] },
     { id: "looks", name: "外观", color: "#9966FF", items: ["sprite_load", "sprite_draw", "say", "draw_text", "draw_number"] },

@@ -236,7 +236,32 @@ void TypeChecker::checkStmt(Stmt& s) {
             VarType vt = lookup(as.name);
             if (vt.base == Type::Unknown)
                 errorAt(as, "赋值给未声明的变量: " + as.name);
-            if (!as.field.empty()) {
+            if (as.index && !as.field.empty()) {
+                // 元素字段赋值 name[idx].field = value（结构体数组/列表的成员直接改）
+                if (vt.len == 0 && vt.base != Type::Unknown)
+                    error(as.line, as.name + " 不是数组，不能用下标赋值");
+                else if (vt.base != Type::Struct && vt.base != Type::Unknown)
+                    error(as.line, as.name + " 的元素不是结构体，不能用 '." + as.field + "' 赋值");
+                Type it = checkExpr(*as.index);
+                if (it != Type::Int && it != Type::Unknown)
+                    error(as.line, "数组下标必须是 int，而非 " + std::string(typeName(it)));
+                Type ft = Type::Unknown; int fLen = 0; std::string fStruct;
+                bool found = false;
+                auto sit = structs_.find(vt.structName);
+                if (sit != structs_.end())
+                    for (auto& d : sit->second) if (d.name == as.field) {
+                        ft = d.type; fLen = d.len; fStruct = d.structName; found = true;
+                    }
+                if (!found && vt.base == Type::Struct)
+                    error(as.line, "结构体 " + vt.structName + " 没有字段 '" + as.field + "'");
+                Type valT = checkExpr(*as.value);
+                bool ok = (valT == ft) && (as.value->arrayLen == fLen) &&
+                          (ft != Type::Struct || as.value->structName == fStruct);
+                if (valT != Type::Unknown && ft != Type::Unknown && !ok)
+                    error(as.line, "字段 '" + as.field + "' 类型不匹配: 应为 " +
+                                       declTypeStr(ft, fLen, fStruct) + "，得到 " +
+                                       declTypeStr(valT, as.value->arrayLen, as.value->structName));
+            } else if (!as.field.empty()) {
                 // 字段赋值 name.field = value
                 Type ft = Type::Unknown; int fLen = 0; std::string fStruct;
                 if (vt.base != Type::Struct && vt.base != Type::Unknown) {
@@ -309,7 +334,9 @@ void TypeChecker::checkStmt(Stmt& s) {
             Type c = checkExpr(*ws.cond);
             if (c != Type::Bool && c != Type::Unknown)
                 error(ws.line, "while 条件必须是 bool，而非 " + std::string(typeName(c)));
+            loopDepth_++;
             checkBlock(*ws.body);
+            loopDepth_--;
             break;
         }
         case StmtKind::For: {
@@ -322,7 +349,9 @@ void TypeChecker::checkStmt(Stmt& s) {
                 error(fs.line, "for 结束值必须是 int");
             pushScope();
             declare(fs.var, {Type::Int, 0, ""});  // 循环变量
+            loopDepth_++;
             checkBlock(*fs.body);
+            loopDepth_--;
             popScope();
             break;
         }
@@ -344,6 +373,12 @@ void TypeChecker::checkStmt(Stmt& s) {
             }
             break;
         }
+        case StmtKind::Break:
+            if (loopDepth_ == 0) error(s.line, "break 只能用在循环里");
+            break;
+        case StmtKind::Continue:
+            if (loopDepth_ == 0) error(s.line, "continue 只能用在循环里");
+            break;
         case StmtKind::ExprStmt: {
             auto& es = static_cast<ExprStmt&>(s);
             checkExpr(*es.expr);

@@ -210,6 +210,16 @@ StmtPtr Parser::parseStmt() {
         case TokKind::KwWhile: return parseWhile();
         case TokKind::KwFor: return parseFor();
         case TokKind::KwReturn: return parseReturn();
+        case TokKind::KwBreak: {
+            auto s = std::make_unique<BreakStmt>();
+            s->line = cur().line; advance(); match(TokKind::Semicolon);
+            return s;
+        }
+        case TokKind::KwContinue: {
+            auto s = std::make_unique<ContinueStmt>();
+            s->line = cur().line; advance(); match(TokKind::Semicolon);
+            return s;
+        }
         default: return parseExprOrAssign();
     }
 }
@@ -314,6 +324,18 @@ StmtPtr Parser::parseExprOrAssign() {
             advance();
             auto s = std::make_unique<AssignStmt>();
             s->line = line; s->col = ncol; s->name = name; s->index = std::move(idx);
+            s->value = parseExpr();
+            match(TokKind::Semicolon);
+            return s;
+        }
+        // 元素字段赋值：name[idx].field = value（结构体数组/列表的成员直接改）
+        if (check(TokKind::Dot) && peek(1).kind == TokKind::Ident &&
+            peek(2).kind == TokKind::Assign) {
+            advance();                       // '.'
+            auto s = std::make_unique<AssignStmt>();
+            s->line = line; s->col = ncol; s->name = name; s->index = std::move(idx);
+            s->field = advance().text;
+            advance();                       // '='
             s->value = parseExpr();
             match(TokKind::Semicolon);
             return s;

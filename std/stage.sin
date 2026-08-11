@@ -67,9 +67,10 @@ extern fn sprite_hide(s: int)
 extern fn sprite_bounce(s: int)
 extern fn sprite_touching_mouse(s: int) -> bool
 
-// —— 计时器 ——
+// —— 计时器 / 等待 ——
 extern fn timer() -> float
 extern fn timer_reset()
+extern fn wait(secs: float)
 
 // —— 按键"刚按下"（边沿触发；事件函数 on_key_* 由驱动器自动接上）——
 extern fn key_pressed_space() -> bool

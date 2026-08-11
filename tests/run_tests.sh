@@ -81,6 +81,8 @@ expect_error string_arith  "$ROOT/tests/cases/string_arith.sin"
 expect_error array_len     "$ROOT/tests/cases/array_len.sin"
 expect_error for_bad       "$ROOT/tests/cases/for_bad.sin"
 expect_error struct_field   "$ROOT/tests/cases/struct_field.sin"
+expect_error break_outside    "$ROOT/tests/cases/break_outside.sin"
+expect_error continue_outside "$ROOT/tests/cases/continue_outside.sin"
 expect_error array_param_len "$ROOT/tests/cases/array_param_len.sin"
 expect_error array_ret_len   "$ROOT/tests/cases/array_ret_len.sin"
 expect_error struct_array_type "$ROOT/tests/cases/struct_array_type.sin"
@@ -534,6 +536,15 @@ if "$SINC" "$WORK/divz.sin" -o "$WORK/divz.c" >/dev/null 2>&1 && \
     fi
 else
     echo "✗ divzero-native: 构建失败"; ((FAIL++))
+fi
+# break/continue + 结构体数组元素字段赋值：纯 CLI（不需要 raylib）
+printf 'struct Foe { hp: int }\nfn main() -> int {\n    let foes: Foe[2]\n    foes[0].hp = 7\n    foes[1].hp = foes[0].hp + 1\n    print(foes[1].hp)\n    let total = 0\n    for i in 0..10 {\n        if i == 5 { break }\n        if i %% 2 == 0 { continue }\n        total = total + i\n    }\n    print(total)\n    return 0\n}\n' > "$WORK/brkfld.sin"
+if "$SINC" "$WORK/brkfld.sin" -o "$WORK/brkfld.c" >/dev/null 2>&1 && \
+   "$CC" -std=c11 "$WORK/brkfld.c" -o "$WORK/brkfld" -lm 2>/dev/null && \
+   [[ "$("$WORK/brkfld")" == $'8\n4' ]]; then
+    echo "✓ break/continue + 元素字段赋值：原生输出 8|4"; ((PASS++))
+else
+    echo "✗ break/continue + 元素字段赋值：失败"; ((FAIL++))
 fi
 if command -v node >/dev/null 2>&1 && \
    NODE_PATH="$(npm root -g 2>/dev/null)" node -e "require('playwright')" >/dev/null 2>&1; then

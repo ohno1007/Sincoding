@@ -1,0 +1,7 @@
+// continue 只能出现在循环里——if 里（无循环包裹）用它必须被拒绝
+fn main() -> int {
+    if true {
+        continue
+    }
+    return 0
+}

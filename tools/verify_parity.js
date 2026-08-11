@@ -21,7 +21,7 @@ function freePort(){return new Promise(r=>{const s=net.createServer();s.listen(0
   const parSrc = fs.readFileSync(sinPath, "utf8");
   // 期望输出：优先用原生成品跑出来的 stdout（对测的意义所在）；没有就用固化基线
   const expected = (expPath ? fs.readFileSync(expPath, "utf8")
-    : "1000\n0\n0\n1000\n-707\n707\n3\n-3\n1\n3.5\n0.333333\n2.5|5\n")
+    : "1000\n0\n0\n1000\n-707\n707\n3\n-3\n1\n3.5\n0.333333\n2.5|5\n8\n4\ntrue\n")
     .split("\n").map(s=>s.trim()).filter(s=>s.length);
   const port = await freePort();
   const srv = spawn("python3",["-m","http.server",String(port),"--bind","127.0.0.1","--directory",path.dirname(htmlPath)],{stdio:"ignore"});
@@ -46,6 +46,16 @@ function freePort(){return new Promise(r=>{const s=net.createServer();s.listen(0
     const got = await p.evaluate(()=>window._sinPreview.world.console.slice());
     res.parityGot = got; res.parityWant = expected;
     res.parity = got.length === expected.length && got.every((v,i)=>String(v).trim()===expected[i]);
+
+    // 1b) 引擎回写往返：积木模型 → 源码 仍保留 break/continue/元素字段赋值/wait
+    await p.evaluate(()=>window._sin.refreshText());
+    await p.waitForTimeout(700);
+    res.roundtrip = await p.evaluate(()=>{
+      const t = document.getElementById("text-out").value;
+      return t.includes("break") && t.includes("continue") &&
+             t.includes("foes[0].hp = 7") && t.includes("wait(");
+    });
+    res.roundtripStatus = await p.$eval("#text-status", e=>e.textContent);
 
     // 2) 整数除零：与成品同语义的中文行号报错
     await setSrc('fn main() -> int {\n    let n = 0\n    print(10 / n)\n    return 0\n}\n');
@@ -106,7 +116,8 @@ function freePort(){return new Promise(r=>{const s=net.createServer();s.listen(0
     res.templateStatus = await p.$eval("#text-status", e=>e.textContent);
   }catch(e){res.error=String(e).slice(0,300);}
   res.errors=errs;
-  res.ok = res.parity && res.divzero && res.focus && res.keymap && res.fixvars &&
+  res.ok = res.parity && res.roundtrip && /已同步/.test(res.roundtripStatus||"") &&
+           res.divzero && res.focus && res.keymap && res.fixvars &&
            res.template && /已同步|问题/.test(res.templateStatus||"") && errs.length===0;
   console.log(JSON.stringify(res));
   await b.close(); srv.kill();

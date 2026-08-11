@@ -84,9 +84,10 @@ void sprite_hide(long long s);
 void sprite_bounce(long long s);
 bool sprite_touching_mouse(long long s);
 
-// 计时器
+// 计时器 / 等待
 double timer(void);
 void timer_reset(void);
+void wait(double secs);   // 等待 x 秒（全场冻结；覆盖 libc 的同名符号无碍——本程序不产生子进程）
 
 // 按键"刚按下"（边沿触发，事件驱动的 on_key_* 用它）
 bool key_pressed_space(void);

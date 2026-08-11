@@ -1,7 +1,10 @@
 // parity.sin — 「预览 = 成品」对测程序
 // 同一份源码：原生编译跑一遍、编辑器预览跑一遍，stdout / 控制台必须逐行相同。
-// 覆盖：运动方向约定（0°朝右 90°朝上）、整数/浮点除法、%g 打印格式。
+// 覆盖：运动方向约定（0°朝右 90°朝上）、整数/浮点除法、%g 打印格式、
+//       break/continue、结构体数组元素字段赋值、wait 等待。
 import "std/stage"
+
+struct Foe { hp: int }
 
 fn main() -> int {
     stage_init(480, 360)
@@ -30,6 +33,26 @@ fn main() -> int {
     print(7.0 / 2.0)
     print(1.0 / 3.0)
     print(str(2.5) + "|" + str(5))
+
+    // 结构体数组的元素字段直接赋值
+    let foes: Foe[2]
+    foes[0].hp = 7
+    foes[1].hp = foes[0].hp + 1
+    print(foes[1].hp)
+
+    // break / continue
+    let total = 0
+    for i in 0..10 {
+        if i == 5 { break }
+        if i % 2 == 0 { continue }
+        total = total + i
+    }
+    print(total)
+
+    // wait：两侧都至少等这么久
+    timer_reset()
+    wait(0.12)
+    print(timer() >= 0.1)
 
     stage_close()
     return 0

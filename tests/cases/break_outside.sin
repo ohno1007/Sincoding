@@ -1,0 +1,5 @@
+// break 只能出现在循环里——函数体顶层用它必须被拒绝
+fn main() -> int {
+    break
+    return 0
+}

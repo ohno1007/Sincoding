@@ -261,6 +261,8 @@ StmtPtr readStmtInner(const JPtr& j) {
         if (get(j, "value")) n->value = readExpr(get(j, "value"));
         return n;
     }
+    if (b == "break") return mk<BreakStmt>(j);
+    if (b == "continue") return mk<ContinueStmt>(j);
     if (b == "block_group") return readBlockList(get(j, "body"));
     if (b == "expr") {
         auto n = mk<ExprStmt>(j);

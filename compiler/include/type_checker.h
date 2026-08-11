@@ -60,6 +60,7 @@ private:
     std::unordered_map<std::string, std::vector<StructField>> structs_; // 结构体定义
     std::vector<std::unordered_map<std::string, VarType>> scopes_;
     bool inFn_ = false;               // 正在检查函数体（列表 v1 只许全局声明）
+    int loopDepth_ = 0;               // 循环嵌套深度（break/continue 只许在循环里）
     Type curRet_ = Type::Void;
     int curRetLen_ = 0;          // 当前函数返回类型的数组长度（>0 表示返回数组）
     std::string curRetStruct_;

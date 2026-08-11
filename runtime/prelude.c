@@ -73,6 +73,7 @@ void sprite_bounce(long long s) { rt_bounce((rt_sprite)s); }
 bool sprite_touching_mouse(long long s) { return rt_touching_mouse((rt_sprite)s); }
 double timer(void) { return rt_timer(); }
 void timer_reset(void) { rt_timer_reset(); }
+void wait(double secs) { rt_wait((float)secs); }
 bool key_pressed_space(void) { return rt_key_pressed(RT_KEY_SPACE); }
 bool key_pressed_left(void)  { return rt_key_pressed(RT_KEY_LEFT); }
 bool key_pressed_right(void) { return rt_key_pressed(RT_KEY_RIGHT); }

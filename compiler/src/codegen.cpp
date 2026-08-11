@@ -127,6 +127,7 @@ bool stmtUsesStrRt(const Stmt& s) {
         case StmtKind::Return: { auto& r = static_cast<const ReturnStmt&>(s); return r.value && exprUsesStrRt(*r.value); }
         case StmtKind::ExprStmt: return exprUsesStrRt(*static_cast<const ExprStmt&>(s).expr);
         case StmtKind::Block: return blockUsesStrRt(static_cast<const Block&>(s));
+        case StmtKind::Break: case StmtKind::Continue: return false;
     }
     return false;
 }
@@ -587,6 +588,14 @@ void CodeGen::emitStmt(const Stmt& s) {
             }
             break;
         }
+        case StmtKind::Break:
+            indent();
+            out_ << "break;\n";
+            break;
+        case StmtKind::Continue:
+            indent();
+            out_ << "continue;\n";
+            break;
         case StmtKind::ExprStmt: {
             auto& es = static_cast<const ExprStmt&>(s);
             indent();

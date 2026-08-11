@@ -27,6 +27,8 @@
   }
 
   class ReturnSignal { constructor(v) { this.value = v; } }
+  class BreakSignal {}      // break：跳出最近一层循环
+  class ContinueSignal {}   // continue：直接进入下一轮
 
   // 聚合值语义：数组/结构体在 let / 赋值 / 传参时按值拷贝（与生成的 C 一致）。
   // 切片（声明 len === -1）是刻意的借用视图，不拷贝。
@@ -134,6 +136,7 @@
     // 同一组结构体定义与全局变量（数组/结构体/标量），实现跨精灵的数据共享。
     runProject(programs, onStatus, shared) {
       this.stop();
+      this.pending = null; this.sleepUntil = 0;      // 清掉上一次运行的挂起现场
       this.onStatus = onStatus || (() => {});
       const w = this.canvas.width, h = this.canvas.height;
       this.ctx.fillStyle = "#f5f5f7"; this.ctx.fillRect(0, 0, w, h);
@@ -194,17 +197,16 @@
         const loopIdx = body.findIndex((s) => s.block === "while" && s.cond &&
           s.cond.block === "call" && s.cond.callee === "stage_running");
         this.fns = fns;
-        try {
-          if (loopIdx < 0) {
-            // 无主循环：也作为 actor 走 pump 驱动的生成器——断点/单步在这类程序里
-            // 同样生效（此前直接 runToEnd 跑完，断点被无声忽略，用户以为调试器坏了）
-            this.actors.push({ fns, env, once: this.execList(body, env) });
-          } else {
-            for (let i = 0; i < loopIdx; i++) this.runToEnd(this.execStmt(body[i], env));  // 初始化
-            this.actors.push({ fns, env, loop: body[loopIdx], post: body.slice(loopIdx + 1) });
-          }
-        } catch (e) {
-          if (!(e instanceof ReturnSignal)) this.onStatus("运行出错: " + e.message, "warn");
+        if (loopIdx < 0) {
+          // 无主循环：也作为 actor 走 pump 驱动的生成器——断点/单步在这类程序里
+          // 同样生效（此前直接 runToEnd 跑完，断点被无声忽略，用户以为调试器坏了）
+          this.actors.push({ fns, env, once: this.execList(body, env) });
+        } else {
+          // 主循环前的开场段（stage_init / on_start / 各种 let）也走生成器：
+          // 这样 on_start 里的 wait(秒) 能真正跨帧挂起，断点也能在开场段命中
+          // （此前 runToEnd 同步吞掉，wait 变成无声跳过）
+          this.actors.push({ fns, env, loop: body[loopIdx], post: body.slice(loopIdx + 1),
+                             pre: loopIdx > 0 ? this.execSeq(body.slice(0, loopIdx), env) : null });
         }
       }
       if (!hasMain) { this.onStatus("没有 main() 或事件函数（当绿旗被点击…），无法预览", "warn"); return; }
@@ -223,6 +225,13 @@
         return;
       }
       if (this.paused) return;                       // 调试暂停中：不推进
+      if (this.sleepUntil) {                         // wait(秒)：到点前全场冻结（画面保持）
+        if (performance.now() < this.sleepUntil) {
+          this.raf = requestAnimationFrame(() => this.frameLoop());
+          return;
+        }
+        this.sleepUntil = 0;                         // 到点：从 pending 现场继续
+      }
       // 从上次暂停处续跑；否则开新的一帧
       let startIdx = 0;
       if (this.pending) { startIdx = this.pending.ai; }
@@ -234,14 +243,20 @@
       for (let ai = startIdx; ai < this.actors.length; ai++) {
         const a = this.actors[ai];
         this.fns = a.fns;
-        // 一次性程序（无主循环）续用同一个生成器；循环程序每帧新建循环体生成器
-        const gen = a.once ? a.once
+        // 开场段/一次性程序续用同一个生成器；循环程序每帧新建循环体生成器
+        const gen = a.pre ? a.pre
+                  : a.once ? a.once
                   : (this.pending && this.pending.ai === ai) ? this.pending.gen
                                                              : this.execList(a.loop.body, a.env);
         this.pending = null;
         try {
-          if (!this.pump(gen, ai)) return;           // 命中断点/单步 → 挂起，等用户操作
-          if (a.once) a.done = true;                 // 一次性程序跑完即退场
+          if (!this.pump(gen, ai)) {
+            // wait 挂起要继续走 raf 计时；断点/单步挂起则等用户操作
+            if (this.sleepUntil) this.raf = requestAnimationFrame(() => this.frameLoop());
+            return;
+          }
+          if (a.pre) a.pre = null;                   // 开场段跑完：下一帧进入主循环
+          else if (a.once) a.done = true;            // 一次性程序跑完即退场
         } catch (e) {
           if (e instanceof ReturnSignal) a.done = true;
           else { this.onStatus("运行出错: " + e.message, "warn"); return; }
@@ -263,6 +278,8 @@
       try { for (const s of list) yield* this.execStmt(s, env); }
       finally { env.pop(); }
     }
+    // 不开新作用域的顺序执行：主循环前的开场段用（let 的变量要留给循环体）
+    *execSeq(list, env) { for (const s of list) yield* this.execStmt(s, env); }
 
     *execStmt(node, env) {
       const w = this.world;
@@ -275,7 +292,12 @@
           break;
         }
         case "assign": {
-          if (node.field) { const o = this.lookup(env, node.name); if (o) o[node.field] = deepVal(yield* this.eval(node.value, env)); }
+          if (node.index && node.field) {          // 元素字段赋值 xs[i].hp = v
+            const a = this.lookup(env, node.name); const ix = yield* this.eval(node.index, env);
+            const o = a[checkIndex(a, ix, node.line)];
+            if (o) o[node.field] = deepVal(yield* this.eval(node.value, env));
+          }
+          else if (node.field) { const o = this.lookup(env, node.name); if (o) o[node.field] = deepVal(yield* this.eval(node.value, env)); }
           else if (node.index) {
             const a = this.lookup(env, node.name); const ix = yield* this.eval(node.index, env);
             a[checkIndex(a, ix, node.line)] = deepVal(yield* this.eval(node.value, env));
@@ -290,7 +312,8 @@
         case "while": {
           let g = 0;
           while (yield* this.eval(node.cond, env)) {
-            yield* this.execList(node.body, env);
+            try { yield* this.execList(node.body, env); }
+            catch (e) { if (e instanceof BreakSignal) break; if (!(e instanceof ContinueSignal)) throw e; }
             if (++g > 2000000) throw new Error("循环次数过多");
           }
           break;
@@ -298,10 +321,18 @@
         case "for": {
           const a = yield* this.eval(node.start, env), b = yield* this.eval(node.end, env);
           env.push(new Map());
-          try { for (let i = a; i < b; i++) { env[env.length - 1].set(node.var, i); yield* this.execList(node.body, env); } }
+          try {
+            for (let i = a; i < b; i++) {
+              env[env.length - 1].set(node.var, i);
+              try { yield* this.execList(node.body, env); }
+              catch (e) { if (e instanceof BreakSignal) break; if (!(e instanceof ContinueSignal)) throw e; }
+            }
+          }
           finally { env.pop(); }
           break;
         }
+        case "break": throw new BreakSignal();
+        case "continue": throw new ContinueSignal();
         case "return":
           throw new ReturnSignal(node.value !== undefined ? yield* this.eval(node.value, env) : 0);
         case "expr":
@@ -312,7 +343,11 @@
 
     defaultVal(node) {
       if (node.len === -2) return [];        // 动态列表：空起步
-      if (node.len > 0) return new Array(node.len).fill(node.type === "float" ? 0 : (node.type === "bool" ? false : (node.type === "string" ? "" : 0)));
+      if (node.len > 0) {                    // 定长数组：结构体元素各自零初始化（与 C 的 {0} 一致）
+        const prim = node.type === "float" ? 0 : node.type === "bool" ? false : node.type === "string" ? "" : 0;
+        const isStruct = !["int", "float", "bool", "string"].includes(node.type);
+        return Array.from({ length: node.len }, () => (isStruct ? {} : prim));
+      }
       if (node.type === "bool") return false;
       if (node.type === "string") return "";
       if (node.type === "float" || node.type === "int") return 0;
@@ -338,6 +373,12 @@
         case "call": {
           const args = [];
           for (const a of node.args) args.push(yield* this.eval(a, env));
+          // wait(秒)：特殊形式——挂起整个帧循环（与成品 WaitTime 同语义：全场冻结），
+          // 到点后从这里继续。普通 builtin 做不到跨帧挂起，必须在生成器层 yield。
+          if (node.callee === "wait") {
+            yield { node: node, env: env, wait: performance.now() + (args[0] || 0) * 1000 };
+            return 0;
+          }
           return yield* this.callFn(node.callee, args);
         }
         case "index": { const a = yield* this.eval(node.arr, env); const i = yield* this.eval(node.idx, env); return a[checkIndex(a, i, node.line)]; }
@@ -407,6 +448,11 @@
         const r = gen.next();
         if (r.done) return true;
         const { node, env } = r.value;
+        if (r.value.wait) {                           // wait(秒)：挂起现场，整个帧循环冻结到点
+          this.pending = { ai: ai, gen: gen };
+          this.sleepUntil = r.value.wait;
+          return false;
+        }
         if (this.onStep) this.onStep(node);           // 执行高亮（原有行为）
         if (this.stepMode || this.breakpoints.has(node)) {
           this.paused = true;

@@ -156,6 +156,14 @@ StmtPtr cloneStmt(const Stmt& s, const Subst& sb) {
             if (r.value) n->value = cloneExpr(*r.value, sb);
             return n;
         }
+        case StmtKind::Break: {
+            auto n = std::make_unique<BreakStmt>(); copyStmtBase(*n, s);
+            return n;
+        }
+        case StmtKind::Continue: {
+            auto n = std::make_unique<ContinueStmt>(); copyStmtBase(*n, s);
+            return n;
+        }
         case StmtKind::ExprStmt: {
             auto& e = static_cast<const ExprStmt&>(s);
             auto n = std::make_unique<ExprStmt>(); copyStmtBase(*n, s);

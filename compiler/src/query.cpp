@@ -88,6 +88,7 @@ void occStmt(const Stmt& s, int fn, std::vector<Occ>& out) {
         case StmtKind::Return: { auto& r = static_cast<const ReturnStmt&>(s); if (r.value) occExpr(*r.value, fn, out); break; }
         case StmtKind::ExprStmt: occExpr(*static_cast<const ExprStmt&>(s).expr, fn, out); break;
         case StmtKind::Block: occBlock(static_cast<const Block&>(s), fn, out); break;
+        case StmtKind::Break: case StmtKind::Continue: break;
     }
 }
 std::vector<Occ> collectOccurrences(const Program& prog) {
@@ -138,6 +139,7 @@ void renStmt(Stmt& s, char cat, const std::string& from, const std::string& to) 
         case StmtKind::Return: { auto& r = static_cast<ReturnStmt&>(s); if (r.value) renExpr(*r.value, cat, from, to); break; }
         case StmtKind::ExprStmt: renExpr(*static_cast<ExprStmt&>(s).expr, cat, from, to); break;
         case StmtKind::Block: renBlock(static_cast<Block&>(s), cat, from, to); break;
+        case StmtKind::Break: case StmtKind::Continue: break;
     }
 }
 void renameProgram(Program& prog, char cat, const std::string& from, const std::string& to, int fnIndex) {

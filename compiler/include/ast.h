@@ -104,7 +104,7 @@ struct StructLit : Expr {     // Name { f1: e1, f2: e2 }
 };
 
 // ---------- 语句 ----------
-enum class StmtKind { Let, Assign, If, While, For, Return, ExprStmt, Block };
+enum class StmtKind { Let, Assign, If, While, For, Return, Break, Continue, ExprStmt, Block };
 
 struct Stmt {
     StmtKind kind;
@@ -168,6 +168,14 @@ struct ForStmt : Stmt {       // for v in start..end { body }
 struct ReturnStmt : Stmt {
     ExprPtr value; // 可为空（void 返回）
     ReturnStmt() : Stmt(StmtKind::Return) {}
+};
+
+struct BreakStmt : Stmt {
+    BreakStmt() : Stmt(StmtKind::Break) {}
+};
+
+struct ContinueStmt : Stmt {
+    ContinueStmt() : Stmt(StmtKind::Continue) {}
 };
 
 struct ExprStmt : Stmt {

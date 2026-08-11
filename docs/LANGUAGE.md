@@ -389,9 +389,25 @@ while cond {
 for i in 0..n {     // 区间 for，i 从 0 到 n-1（右开）
     // ...
 }
+
+while cond {
+    if done { break }        // 跳出最近一层循环
+    if skip { continue }     // 直接进入下一轮
+}
 ```
 
-`if` / `while` 的条件**必须是 `bool`**；`for` 的区间两端必须是 `int`。
+`if` / `while` 的条件**必须是 `bool`**；`for` 的区间两端必须是 `int`；
+`break` / `continue` 只能写在循环里（编译期检查）。
+
+整数 `/` 与 `%` 在除数为 0 时报中文行号错误并终止（预览与成品同语义），
+不再是 C 的未定义行为。等待用 `wait(secs: float)`（Scratch 的「等待 x 秒」，
+全场冻结，预览与成品一致）。
+
+结构体数组/列表的元素字段可以直接赋值：
+
+```rust
+foes[i].hp = foes[i].hp - 1
+```
 
 ### 全局变量
 
@@ -447,10 +463,10 @@ params    ::= param (',' param)*
 param     ::= IDENT ':' type
 type      ::= ('int' | 'float' | 'bool' | 'string' | 'void') ('[' INT ']')?
 block     ::= '{' stmt* '}'
-stmt      ::= let | assign | if | while | for | return | expr_stmt
+stmt      ::= let | assign | if | while | for | return | 'break' | 'continue' | expr_stmt
 for       ::= 'for' IDENT 'in' expr '..' expr block
 let       ::= 'let' IDENT (':' type)? ('=' expr)? ';'?
-assign    ::= IDENT ('[' expr ']')? '=' expr ';'?
+assign    ::= IDENT ('[' expr ']')? ('.' IDENT)? '=' expr ';'?
 if        ::= 'if' expr block ('else' (if | block))?
 while     ::= 'while' expr block
 return    ::= 'return' expr? ';'?

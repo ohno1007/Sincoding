@@ -320,6 +320,8 @@ bool rt_touching_mouse(rt_sprite s) {
 static double g_timer_base = 0.0;
 double rt_timer(void) { return GetTime() - g_timer_base; }
 void rt_timer_reset(void) { g_timer_base = GetTime(); }
+// 等待 x 秒：整个主循环停住（预览端同语义——全部精灵一起冻结）
+void rt_wait(float secs) { if (secs > 0) WaitTime(secs); }
 bool rt_mouse_down(int button) { return IsMouseButtonDown(button); }
 float rt_mouse_x(void) {
     return (float)GetMouseX() - (float)g_stage_w * 0.5f;

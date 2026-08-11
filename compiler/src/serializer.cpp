@@ -203,6 +203,16 @@ struct SourceWriter {
                 out << "\n";
                 break;
             }
+            case StmtKind::Break:
+                out << "break";
+                tailComment(s.tailComment);
+                out << "\n";
+                break;
+            case StmtKind::Continue:
+                out << "continue";
+                tailComment(s.tailComment);
+                out << "\n";
+                break;
             case StmtKind::ExprStmt: {
                 auto& es = static_cast<const ExprStmt&>(s);
                 writeExpr(*es.expr);
@@ -504,6 +514,12 @@ struct JsonWriter {
                 if (rs.value) { out << ","; nl(); key("value"); expr(*rs.value); }
                 break;
             }
+            case StmtKind::Break:
+                str("break");
+                break;
+            case StmtKind::Continue:
+                str("continue");
+                break;
             case StmtKind::ExprStmt: {
                 auto& es = static_cast<const ExprStmt&>(s);
                 str("expr"); out << ","; nl(); key("expr"); expr(*es.expr);
