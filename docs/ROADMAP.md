@@ -89,8 +89,10 @@
 1. **AST 唯一真相**：积木是渲染，文本是序列化，二者只经 AST 互转。
 2. **引擎单例**：语言知识（语法/类型/序列化/查询）只存在于 C++ 引擎。
    ✅ JS 侧的 `blockmodel.js` 镜像已退役删除，序列化只剩 C++ 一份实现。
-3. **预览 = 成品**：interp.js 每加一个运行时函数，runtime.c 必须同步，反之亦然；
-   由 `tools/verify_palette_blocks.js` 类测试强制。
+3. **预览 = 成品**：interp.js 每加一个运行时函数/内建，runtime 与编译器必须同步。
+   ✅ 已补齐 `len()` 内建，并让积木 JSON 带上 `libImpl`（被导入库函数的实现），
+   使预览能真正执行库调用——此前「导入即得积木」拖出来的库积木在预览里跑不了。
+   由 `tools/verify_lib_preview.js` 与 `verify_palette_blocks.js` 强制。
 
 ### 明确冻结/放弃的决策
 

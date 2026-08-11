@@ -271,6 +271,12 @@ if command -v node >/dev/null 2>&1 && \
     else
         echo "✗ IDE mini-LSP: 验证失败（$rout）"; ((FAIL++))
     fi
+    # 预览 = 成品：import 的库函数在预览里也能真正执行（不只是有积木）
+    if pout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_lib_preview.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ 预览库调用: import 的库函数在预览里执行正确（$pout）"; ((PASS++))
+    else
+        echo "✗ 预览库调用: 验证失败（$pout）"; ((FAIL++))
+    fi
     # 积木级调试器：断点 → 暂停 → 变量/调用栈 → 单步
     if dout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_debugger.js" "$ROOT/editor/index.html" 2>&1)"; then
         echo "✓ IDE 调试器: 断点命中 + 变量面板 + 调用栈 + 单步（$dout）"; ((PASS++))

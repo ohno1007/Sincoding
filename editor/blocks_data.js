@@ -1,6 +1,7 @@
 window.SIN_BLOCKS = {
   "imports": [],
   "libs": [],
+  "libImpl": [],
   "structs": [],
   "globals": [],
   "program": [

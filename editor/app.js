@@ -201,7 +201,8 @@
     preview.setAssets("assets/", buildAssets()); // 造型同源：画板造型 + 文件造型
     // 多精灵并行 + 项目级共享状态（结构体/全局变量/数组）
     try { preview.runProject(project.sprites.map((s) => s.program), setPvStatus,
-      { globals: project.globals || [], structs: project.structs || [] }); }
+      { globals: project.globals || [], structs: project.structs || [],
+        libImpl: project.libImpl || [] }); }
     catch (e) { setPvStatus("预览错误", "warn"); }
   }
   function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(runPreview, 450); }
@@ -797,6 +798,7 @@
     selected = prog[0] || null;
     // 导入即得积木：import 的库函数签名变了就重建调色板的库分类
     if (rebuildLibCats(blk.libs)) buildPalette();
+    project.libImpl = blk.libImpl || [];   // 库函数实现：不进画布，但预览要靠它执行
     renderCanvas(); // 不回写文本，避免打断输入
     const diags = res.diags || [];
     renderDiags(diags);

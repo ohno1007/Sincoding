@@ -116,10 +116,14 @@
       (shared && shared.globals || []).forEach((g) => {
         this.globalScope.set(g.name, g.value !== undefined ? this.runToEnd(this.eval(g.value, [this.globalScope])) : this.defaultVal(g));
       });
+      // import 进来的库函数实现：不在画布上，但预览要靠它们执行库调用。
+      // （泛型模板原样可用——JS 是动态类型的，一份模板服务所有元素类型。）
+      const libFns = {};
+      (shared && shared.libImpl || []).forEach((f) => { if (f && f.name) libFns[f.name] = f; });
       this.actors = [];
       let hasMain = false;
       for (const program of (programs || [])) {
-        const fns = {};
+        const fns = Object.assign({}, libFns);
         (program || []).forEach((f) => { if (f.block === "fn") fns[f.name] = f; });
         const main = fns["main"];
         if (!main) continue;
@@ -450,6 +454,8 @@
     to_int(a) { return Math.trunc(a[0]); },
     // 内建 str(x)：标量转字符串（与生成的 C 语义一致；'+' 拼接在 binop 里天然可用）
     str(a) { const v = a[0]; return typeof v === "boolean" ? (v ? "true" : "false") : String(v); },
+    // 内建 len(x)：数组/切片长度（切片在 JS 里就是同一个数组对象，天然共享）
+    len(a) { const v = a[0]; return (v && v.length !== undefined) ? v.length : 0; },
     // libm 数学函数（对应 extern fn sqrt/sin/... 直接绑定 libm，程序需 -lm）
     sqrt(a) { return Math.sqrt(a[0]); },
     sin(a) { return Math.sin(a[0]); },

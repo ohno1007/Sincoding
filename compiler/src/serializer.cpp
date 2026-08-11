@@ -574,6 +574,26 @@ std::string serializeBlocks(const Program& prog) {
         }
     }
     w.out << ",";
+    // 被导入函数的**完整定义**：不进画布，但预览解释器需要它们才能执行库调用。
+    // （libs 只有签名，用于生成积木；这里给实现。泛型模板原样给出——JS 解释器
+    //  是动态类型的，一份模板即可服务所有元素类型。单态化实例不必重复给。）
+    w.nl(); w.key("libImpl");
+    {
+        std::vector<const FnDecl*> impl;
+        for (auto& fn : prog.fns)
+            if (!fn->module.empty() && fn->module != "<generic>" && !fn->isExtern)
+                impl.push_back(fn.get());
+        if (impl.empty()) { w.out << "[]"; }
+        else {
+            w.out << "["; w.depth++;
+            for (size_t i = 0; i < impl.size(); i++) {
+                if (i) w.out << ",";
+                w.nl(); w.fn(*impl[i]);
+            }
+            w.depth--; w.nl(); w.out << "]";
+        }
+    }
+    w.out << ",";
     // 结构体定义
     w.nl(); w.key("structs");
     if (structs.empty()) {
