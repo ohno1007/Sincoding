@@ -806,8 +806,85 @@
         s._fn === selected ? "3px solid #ffd21a" : "none"));
   }
 
+  // 结构体声明积木：名字/字段名/字段类型均可编辑，可加可删
+  function renderStructBlock(st, idx) {
+    const script = el("div", "script");
+    if (st._x === undefined) { st._x = 40; st._y = 36 + idx * 200; }
+    script.style.left = st._x + "px"; script.style.top = st._y + "px";
+    const blk = el("div", "block hat struct-blk");
+    const hdr = el("div", "hdr");
+    hdr.append(el("span", "label", "结构体"));
+    hdr.append(field(() => st.name, (v) => { st.name = v || "S"; }));
+    const addF = el("button", "add-param", "+字段");
+    addF.addEventListener("pointerdown", (e) => e.stopPropagation());
+    addF.addEventListener("click", (e) => {
+      e.stopPropagation();
+      st.fields = st.fields || [];
+      st.fields.push({ name: "f" + (st.fields.length + 1), type: "int", len: 0 });
+      render();
+    });
+    hdr.append(addF);
+    blk.append(hdr);
+    (st.fields || []).forEach((f, i) => {
+      const row = el("div", "hdr");
+      row.append(field(() => f.name, (v) => { f.name = v || ("f" + i); }));
+      row.append(el("span", "kw", ":"));
+      row.append(field(() => typeText(f), (v) => applyTypeText(f, v)));
+      row.addEventListener("contextmenu", (e) => {     // 右键删字段
+        e.preventDefault(); e.stopPropagation();
+        st.fields.splice(i, 1); render();
+      });
+      blk.append(row);
+    });
+    script.append(blk);
+    dragScript(script, st, hdr);
+    hdr.addEventListener("contextmenu", (e) => {       // 右键删整个结构体
+      e.preventDefault(); e.stopPropagation();
+      project.structs.splice(idx, 1); render();
+    });
+    return script;
+  }
+
+  // 让一个脚本块可拖动（结构体/全局共用；函数块有自己的拖拽逻辑）
+  function dragScript(script, node, handle) {
+    handle.addEventListener("pointerdown", (e) => {
+      if (e.target.classList.contains("field") || e.target.tagName === "BUTTON") return;
+      e.stopPropagation();
+      const start = { mx: e.clientX, my: e.clientY, ox: node._x, oy: node._y };
+      const onMove = (ev) => {
+        node._x = start.ox + (ev.clientX - start.mx) / view.k;
+        node._y = start.oy + (ev.clientY - start.my) / view.k;
+        script.style.left = node._x + "px"; script.style.top = node._y + "px";
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    });
+  }
+
+  // 全局变量：本身就是 let 语句节点，直接复用语句渲染（编辑/删除都白送）
+  function renderGlobalBlock(g, idx) {
+    const script = el("div", "script");
+    if (g._x === undefined) { g._x = 400; g._y = 36 + idx * 90; }
+    script.style.left = g._x + "px"; script.style.top = g._y + "px";
+    const wrap = el("div", "block hat global-blk");
+    const hdr = el("div", "hdr");
+    hdr.append(el("span", "label", "全局"));
+    wrap.append(hdr);
+    wrap.append(renderStmt(g, project.globals));
+    script.append(wrap);
+    dragScript(script, g, hdr);
+    return script;
+  }
+
   function renderCanvas() {
     canvas.innerHTML = "";
+    // 项目级共享状态（所有精灵可见）先画，再画当前精灵的函数
+    (project.structs || []).forEach((st, i) => canvas.append(renderStructBlock(st, i)));
+    (project.globals || []).forEach((g, i) => canvas.append(renderGlobalBlock(g, i)));
     sprite().program.forEach((fn) => canvas.append(renderFn(fn)));
     markSelected();
     const tag = document.getElementById("page-tag");
@@ -1520,6 +1597,19 @@
     if (!selected || !selected.body) return;
     selected.body.push(node); render();
   }
+  function addStruct() {
+    project.structs = project.structs || [];
+    project.structs.push({ name: "Point" + (project.structs.length + 1),
+                           fields: [{ name: "x", type: "int", len: 0 },
+                                    { name: "y", type: "int", len: 0 }] });
+    render();
+  }
+  function addGlobal() {
+    project.globals = project.globals || [];
+    project.globals.push({ block: "let", name: "g" + (project.globals.length + 1),
+                           type: "int", len: 0, value: { block: "int", value: 0 } });
+    render();
+  }
   function addFn() {
     const fn = { block: "fn", name: "fn" + (sprite().program.length + 1), params: [], ret: "int",
       body: [{ block: "return", value: { block: "int", value: 0 } }],
@@ -1544,6 +1634,9 @@
     { id: "pen", name: "画笔", color: "#0FBD8C", items: ["pen_clear", "pen_color", "pen_size", "pen_line", "pen_dot"] },
     { id: "platform", name: "平台", color: "#5CB1D6", items: ["if_mouse", "let_mouse_x", "let_mouse_y", "let_random", "let_screen_w"] },
     { id: "events", name: "事件 / 声音", color: "#FFBF00", items: ["if_key", "if_key_right", "if_key_up", "if_key_down", "broadcast", "if_received", "play_tone", "play_sound"] },
+    { id: "shared", name: "结构体 / 全局", color: "#FF6680",
+      items: [{ special: "addStruct", label: "新建结构体" },
+              { special: "addGlobal", label: "新建全局变量" }] },
     { id: "modules", name: "模块 / 库", color: "#CF63CF",
       items: [{ special: "addImport", label: "导入库…" }] },
   ];
@@ -1609,6 +1702,14 @@
   }
   // 自制积木的预览（函数定义帽子块外观）
   function specialPreview(sp) {
+    if (sp.special === "addStruct" || sp.special === "addGlobal") {
+      const blk = el("div", "block");
+      const row = el("div", "hdr");
+      row.append(el("span", "label", sp.special === "addStruct" ? "结构体" : "全局"),
+                 el("span", "param", sp.special === "addStruct" ? "新建…" : "新变量"));
+      blk.append(row);
+      return blk;
+    }
     if (sp.special === "addImport") {          // 导入库：显示当前已导入的模块
       const blk = el("div", "block");
       const row = el("div", "hdr");
@@ -1708,7 +1809,12 @@
           const up = () => {
             window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
             if (started) return;
-            if (special) { if (it.special === "addFn") addFn(); else if (it.special === "addImport") addImport(); }
+            if (special) {
+              if (it.special === "addFn") addFn();
+              else if (it.special === "addImport") addImport();
+              else if (it.special === "addStruct") addStruct();
+              else if (it.special === "addGlobal") addGlobal();
+            }
             else if (lib) { if (!isReporter) addStmtNode(mk()); }  // reporter 只能拖入槽位
             else if (!isReporter) addStmt(it);
           };

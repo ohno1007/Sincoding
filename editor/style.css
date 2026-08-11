@@ -450,3 +450,8 @@ body.dragging-block { cursor:grabbing; }
   background: rgba(255, 255, 255, .28); color: #fff;
 }
 .block.hat .add-param:hover { background: rgba(255, 255, 255, .45); }
+
+/* 项目级共享状态（结构体 / 全局变量）在画布上的积木 */
+.block.struct-blk { background: #FF6680; }
+.block.global-blk { background: #FF8C1A; }
+.block.struct-blk .hdr, .block.global-blk .hdr { gap: 6px; }

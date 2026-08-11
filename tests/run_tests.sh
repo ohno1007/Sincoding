@@ -271,6 +271,12 @@ if command -v node >/dev/null 2>&1 && \
     else
         echo "✗ IDE mini-LSP: 验证失败（$rout）"; ((FAIL++))
     fi
+    # 结构体 / 全局变量可从积木创建与编辑
+    if sout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_shared_blocks.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ 共享状态积木: 新建结构体/字段/数组字段/全局变量（$sout）"; ((PASS++))
+    else
+        echo "✗ 共享状态积木: 验证失败（$sout）"; ((FAIL++))
+    fi
     # 函数签名可从积木编辑（加参数 / 切片类型 / 返回类型）
     if fout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_fn_signature.js" "$ROOT/editor/index.html" 2>&1)"; then
         echo "✓ 函数签名积木: 加参数 + 切片类型 + 改返回类型（$fout）"; ((PASS++))
