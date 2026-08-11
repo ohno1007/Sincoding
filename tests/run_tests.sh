@@ -176,6 +176,18 @@ if "$SINC" "$SLSRC" -o "$WORK/slice.c" >/dev/null 2>&1 && \
     echo "✓ slice: 同一函数处理 int[3]/int[5] + 通过切片就地修改生效"; ((PASS++))
 else echo "✗ slice: 行为不符（$("$WORK/slice" 2>/dev/null | tr '\n' ' ')）"; ((FAIL++)); fi
 
+# ---- 诊断精度：类型错误应带列号并指向出错的标识符 ----
+echo
+echo "=== 诊断精度：类型错误的列号 ==="
+DIAGSRC="$WORK/diag.sin"
+printf '%s\n' 'fn main() -> int {' '    let a: int = 1' '    return a + nope' '}' > "$DIAGSRC"
+# "nope" 在第 3 行第 16 列（1-based）
+if "$SINC" "$DIAGSRC" -o /dev/null 2>&1 | grep -q ':3:16: .*未声明的变量: nope'; then
+    echo "✓ 诊断列号: 类型错误精确指向出错标识符（3:16 → nope）"; ((PASS++))
+else
+    echo "✗ 诊断列号: 未指向正确位置（$("$SINC" "$DIAGSRC" -o /dev/null 2>&1 | head -1)）"; ((FAIL++))
+fi
+
 # ---- IDE 查询：悬停显示类型（mini-LSP）----
 echo
 echo "=== IDE 查询：hover 显示类型 ==="

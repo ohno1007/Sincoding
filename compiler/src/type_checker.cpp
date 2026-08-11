@@ -29,6 +29,14 @@ const char* typeToC(Type t) {
 void TypeChecker::error(int line, const std::string& msg) {
     errors_.push_back({line, 0, msg});
 }
+// 带列号的诊断：编辑器据此把波浪线画在**出错的那个标识符/表达式**上，
+// 而不是整行高亮。AST 节点的 col 是为 mini-LSP 加的，这里正好复用。
+void TypeChecker::errorAt(const Expr& e, const std::string& msg) {
+    errors_.push_back({e.line, e.col, msg});
+}
+void TypeChecker::errorAt(const Stmt& st, const std::string& msg) {
+    errors_.push_back({st.line, st.col, msg});
+}
 
 bool TypeChecker::declare(const std::string& name, VarType t) {
     auto& scope = scopes_.back();
@@ -168,7 +176,7 @@ void TypeChecker::checkStmt(Stmt& s) {
                     bool ok = (initT == ls.declared) && (ls.declaredLen == initLen) &&
                               (ls.declared != Type::Struct || ls.init->structName == ls.structName);
                     if (!ok)
-                        error(ls.line, "类型不匹配: 'let " + ls.name + ": " +
+                        errorAt(*ls.init, "类型不匹配: 'let " + ls.name + ": " +
                                            declTypeStr(ls.declared, ls.declaredLen, ls.structName) +
                                            "' 不能用 " +
                                            declTypeStr(initT, initLen, ls.init->structName) + " 初始化");
@@ -188,7 +196,7 @@ void TypeChecker::checkStmt(Stmt& s) {
             auto& as = static_cast<AssignStmt&>(s);
             VarType vt = lookup(as.name);
             if (vt.base == Type::Unknown)
-                error(as.line, "赋值给未声明的变量: " + as.name);
+                errorAt(as, "赋值给未声明的变量: " + as.name);
             if (!as.field.empty()) {
                 // 字段赋值 name.field = value
                 Type ft = Type::Unknown; int fLen = 0; std::string fStruct;
@@ -309,7 +317,7 @@ Type TypeChecker::checkExpr(Expr& e) {
             auto& v = static_cast<Var&>(e);
             VarType t = lookup(v.name);
             if (t.base == Type::Unknown)
-                error(v.line, "使用了未声明的变量: " + v.name);
+                errorAt(v, "使用了未声明的变量: " + v.name);
             v.type = t.base;
             v.arrayLen = t.len;
             v.structName = t.structName;
@@ -362,7 +370,7 @@ Type TypeChecker::checkExpr(Expr& e) {
                     return d.type;
                 }
             }
-            error(fa.line, "结构体 " + fa.obj->structName + " 没有字段 '" + fa.field + "'");
+            errorAt(fa, "结构体 " + fa.obj->structName + " 没有字段 '" + fa.field + "'");
             fa.type = Type::Unknown;
             return Type::Unknown;
         }
@@ -431,13 +439,13 @@ Type TypeChecker::checkExpr(Expr& e) {
             } else if (op == "==" || op == "!=" || op == "<" || op == "<=" ||
                        op == ">" || op == ">=") {
                 if (lt != Type::Unknown && rt != Type::Unknown && lt != rt)
-                    error(b.line, "比较运算 '" + op + "' 两侧类型不一致: " +
+                    errorAt(*b.lhs, "比较运算 '" + op + "' 两侧类型不一致: " +
                                       typeName(lt) + " 与 " + typeName(rt));
                 // 字符串支持全部比较：== != 走 strcmp==0，< <= > >= 走 strcmp 符号
                 b.type = Type::Bool;
             } else { // + - * / %
                 if (lt != Type::Unknown && rt != Type::Unknown && lt != rt)
-                    error(b.line, "算术运算 '" + op + "' 两侧类型不一致: " +
+                    errorAt(*b.lhs, "算术运算 '" + op + "' 两侧类型不一致: " +
                                       typeName(lt) + " 与 " + typeName(rt));
                 if (lt == Type::Bool || rt == Type::Bool)
                     error(b.line, "算术运算 '" + op + "' 不能用于 bool");
@@ -497,14 +505,14 @@ Type TypeChecker::checkExpr(Expr& e) {
             if (checkGenericCall(c)) return c.type;   // 泛型：推断实参类型并改写为实例
             auto it = fns_.find(c.callee);
             if (it == fns_.end()) {
-                error(c.line, "调用了未定义的函数: " + c.callee);
+                errorAt(c, "调用了未定义的函数: " + c.callee);
                 for (auto& a : c.args) checkExpr(*a);
                 c.type = Type::Unknown;
                 return Type::Unknown;
             }
             const FnSig& sig = it->second;
             if (c.args.size() != sig.params.size())
-                error(c.line, "函数 " + c.callee + " 期望 " +
+                errorAt(c, "函数 " + c.callee + " 期望 " +
                                   std::to_string(sig.params.size()) + " 个参数，得到 " +
                                   std::to_string(c.args.size()));
             for (size_t i = 0; i < c.args.size(); i++) {

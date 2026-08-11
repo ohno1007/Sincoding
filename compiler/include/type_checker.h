@@ -36,7 +36,9 @@ public:
     const std::vector<InstReq>& instantiations() const { return insts_; }
 
 private:
-    void error(int line, const std::string& msg);
+    void error(int line, const std::string& msg);          // 无精确列时用
+    void errorAt(const Expr& e, const std::string& msg);   // 指向出错的表达式
+    void errorAt(const Stmt& st, const std::string& msg);  // 指向出错的语句
     void checkFn(FnDecl& fn);
     void checkBlock(Block& block);
     void checkStmt(Stmt& s);

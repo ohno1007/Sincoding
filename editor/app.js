@@ -1008,7 +1008,14 @@
     let pos = 0;
     for (let i = 0; i < line - 1 && i < lines.length; i++) pos += lines[i].length + 1;
     pos += Math.max(0, (col || 1) - 1);
-    textOut.focus(); textOut.setSelectionRange(pos, pos);
+    // 有列号时直接**选中出错的那个标识符**，一眼看到问题在哪
+    let end = pos;
+    if (col) {
+      const v = textOut.value;
+      while (end < v.length && /[A-Za-z0-9_]/.test(v[end])) end++;
+      if (end === pos) end = Math.min(v.length, pos + 1);   // 非标识符：至少选一个字符
+    }
+    textOut.focus(); textOut.setSelectionRange(pos, end);
     const lh = 20; textOut.scrollTop = Math.max(0, (line - 4)) * lh; syncHighlight();
   }
 
