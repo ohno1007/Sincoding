@@ -376,6 +376,12 @@ if command -v node >/dev/null 2>&1 && \
     else
         echo "✗ 代码补全: 验证失败（$cout）"; ((FAIL++))
     fi
+    # 代码面板可玩性：×关闭/重开 + 可切换 CodeMirror（引擎补全桥接）
+    if pout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_codepane.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ 代码面板: 可关闭/重开 + CodeMirror 可选（同步/诊断/引擎补全）（$pout）"; ((PASS++))
+    else
+        echo "✗ 代码面板: 验证失败（$pout）"; ((FAIL++))
+    fi
     # 预览 = 成品：import 的库函数在预览里也能真正执行（不只是有积木）
     if pout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_lib_preview.js" "$ROOT/editor/index.html" 2>&1)"; then
         echo "✓ 预览库调用: import 的库函数在预览里执行正确（$pout）"; ((PASS++))

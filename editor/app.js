@@ -141,7 +141,10 @@
     return { imports: project.imports || [], structs: project.structs || [],
              globals: project.globals || [], program: sprite().program };
   }
-  function setTextValue(v) { textOut.value = v; syncHighlight(); }
+  function setTextValue(v) {
+    textOut.value = v; syncHighlight();
+    if (cm && cm.getValue() !== v) cm.setValue(v);   // CodeMirror 模式：同步到 CM
+  }
   // 积木 → 文本：交给 wasm 引擎（唯一序列化器）。
   // 此前由 blockmodel.js 镜像 C++ 实现，双份实现已漂移出真实 bug（import/泛型/数组长度丢失），
   // 现已退役——宁可提示"引擎未就绪"，也不产出错误的文本。
@@ -153,6 +156,7 @@
   }
   function refreshText() {
     if (document.activeElement === textOut) return; // 用户正在编辑文本，别打断
+    if (cm && cm.hasFocus()) return;                // CodeMirror 模式下同理
     try {
       const src = modelToSource(fullModel());
       if (src === null) { setTextStatus("编译器加载中…", "warn"); return; }
@@ -197,6 +201,155 @@
     const wrap = document.getElementById("text-hl");
     if (wrap) { wrap.scrollTop = textOut.scrollTop; wrap.scrollLeft = textOut.scrollLeft; }
   }
+
+  // ---------------- 代码面板：可关闭 + 可换编辑器（内置 / CodeMirror） ----------------
+  // 默认是内置编辑器 + 面板打开——积木/文本双向同步是产品核心，但用户可以：
+  //  - 点 × 收起整个代码面板，纯积木使用（画布变宽）；右上角「</> 代码」随时打开
+  //  - 切换到 CodeMirror（vendor 内置，离线可用）：行号 / 当前行高亮 / 括号匹配，
+  //    补全（Ctrl+空格）/ 光标类型 / F2 重命名照旧由 wasm 引擎驱动
+  let cm = null;                                   // CodeMirror 实例（null = 内置编辑器）
+  const tpPane = document.getElementById("text-pane");
+  const tpOpenBtn = document.getElementById("tp-open");
+  function setCodePane(open) {
+    if (tpPane) tpPane.style.display = open ? "" : "none";
+    if (tpOpenBtn) tpOpenBtn.hidden = open;
+    try { localStorage.setItem("sin.codePane", open ? "1" : "0"); } catch (e) {}
+  }
+  const tpClose = document.getElementById("tp-close");
+  if (tpClose) tpClose.addEventListener("click", () => setCodePane(false));
+  if (tpOpenBtn) tpOpenBtn.addEventListener("click", () => setCodePane(true));
+  try { if (localStorage.getItem("sin.codePane") === "0") setCodePane(false); } catch (e) {}
+
+  // 懒加载 vendor 脚本/样式（选了 CodeMirror 才加载，默认零开销）
+  function loadOnce(tag, attrs) {
+    return new Promise((res, rej) => {
+      if (document.querySelector(tag + "[data-v=\"" + (attrs.href || attrs.src) + "\"]")) return res();
+      const e = document.createElement(tag);
+      Object.assign(e, attrs);
+      e.dataset.v = attrs.href || attrs.src;
+      if (tag === "script") { e.onload = res; e.onerror = rej; }
+      else res();
+      document.head.appendChild(e);
+    });
+  }
+  async function loadCodeMirror() {
+    const base = "vendor/codemirror/";
+    await loadOnce("link", { rel: "stylesheet", href: base + "codemirror.css" });
+    await loadOnce("link", { rel: "stylesheet", href: base + "show-hint.css" });
+    await loadOnce("script", { src: base + "codemirror.js" });
+    await loadOnce("script", { src: base + "matchbrackets.js" });
+    await loadOnce("script", { src: base + "active-line.js" });
+    await loadOnce("script", { src: base + "show-hint.js" });
+  }
+  // Sincoding 的 CM 语法着色（与内置高亮同一套词表）
+  function defineSinMode() {
+    if (window.CodeMirror.modes.sincoding) return;
+    window.CodeMirror.defineMode("sincoding", () => ({
+      token(stream) {
+        if (stream.match(/^\/\/.*/)) return "comment";
+        if (stream.match(/^"(?:[^"\\]|\\.)*"?/)) return "string";
+        if (stream.match(/^\d+\.\d+/) || stream.match(/^\d+/)) return "number";
+        if (stream.match(/^[A-Za-z_]\w*/)) {
+          const w = stream.current();
+          if (HL_KW.has(w)) return "keyword";
+          if (HL_TY.has(w)) return "type";
+          return null;
+        }
+        stream.next(); return null;
+      },
+    }));
+  }
+  // 引擎补全接到 CM 的 show-hint（同一个 sin_complete，语境/类型一致）
+  function cmHint(inst) {
+    const c = inst.getCursor();
+    const res = sincMod ? (() => {
+      try {
+        return JSON.parse(sincMod.ccall("sin_complete", "string", ["string", "number", "number"],
+                                        [inst.getValue(), c.line + 1, c.ch + 1]));
+      } catch (e) { return null; }
+    })() : null;
+    const items = (res && res.items) || [];
+    const prefix = (res && res.prefix) || "";
+    return {
+      list: items.map((i) => ({ text: i.text, displayText: i.text + "  —  " + i.detail })),
+      from: window.CodeMirror.Pos(c.line, c.ch - prefix.length),
+      to: c,
+    };
+  }
+  async function enableCodeMirror() {
+    await loadCodeMirror();
+    defineSinMode();
+    if (cm) return;
+    document.getElementById("text-edit").style.display = "none";   // 隐藏内置编辑器（textOut 仍是数据真相）
+    // 插到内置编辑器的位置（诊断列表之前），别落到预览面板后面去
+    cm = window.CodeMirror((elt) => {
+      elt.id = "cm-host";
+      tpPane.insertBefore(elt, document.getElementById("diag-list"));
+    }, {
+      value: textOut.value, mode: "sincoding", lineNumbers: true,
+      styleActiveLine: true, matchBrackets: true, indentUnit: 4, tabSize: 4,
+      extraKeys: {
+        "Ctrl-Space": (inst) => inst.showHint({ hint: cmHint, completeSingle: false }),
+        F2: (inst) => {
+          const c = inst.getCursor();
+          if (!sincMod) return;
+          const cur = JSON.parse(sincMod.ccall("sin_hover", "string", ["string", "number", "number"],
+                                               [inst.getValue(), c.line + 1, c.ch + 1]));
+          if (!cur || !cur.found) { setTextStatus("光标处不是可改名的标识符", "warn"); return; }
+          const nn = (prompt("把「" + cur.name + "」重命名为：", cur.name) || "").trim();
+          if (!nn || nn === cur.name) return;
+          const r = JSON.parse(sincMod.ccall("sin_rename", "string", ["string", "number", "number", "string"],
+                                             [inst.getValue(), c.line + 1, c.ch + 1, nn]));
+          if (r && r.ok) { setTextValue(r.source); onTextEdited(); }
+        },
+      },
+    });
+    cm.on("change", () => {                       // CM 编辑 → 回灌 textOut → 走既有同步管线
+      if (textOut.value === cm.getValue()) return;
+      textOut.value = cm.getValue();
+      clearTimeout(textTimer); textTimer = setTimeout(onTextEdited, 250);
+    });
+    cm.on("cursorActivity", () => {               // 光标停在标识符上：状态栏显示类型
+      if (!sincMod || !cm.hasFocus()) return;
+      const c = cm.getCursor();
+      try {
+        const h = JSON.parse(sincMod.ccall("sin_hover", "string", ["string", "number", "number"],
+                                           [cm.getValue(), c.line + 1, c.ch + 1]));
+        if (h && h.found) setTextStatus(h.kind + " " + h.name + " : " + h.type, "ok");
+      } catch (e) {}
+    });
+    cm.on("inputRead", (inst, ch) => {            // 敲字母/点号自动弹补全
+      if (/[A-Za-z_.]/.test(ch.text && ch.text[0] || ""))
+        inst.showHint({ hint: cmHint, completeSingle: false });
+    });
+  }
+  function disableCodeMirror() {
+    if (!cm) return;
+    const host = document.getElementById("cm-host");
+    if (host) host.remove();
+    cm = null;
+    document.getElementById("text-edit").style.display = "";
+    syncHighlight();
+  }
+  const tpEditor = document.getElementById("tp-editor");
+  if (tpEditor) {
+    tpEditor.addEventListener("change", () => {
+      const kind = tpEditor.value;
+      try { localStorage.setItem("sin.editorKind", kind); } catch (e) {}
+      if (kind === "codemirror") enableCodeMirror().catch(() => {
+        tpEditor.value = "simple"; setTextStatus("CodeMirror 加载失败，已回退内置编辑器", "warn");
+      });
+      else disableCodeMirror();
+    });
+    try {
+      if (localStorage.getItem("sin.editorKind") === "codemirror") {
+        tpEditor.value = "codemirror";
+        enableCodeMirror().catch(() => { tpEditor.value = "simple"; });
+      }
+    } catch (e) {}
+  }
+  window._sinCodePane = { set: setCodePane, editor: (k) => { tpEditor.value = k; tpEditor.dispatchEvent(new Event("change")); },
+                          cm: () => cm, hint: () => (cm ? cmHint(cm) : null) };  // 测试探针
 
   // ---------------- 实时预览（解释器跑积木） ----------------
   let preview = null, previewTimer = null;
@@ -1057,6 +1210,16 @@
     });
   }
   function jumpToLine(line, col) {
+    if (cm) {                                     // CodeMirror 模式：用 CM 自己的定位/选中
+      const ln = line - 1, ch = Math.max(0, (col || 1) - 1);
+      let end = ch;
+      const lineText = cm.getLine(ln) || "";
+      if (col) { while (end < lineText.length && /[A-Za-z0-9_]/.test(lineText[end])) end++; if (end === ch) end = ch + 1; }
+      cm.focus();
+      cm.setSelection({ line: ln, ch: ch }, { line: ln, ch: end });
+      cm.scrollIntoView({ line: ln, ch: 0 }, 80);
+      return;
+    }
     const lines = textOut.value.split("\n");
     let pos = 0;
     for (let i = 0; i < line - 1 && i < lines.length; i++) pos += lines[i].length + 1;

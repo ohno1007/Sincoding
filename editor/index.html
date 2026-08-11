@@ -84,8 +84,17 @@
             <button id="zoom-out" title="缩小">－</button>
             <button id="zoom-reset" title="回到 100%">＝</button>
           </div>
+          <button id="tp-open" title="打开代码面板" hidden>&lt;/&gt; 代码</button>
         </div>
         <div id="text-pane">
+          <div id="tp-bar">
+            <span class="tp-title">代码</span>
+            <select id="tp-editor" title="选择代码编辑器">
+              <option value="simple">内置编辑器</option>
+              <option value="codemirror">CodeMirror</option>
+            </select>
+            <button id="tp-close" title="关闭代码面板（积木照常可用）">×</button>
+          </div>
           <div id="text-edit">
             <pre id="text-hl" aria-hidden="true"><code></code></pre>
             <textarea id="text-out" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
