@@ -8,6 +8,17 @@
  *  - 相邻积木用下凸榫头咬合
  *  - UI 主紫 #855CD6，面板白底 + #D9D9D9 发丝线，文字 #575E75
  */
+/* UI 字体：Nunito（圆润几何，OFL，随包 vendor 离线可用）——拉丁/数字用它，
+   中文回落到系统黑体；代码区仍是等宽字体，不受影响 */
+@font-face { font-family:"Nunito"; font-weight:400; font-style:normal; font-display:swap;
+  src:url("vendor/fonts/nunito-latin-400.woff2") format("woff2"); }
+@font-face { font-family:"Nunito"; font-weight:600; font-style:normal; font-display:swap;
+  src:url("vendor/fonts/nunito-latin-600.woff2") format("woff2"); }
+@font-face { font-family:"Nunito"; font-weight:700; font-style:normal; font-display:swap;
+  src:url("vendor/fonts/nunito-latin-700.woff2") format("woff2"); }
+@font-face { font-family:"Nunito"; font-weight:800; font-style:normal; font-display:swap;
+  src:url("vendor/fonts/nunito-latin-800.woff2") format("woff2"); }
+
 :root {
   /* Scratch 分类配色（填充 / 描边 = 加深一档） */
   --c-motion:#4C97FF;    --b-motion:#3373CC;
@@ -22,7 +33,8 @@
   /* UI 基色（Scratch 界面） */
   --ui-primary:#855CD6;
   --ink:#575E75; --bg:#E9F0FC; --panel:#fff; --line:#D9D9D9; --pane-bg:#F9F9F9;
-  font-family:"Helvetica Neue", -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-family:"Nunito", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei",
+    -apple-system, "Segoe UI", sans-serif;
 }
 * { box-sizing:border-box; }
 html,body { margin:0; height:100%; }
@@ -33,8 +45,8 @@ header { flex:0 0 auto; display:flex; align-items:center; gap:12px; padding:6px 
   background:#fff; color:var(--ink);
   border-bottom:1px solid var(--line); z-index:5; }
 header .logo { display:flex; align-items:center; gap:9px; }
-header .logo svg { color:var(--c-motion); }
-header h1 { font-size:16px; margin:0; font-weight:700; letter-spacing:.3px; color:#3B4351; }
+header .logo svg { color:var(--c-motion); }   /* 多色 logo 自带填充，此色只作回退 */
+header h1 { font-size:17px; margin:0; font-weight:800; letter-spacing:.2px; color:#3B4351; }
 header .sub { font-size:11.5px; opacity:.78; }
 header .tabs { margin-left:auto; display:flex; gap:2px; background:#EEF1F6;
   padding:3px; border-radius:8px; }
@@ -169,7 +181,8 @@ header .tabs button.active { background:#fff; color:var(--c-motion); font-weight
 #tp-open:hover { background:#F2F6FC; }
 #tp-open[hidden] { display:none; }
 /* CodeMirror 宿主（可选编辑器）：占满内置编辑器的位置 */
-#cm-host { flex:1 1 auto; min-height:0; height:auto; font-size:12.5px; line-height:1.6; }
+#cm-host { flex:1 1 auto; min-height:0; height:auto; font-size:12.5px; line-height:1.6;
+  font-family:ui-monospace,"SFMono-Regular",Menlo,monospace; }
 #cm-host .CodeMirror-linenumber { color:#A6AEBB; }
 #cm-host .cm-type { color:#0E7490; }
 /* 文本编辑器：透明 textarea 覆盖在高亮层之上（同步对齐） */

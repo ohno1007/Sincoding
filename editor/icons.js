@@ -10,6 +10,13 @@
     code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
     palette: '<circle cx="13.5" cy="6.5" r=".7" fill="currentColor" stroke="none"/><circle cx="17.5" cy="10.5" r=".7" fill="currentColor" stroke="none"/><circle cx="8.5" cy="7.5" r=".7" fill="currentColor" stroke="none"/><circle cx="6.5" cy="12.5" r=".7" fill="currentColor" stroke="none"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.65-.75 1.65-1.69 0-.44-.18-.83-.44-1.12-.29-.29-.44-.65-.44-1.13a1.64 1.64 0 0 1 1.67-1.67h2c3.05 0 5.55-2.5 5.55-5.55C21.97 6.01 17.46 2 12 2Z"/>',
     puzzle: '<path d="M15.5 3.5a2 2 0 0 1 2 2V8H20a2 2 0 1 1 0 4h-2.5v2.5a2 2 0 0 1-2 2H13V19a2 2 0 1 1-4 0v-.5H6.5a2 2 0 0 1-2-2V14H4a2 2 0 1 1 0-4h.5V7.5a2 2 0 0 1 2-2H9V5a2 2 0 1 1 4 0v.5h2.5Z"/>',
+    // 品牌标志：两块错位咬合的积木（蓝上橙下，凸榫压进下一块）——产品本体的形状
+    logo: '<g stroke="none">' +
+      '<rect x="2" y="3" width="14.5" height="7.5" rx="2" fill="#4C97FF"/>' +
+      '<path d="M5.5 10.5h5v2a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1z" fill="#4C97FF"/>' +
+      '<rect x="7" y="13" width="14.5" height="7.5" rx="2" fill="#FFAB19"/>' +
+      '<path d="M10.5 20.5h5v1.6a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1z" fill="#FFAB19" opacity=".45"/>' +
+      '</g>',
     move: '<polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/>',
     play: '<polygon points="6 3 20 12 6 21 6 3"/>',
     stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
