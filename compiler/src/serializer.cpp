@@ -144,6 +144,7 @@ struct SourceWriter {
                     out << ": " << (ls.declared == Type::Struct ? ls.structName : typeName(ls.declared));
                     if (ls.declaredLen > 0) out << "[" << ls.declaredLen << "]";
                     else if (ls.declaredLen == -1) out << "[]";
+                    else if (ls.declaredLen == -2) out << "[*]";
                 }
                 if (ls.init) { out << " = "; writeExpr(*ls.init); }
                 tailComment(s.tailComment);
@@ -345,6 +346,7 @@ struct JsonWriter {
 
     void expr(const Expr& e) {
         out << "{"; depth++;
+        if (e.line > 0) { nl(); key("line"); out << e.line; out << ","; }
         nl(); key("block");
         switch (e.kind) {
             case ExprKind::IntLit:
@@ -448,6 +450,7 @@ struct JsonWriter {
 
     void stmt(const Stmt& s) {
         out << "{"; depth++;
+        if (s.line > 0) { nl(); key("line"); out << s.line; out << ","; }
         nl(); key("block");
         switch (s.kind) {
             case StmtKind::Let: {

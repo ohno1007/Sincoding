@@ -572,6 +572,8 @@
     sprite_touching_mouse: "碰到鼠标?", timer: "计时器", timer_reset: "计时器归零",
     key_pressed_space: "刚按下空格?", key_pressed_left: "刚按下←?", key_pressed_right: "刚按下→?",
     key_pressed_up: "刚按下↑?", key_pressed_down: "刚按下↓?", mouse_clicked: "刚点击?",
+    push: "添加到列表", pop: "取出末项", insert: "插入到列表",
+    remove_at: "删除列表第", clear: "清空列表",
   };
   // 事件函数：约定名 → 帽子块的中文标签（渲染成 Scratch 式事件帽，名字仍是唯一真相）
   const EVENT_LABELS = {
@@ -1058,13 +1060,14 @@
 
   // 参数/返回类型的文本表示：int / float[3] / int[]（len: 0 标量, >0 定长, -1 切片）
   function typeText(p) {
-    return (p.type || "int") + (p.len === -1 ? "[]" : (p.len > 0 ? "[" + p.len + "]" : ""));
+    return (p.type || "int") +
+      (p.len === -1 ? "[]" : p.len === -2 ? "[*]" : (p.len > 0 ? "[" + p.len + "]" : ""));
   }
   function applyTypeText(p, v) {
-    const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(\[\s*(\d*)\s*\])?\s*$/.exec(v || "");
+    const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(\[\s*(\d*|\*)\s*\])?\s*$/.exec(v || "");
     if (!m) return;                                   // 写法不合法就保持原样
     p.type = m[1];
-    p.len = m[2] ? (m[3] === "" ? -1 : parseInt(m[3], 10)) : 0;
+    p.len = m[2] ? (m[3] === "" ? -1 : m[3] === "*" ? -2 : parseInt(m[3], 10)) : 0;
   }
   function retText(fn) {
     const t = fn.ret || "void";
@@ -1936,6 +1939,10 @@
     sprite_hide: () => Ex(C("sprite_hide", Vr("s"))),
     sprite_bounce: () => Ex(C("sprite_bounce", Vr("s"))),
     timer_reset: () => Ex(C("timer_reset")),
+    list_push: () => Ex(C("push", Vr("xs"), I(0))),
+    list_insert: () => Ex(C("insert", Vr("xs"), I(0), I(0))),
+    list_remove: () => Ex(C("remove_at", Vr("xs"), I(0))),
+    list_clear: () => Ex(C("clear", Vr("xs"))),
     say: () => Ex(C("say", Vr("s"), S("你好"))),
     draw_text: () => Ex(C("draw_text", S("文字"), F(0), F(0), I(24))),
     draw_number: () => Ex(C("draw_number", Vr("x"), F(0), F(0), I(24))),
@@ -1989,6 +1996,7 @@
     r_random: () => C("random_int", I(1), I(10)),
     r_mouse_x: () => C("mouse_x"), r_mouse_y: () => C("mouse_y"), r_mouse_down: () => C("mouse_down"),
     r_timer: () => C("timer"), r_touch_mouse: () => C("sprite_touching_mouse", Vr("s")),
+    r_pop: () => C("pop", Vr("xs")), r_len: () => C("len", Vr("xs")),
     r_key: () => C("key_down", C("key_left")), r_received: () => C("received", S("go")),
     r_sprite_x: () => C("sprite_x", Vr("s")), r_sprite_y: () => C("sprite_y", Vr("s")),
   };
@@ -2018,6 +2026,13 @@
                            _x: p.x, _y: p.y });
     render();
   }
+  function addList() {
+    project.globals = project.globals || [];
+    const p = freeSpot();
+    project.globals.push({ block: "let", name: "xs" + (project.globals.length + 1),
+                           type: "int", len: -2, _x: p.x, _y: p.y + 130 });
+    render();
+  }
   function addGlobal() {
     project.globals = project.globals || [];
     const p = freeSpot();
@@ -2044,7 +2059,8 @@
   // 调色板分类（仿 Scratch：左侧分类导航 + 右侧「所见即所得」积木预览）
   const PALETTE = [
     { id: "custom", name: "自制积木", color: "#FF6680", items: [{ special: "addFn", label: "新建函数" }] },
-    { id: "data", name: "变量 / 数据", color: "#FF8C1A", items: ["let", "let_str", "let_arr", "set_idx"] },
+    { id: "data", name: "变量 / 数据", color: "#FF8C1A", items: ["let", "let_str", "let_arr", "set_idx",
+        { special: "addList", label: "新建列表" }, "list_push", "list_insert", "list_remove", "list_clear"] },
     // 分类点颜色 = 该栏积木主色（本栏是赋值形态的运算，块体是变量橙，点也用橙）
     { id: "op", name: "运算", color: "#FF8C1A", items: ["incr", "decr", "set_op", "to_int", "to_float"] },
     { id: "reporters", name: "运算块 (拖入槽)", color: "#59C059", reporter: true,
@@ -2052,7 +2068,7 @@
         "r_lt", "r_gt", "r_eq", "r_le", "r_ge", "r_ne", "r_and", "r_or", "r_not",
         "r_int", "r_float", "r_str", "r_true", "r_random",
         "r_mouse_x", "r_mouse_y", "r_mouse_down", "r_key", "r_received", "r_sprite_x", "r_sprite_y",
-        "r_timer", "r_touch_mouse"] },
+        "r_timer", "r_touch_mouse", "r_pop", "r_len"] },
     { id: "control", name: "控制", color: "#FFAB19", items: ["if", "if_else", "while", "for", "repeat", "return", "print"] },
     { id: "stage", name: "舞台", color: "#FFAB19", items: ["stage_init", "game_loop", "frame_begin", "frame_end", "stage_close"] },
     { id: "motion", name: "运动", color: "#4C97FF", items: ["sprite_new", "sprite_move_to", "sprite_move", "sprite_turn", "sprite_point", "sprite_scale", "sprite_bounce", "sprite_show", "sprite_hide", "sprite_x", "sprite_y"] },
@@ -2154,6 +2170,14 @@
       });
       return blk;
     }
+    if (sp.special === "addList") {
+      // 预览不能复用 global-blk：画布断言"恰好 1 个"会把调色板预览数进去
+      const blk = el("div", "block pal-global");
+      const row = el("div", "hdr");
+      row.append(el("span", "label", "列表"), el("span", "param", "新建…"));
+      blk.append(row);
+      return blk;
+    }
     if (sp.special === "addEvent") {
       const blk = el("div", "block fn hat event-hat");
       const row = el("div", "hdr");
@@ -2253,6 +2277,7 @@
             if (special) {
               if (it.special === "addFn") addFn();
               else if (it.special === "addEvent") addEventFn(it.ev);
+              else if (it.special === "addList") addList();
               else if (it.special === "addImport") addImport();
               else if (it.special === "addStruct") addStruct();
               else if (it.special === "addGlobal") addGlobal();

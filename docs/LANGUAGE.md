@@ -132,6 +132,40 @@ fill(a, 7)        // a 变成 [7,7,7]
 `sum / max_of / min_of / index_of / contains / count_of`（只读）与
 `fill / reverse / sort`（就地），外加浮点版 `sum_f / max_of_f`。
 
+## 3.5.2 动态列表 `T[*]`
+
+可增删的列表（Scratch 的"列表"）。v1 规则：**只能声明为全局变量**、从空开始：
+
+```rust
+let scores: int[*]          // 全局列表，空起步
+
+fn main() -> int {
+    push(scores, 30)         // 追加
+    insert(scores, 0, 99)    // 插到下标 0
+    remove_at(scores, 0)     // 删除下标 0
+    print(scores[0])         // 下标读写（带越界检查）
+    print(pop(scores))       // 取出并返回末项（空列表报错）
+    print(len(scores))
+    clear(scores)
+    sort(scores)             // 列表可借用为切片：std/arrayx 直接可用
+    return 0
+}
+```
+
+限制（都会得到明确诊断）：不能在函数内声明、不能作参数/返回值/结构体字段、
+不能整体赋值（`a = b` 在 C 里是指针别名，会悬空——要复制请 clear 后逐个 push）。
+读写元素/排序请借用为切片 `T[]`；跨函数增删用全局列表。
+
+## 3.5.3 数组越界保护
+
+所有下标访问（定长数组 / 切片 / 列表）都带运行时检查，越界立即报**行号**并终止：
+
+```
+运行时错误(第4行): 数组下标 5 越界(长度 3)
+```
+
+预览解释器与编译成品同语义（含 `&&`/`||` 短路求值——守卫住的下标不会被求值）。
+
 ## 3.6 结构体（简单 / 标量字段）
 
 把若干标量字段聚合为一个类型，可作变量、参数与返回值（按值传递）：
@@ -285,6 +319,30 @@ fn main() -> int {
 `std/arrayx` 提供通用数组工具（**切片** `T[]` 管长度 + **泛型** `<T>` 管元素类型）：
 `sum / max_of / min_of / index_of / contains / count_of / fill / reverse / sort`，
 同一份代码同时服务 `int[]` 与 `float[]`。
+
+## 4.6 事件函数（零样板写游戏）
+
+不写 `main` 也能跑：定义**约定名**的事件函数，编译器自动合成主循环
+（舞台隐式初始化 480x360；预览与成品驱动顺序完全一致）：
+
+```rust
+let hero: int = 0
+
+fn on_start() {                  // 当绿旗被点击：初始化
+    hero = sprite_new(0.0, 0.0, 40.0)
+}
+
+fn on_frame() {                  // 每一帧：游戏逻辑
+    sprite_move(hero, 5.0)
+    sprite_bounce(hero)
+    sprite_draw(hero)
+}
+
+fn on_key_space() { }            // 当按下空格（刚按下的边沿，不是按住）
+```
+
+可用事件：`on_start` / `on_frame` / `on_key_space|left|right|up|down` / `on_click`。
+事件函数必须无参、无返回值。写了 `main` 则一切照旧（事件函数不会被自动调用）。
 
 ## 5. 控制流
 

@@ -1,0 +1,28 @@
+import "std/arrayx"
+
+// 全局列表：从空开始，push 添加
+let scores: int[*]
+
+fn total() -> int {
+    let s = 0
+    for i in 0..len(scores) { s = s + scores[i] }
+    return s
+}
+
+fn main() -> int {
+    push(scores, 30)
+    push(scores, 10)
+    push(scores, 20)
+    print(len(scores))       // 3
+    print(total())           // 60
+    insert(scores, 1, 99)    // [30, 99, 10, 20]
+    print(scores[1])         // 99
+    remove_at(scores, 1)     // [30, 10, 20]
+    sort(scores)             // 列表借用为切片：arrayx 直接可用 → [10, 20, 30]
+    print(scores[0])         // 10
+    print(pop(scores))       // 30
+    print(len(scores))       // 2
+    clear(scores)
+    print(len(scores))       // 0
+    return 0
+}

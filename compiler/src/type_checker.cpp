@@ -93,6 +93,8 @@ bool TypeChecker::check(Program& prog) {
                 else if (!structs_.count(f.structName))
                     error(f.line, "字段 '" + f.name + "' 引用了未定义或未在前面声明的结构体: " + f.structName);
             }
+            if (f.len == -2)
+                error(f.line, "字段 '" + f.name + "' 不能是列表 T[*]（列表请用全局变量）");
             if (!seen.insert(f.name).second)
                 error(f.line, "字段名重复: " + f.name);
         }
@@ -112,6 +114,8 @@ bool TypeChecker::check(Program& prog) {
         FnSig sig;
         if (fn->retLen == -1)
             error(fn->line, "函数 " + fn->name + " 不能返回切片 T[]（会指向已销毁的局部数组）");
+        if (fn->retLen == -2)
+            error(fn->line, "函数 " + fn->name + " 不能返回列表 T[*]（往全局列表里 push 即可）");
         sig.ret = {fn->ret, fn->retLen, fn->retStruct};
         if (fn->ret == Type::Struct && !structs_.count(fn->retStruct))
             error(fn->line, "未定义的结构体: " + fn->retStruct);
@@ -153,6 +157,7 @@ bool TypeChecker::check(Program& prog) {
 }
 
 void TypeChecker::checkFn(FnDecl& fn) {
+    inFn_ = true;
     curRet_ = fn.ret;
     curRetLen_ = fn.retLen;
     curRetStruct_ = fn.retStruct;
@@ -160,11 +165,14 @@ void TypeChecker::checkFn(FnDecl& fn) {
     for (auto& p : fn.params) {
         if (p.type == Type::Void)
             error(p.line, "参数 '" + p.name + "' 不能是 void 类型");
+        if (p.len == -2)
+            error(p.line, "列表不能作参数：用切片 T[] 借用（可读写元素/排序），增删用全局列表");
         if (!declare(p.name, {p.type, p.len, p.structName}))
             error(p.line, "参数名重复: " + p.name);
     }
     checkBlock(*fn.body);
     popScope();
+    inFn_ = false;
 }
 
 void TypeChecker::checkBlock(Block& block) {
@@ -177,6 +185,18 @@ void TypeChecker::checkStmt(Stmt& s) {
     switch (s.kind) {
         case StmtKind::Let: {
             auto& ls = static_cast<LetStmt&>(s);
+            if (ls.declaredLen == -2) {
+                // v1 列表 = 全局（与 Scratch"列表在舞台上"同心智）；局部列表牵涉
+                // 作用域释放/所有权转移，后续版本再放开
+                if (inFn_) error(ls.line, "列表 T[*] 目前只能声明为全局变量（函数外）");
+                if (ls.init) error(ls.line, "列表从空开始，用 push 添加元素（不支持初始化字面量）");
+                declare(ls.name, {ls.declared, -2, ls.structName});
+                if (ls.declared == Type::Struct && !structs_.count(ls.structName))
+                    error(ls.line, "未定义的结构体: " + ls.structName);
+                if (ls.declared == Type::Unknown || ls.declared == Type::Void)
+                    error(ls.line, "列表必须标注元素类型（如 let xs: int[*]）");
+                break;
+            }
             if (ls.init) {
                 Type initT = checkExpr(*ls.init);
                 int initLen = ls.init->arrayLen;
@@ -187,6 +207,10 @@ void TypeChecker::checkStmt(Stmt& s) {
                     ls.declared = (initT == Type::Void) ? Type::Int : initT;
                     ls.declaredLen = initLen;
                     ls.structName = ls.init->structName;
+                    if (initLen == -2) {   // let y = xs 会造成列表别名（C 里指针共享）
+                        errorAt(*ls.init, "列表不能整体赋值给新变量（用切片借用或逐元素访问）");
+                        ls.declaredLen = 0;
+                    }
                 } else if (initT != Type::Unknown) {
                     bool ok = (initT == ls.declared) && (ls.declaredLen == initLen) &&
                               (ls.declared != Type::Struct || ls.init->structName == ls.structName);
@@ -251,11 +275,20 @@ void TypeChecker::checkStmt(Stmt& s) {
                                        declTypeStr(vt.base, 0, vt.structName) + "，却赋以 " +
                                        declTypeStr(valT, 0, as.value->structName));
             } else {
+                // 列表不能整体赋值：C 里是指针别名（之后 realloc 会让另一份悬空）。
+                // 要复制内容：clear + 逐个 push；要共享：本来就是同一个全局。
+                if (vt.len == -2) {
+                    errorAt(as, "列表不能整体赋值（要复制内容请 clear 后逐个 push）");
+                    checkExpr(*as.value);
+                    break;
+                }
                 Type valT = checkExpr(*as.value);
                 int valLen = as.value->arrayLen;
+                if (valLen == -2)
+                    errorAt(*as.value, "列表不能整体赋给别的变量");
                 bool ok = (valT == vt.base) && (valLen == vt.len) &&
                           (vt.base != Type::Struct || as.value->structName == vt.structName);
-                if (vt.base != Type::Unknown && valT != Type::Unknown && !ok)
+                if (vt.base != Type::Unknown && valT != Type::Unknown && valLen != -2 && !ok)
                     error(as.line, "赋值类型不匹配: " + as.name + " 是 " +
                                        declTypeStr(vt.base, vt.len, vt.structName) + "，却赋以 " +
                                        declTypeStr(valT, valLen, as.value->structName));
@@ -500,7 +533,7 @@ Type TypeChecker::checkExpr(Expr& e) {
                 } else {
                     checkExpr(*c.args[0]);
                     if (c.args[0]->arrayLen == 0)
-                        error(c.line, "len 只能用于数组或切片");
+                        error(c.line, "len 只能用于数组、切片或列表");
                 }
                 c.type = Type::Int;
                 return Type::Int;
@@ -516,6 +549,50 @@ Type TypeChecker::checkExpr(Expr& e) {
                 }
                 c.type = Type::String;
                 return Type::String;
+            }
+            // 内建列表操作：push(xs,v) / pop(xs) / insert(xs,i,v) / remove_at(xs,i) / clear(xs)
+            // 第一个参数必须是列表（T[*]）变量——列表按值整体拷贝没有意义，增删要打在本体上
+            if (c.callee == "push" || c.callee == "pop" || c.callee == "insert" ||
+                c.callee == "remove_at" || c.callee == "clear") {
+                if (c.args.empty()) { error(c.line, c.callee + " 需要一个列表参数"); c.type = Type::Unknown; return c.type; }
+                Type lt = checkExpr(*c.args[0]);
+                if (c.args[0]->arrayLen != -2 || c.args[0]->kind != ExprKind::Var) {
+                    errorAt(*c.args[0], c.callee + " 的第一个参数必须是列表变量（T[*]）");
+                    for (size_t i = 1; i < c.args.size(); i++) checkExpr(*c.args[i]);
+                    c.type = Type::Unknown; return c.type;
+                }
+                const std::string& esn = c.args[0]->structName;
+                auto wantElem = [&](Expr& v) {
+                    Type vt = checkExpr(v);
+                    if (vt != Type::Unknown &&
+                        (vt != lt || v.arrayLen != 0 || (lt == Type::Struct && v.structName != esn)))
+                        errorAt(v, c.callee + " 的元素类型应为 " +
+                                     std::string(lt == Type::Struct ? esn.c_str() : typeName(lt)));
+                };
+                auto wantInt = [&](Expr& v) {
+                    Type vt = checkExpr(v);
+                    if (vt != Type::Int && vt != Type::Unknown) errorAt(v, "下标必须是 int");
+                };
+                if (c.callee == "push") {
+                    if (c.args.size() != 2) error(c.line, "push(列表, 值) 需要 2 个参数");
+                    else wantElem(*c.args[1]);
+                    c.type = Type::Void;
+                } else if (c.callee == "pop") {
+                    if (c.args.size() != 1) error(c.line, "pop(列表) 需要 1 个参数");
+                    c.type = lt; c.structName = esn;      // 返回末元素
+                } else if (c.callee == "insert") {
+                    if (c.args.size() != 3) error(c.line, "insert(列表, 下标, 值) 需要 3 个参数");
+                    else { wantInt(*c.args[1]); wantElem(*c.args[2]); }
+                    c.type = Type::Void;
+                } else if (c.callee == "remove_at") {
+                    if (c.args.size() != 2) error(c.line, "remove_at(列表, 下标) 需要 2 个参数");
+                    else wantInt(*c.args[1]);
+                    c.type = Type::Void;
+                } else {                                   // clear
+                    if (c.args.size() != 1) error(c.line, "clear(列表) 需要 1 个参数");
+                    c.type = Type::Void;
+                }
+                return c.type;
             }
             if (checkGenericCall(c)) return c.type;   // 泛型：推断实参类型并改写为实例
             auto it = fns_.find(c.callee);
@@ -536,7 +613,8 @@ Type TypeChecker::checkExpr(Expr& e) {
                     const VarType& pt = sig.params[i];
                     int aLen = c.args[i]->arrayLen;
                     // 切片形参：定长数组 T[N] 与切片 T[] 都可传入（前者自动借用为视图）
-                    bool lenOk = (aLen == pt.len) || (pt.len == -1 && (aLen > 0 || aLen == -1));
+                    bool lenOk = (aLen == pt.len) ||
+                                 (pt.len == -1 && (aLen > 0 || aLen == -1 || aLen == -2));
                     bool ok = (at == pt.base) && lenOk &&
                               (pt.base != Type::Struct || c.args[i]->structName == pt.structName);
                     // 定长数组借用为切片时必须是可取地址的左值（变量/字段/元素）

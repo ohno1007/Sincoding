@@ -30,6 +30,7 @@ std::string arrElemC(Type t, const std::string& sn) {
 }
 // 切片 T[] 的 C 表示：{ 元素指针, 长度 } —— 借用视图，不拷贝数据
 std::string sliceName(Type t, const std::string& sn) { return "Slice_" + arrTag(t, sn); }
+std::string listName(Type t, const std::string& sn) { return "List_" + arrTag(t, sn); }
 
 void addArr(Type t, const std::string& sn, int len,
             std::vector<ArrType>& out, std::set<std::string>& seen) {
@@ -145,7 +146,16 @@ std::string CodeGen::generate(const Program& prog) {
     out_ << "// 由 Sincoding 编译器自动生成，请勿手改\n";
     out_ << "#include <stdio.h>\n";
     out_ << "#include <stdbool.h>\n";
-    out_ << "#include <string.h>\n\n";
+    out_ << "#include <string.h>\n";
+    out_ << "#include <stdlib.h>\n\n";
+    out_ << "// 数组下标越界检查：报出错行号并终止（比未定义行为友好得多）\n"
+            "static long long sin_idx(long long i, long long n, int line) {\n"
+            "    if (i < 0 || i >= n) {\n"
+            "        fprintf(stderr, \"\\u8fd0\\u884c\\u65f6\\u9519\\u8bef(\\u7b2c%d\\u884c): \\u6570\\u7ec4\\u4e0b\\u6807 %lld \\u8d8a\\u754c(\\u957f\\u5ea6 %lld)\\n\", line, i, n);\n"
+            "        exit(1);\n"
+            "    }\n"
+            "    return i;\n"
+            "}\n\n";
     if (debug_) {                        // 调试钩子由 runtime 的 debug 模块实现
         out_ << "// --debug：调试钩子（F12 面板用）；发布构建不生成这些调用\n"
                 "extern void sin_dbg_line(long long line);\n"
@@ -244,6 +254,47 @@ std::string CodeGen::generate(const Program& prog) {
     // 前向声明
     for (auto& fn : prog.fns) if (!isTemplate(*fn)) emitFnProto(*fn);
     out_ << "\n";
+
+    // 动态列表：全局 let T[*] —— 每种元素类型发射一个 List_T + 操作助手。
+    // 增长 ×2，越界/空 pop 与 sin_idx 同风格报错退出。
+    {
+        std::set<std::string> lseen;
+        std::vector<std::pair<Type, std::string>> ltypes;
+        for (auto& g : prog.globals) {
+            if (g->kind != StmtKind::Let) continue;
+            auto& ls = static_cast<const LetStmt&>(*g);
+            if (ls.declaredLen != -2) continue;
+            if (lseen.insert(arrTag(ls.declared, ls.structName)).second)
+                ltypes.push_back({ls.declared, ls.structName});
+        }
+        for (auto& [t, sn] : ltypes) {
+            std::string L = listName(t, sn);
+            std::string E = (t == Type::Struct) ? sn : typeToC(t);
+            out_ << "typedef struct { " << E << "* data; long long len; long long cap; } " << L << ";\n";
+            out_ << "static void " << L << "_push(" << L << "* l, " << E << " v) {\n"
+                    "    if (l->len == l->cap) {\n"
+                    "        l->cap = l->cap ? l->cap * 2 : 8;\n"
+                    "        l->data = (" << E << "*)realloc(l->data, (size_t)l->cap * sizeof(" << E << "));\n"
+                    "    }\n"
+                    "    l->data[l->len++] = v;\n"
+                    "}\n";
+            out_ << "static " << E << " " << L << "_pop(" << L << "* l, int line) {\n"
+                    "    if (l->len == 0) { fprintf(stderr, \"\\u8fd0\\u884c\\u65f6\\u9519\\u8bef(\\u7b2c%d\\u884c): \\u5bf9\\u7a7a\\u5217\\u8868 pop\\n\", line); exit(1); }\n"
+                    "    return l->data[--l->len];\n"
+                    "}\n";
+            out_ << "static void " << L << "_insert(" << L << "* l, long long i, " << E << " v, int line) {\n"
+                    "    if (i < 0 || i > l->len) { fprintf(stderr, \"\\u8fd0\\u884c\\u65f6\\u9519\\u8bef(\\u7b2c%d\\u884c): insert \\u4e0b\\u6807 %lld \\u8d8a\\u754c(\\u957f\\u5ea6 %lld)\\n\", line, i, l->len); exit(1); }\n"
+                    "    " << L << "_push(l, v);\n"
+                    "    for (long long k = l->len - 1; k > i; k--) l->data[k] = l->data[k - 1];\n"
+                    "    l->data[i] = v;\n"
+                    "}\n";
+            out_ << "static void " << L << "_remove(" << L << "* l, long long i, int line) {\n"
+                    "    (void)sin_idx(i, l->len, line);\n"
+                    "    for (long long k = i; k + 1 < l->len; k++) l->data[k] = l->data[k + 1];\n"
+                    "    l->len--;\n"
+                    "}\n\n";
+        }
+    }
 
     // 全局变量（文件作用域）
     if (!prog.globals.empty()) {
@@ -393,6 +444,10 @@ void CodeGen::emitStmt(const Stmt& s) {
             auto& ls = static_cast<const LetStmt&>(s);
             indent();
             varTypes_[ls.name] = { ls.declared, ls.declaredLen };
+            if (ls.declaredLen == -2) {                 // 动态列表（全局，空起步）
+                out_ << listName(ls.declared, ls.structName) << " " << ls.name << " = {0, 0, 0};\n";
+                break;
+            }
             if (ls.declaredLen == -1)
                 out_ << sliceName(ls.declared, ls.structName) << " " << ls.name;
             else if (ls.declaredLen > 0)
@@ -420,7 +475,16 @@ void CodeGen::emitStmt(const Stmt& s) {
             auto& as = static_cast<const AssignStmt&>(s);
             indent();
             out_ << as.name;
-            if (as.index) { out_ << ".data["; emitExpr(*as.index); out_ << "]"; }
+            if (as.index) {
+                out_ << ".data[sin_idx(";
+                emitExpr(*as.index);
+                out_ << ", ";
+                auto vt = varTypes_.find(as.name);
+                int vlen = vt != varTypes_.end() ? vt->second.second : 0;
+                if (vlen > 0) out_ << vlen;
+                else out_ << as.name << ".len";
+                out_ << ", " << s.line << ")]";
+            }
             if (!as.field.empty()) out_ << "." << as.field;
             out_ << " = ";
             emitExpr(*as.value);
@@ -530,13 +594,21 @@ void CodeGen::emitArg(const Expr& a, const Param& p) {
         out_ << ".data, " << a.arrayLen << " }";
         return;
     }
+    if (p.len == -1 && a.arrayLen == -2) {              // 列表借用为切片视图（arrayx 的 sort/sum 直接可用）
+        out_ << "(" << sliceName(p.type, p.structName) << "){ ";
+        emitExpr(a);
+        out_ << ".data, ";
+        emitExpr(a);
+        out_ << ".len }";
+        return;
+    }
     emitExpr(a);
 }
 
 // len(x)：切片取运行时长度，定长数组编译期即知
 void CodeGen::emitLen(const Call& c) {
     const Expr& a = *c.args[0];
-    if (a.arrayLen == -1) { out_ << "("; emitExpr(a); out_ << ").len"; }
+    if (a.arrayLen == -1 || a.arrayLen == -2) { out_ << "("; emitExpr(a); out_ << ").len"; }  // 切片/列表：运行时长度
     else out_ << a.arrayLen << "LL";
 }
 
@@ -586,9 +658,12 @@ void CodeGen::emitExpr(const Expr& e) {
         case ExprKind::Index: {
             auto& ix = static_cast<const IndexExpr&>(e);
             emitExpr(*ix.arr);
-            out_ << ".data[";
+            out_ << ".data[sin_idx(";
             emitExpr(*ix.idx);
-            out_ << "]";
+            out_ << ", ";
+            if (ix.arr->arrayLen > 0) out_ << ix.arr->arrayLen;
+            else { emitExpr(*ix.arr); out_ << ".len"; }
+            out_ << ", " << e.line << ")]";
             break;
         }
         case ExprKind::ArrayLit: {
@@ -653,6 +728,29 @@ void CodeGen::emitExpr(const Expr& e) {
             if (c.callee == "print") { emitPrint(c); break; }
             if (c.callee == "str") { emitStr(c); break; }
             if (c.callee == "len") { emitLen(c); break; }
+            // 列表操作：List_T 助手（第一个参数是列表变量，取地址传入）
+            if ((c.callee == "push" || c.callee == "pop" || c.callee == "insert" ||
+                 c.callee == "remove_at" || c.callee == "clear") &&
+                !c.args.empty() && c.args[0]->arrayLen == -2) {
+                const Expr& xs = *c.args[0];
+                std::string L = listName(xs.type, xs.structName);
+                if (c.callee == "clear") {
+                    emitExpr(xs); out_ << ".len = 0";
+                } else if (c.callee == "push") {
+                    out_ << L << "_push(&"; emitExpr(xs); out_ << ", ";
+                    emitExpr(*c.args[1]); out_ << ")";
+                } else if (c.callee == "pop") {
+                    out_ << L << "_pop(&"; emitExpr(xs); out_ << ", " << e.line << ")";
+                } else if (c.callee == "insert") {
+                    out_ << L << "_insert(&"; emitExpr(xs); out_ << ", ";
+                    emitExpr(*c.args[1]); out_ << ", "; emitExpr(*c.args[2]);
+                    out_ << ", " << e.line << ")";
+                } else {                     // remove_at
+                    out_ << L << "_remove(&"; emitExpr(xs); out_ << ", ";
+                    emitExpr(*c.args[1]); out_ << ", " << e.line << ")";
+                }
+                break;
+            }
             // 泛型调用发射单态化后的实例名；普通调用就是原名
             const std::string& target = c.resolved.empty() ? c.callee : c.resolved;
             auto fit = fns_.find(target);

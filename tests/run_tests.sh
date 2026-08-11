@@ -67,6 +67,7 @@ run_ok str_concat "$ROOT/examples/str_concat.sin" $'Score: 42\npi=3.14\nflag=tru
 run_ok mathx "$ROOT/examples/mathx.sin" $'5\n10\n0\n7.5'
 run_ok use_std "$ROOT/examples/use_std.sin" $'5\n10\n2.5\n-1\n10\n7\n9'
 run_ok use_arrayx "$ROOT/examples/use_arrayx.sin" $'15\n60\n7\n5\n3\n0\n1\n1.5\n5'
+run_ok lists "$ROOT/examples/lists.sin" $'3\n60\n99\n10\n30\n2\n0'
 run_ok generics "$ROOT/examples/generics.sin" $'10\n7\n9\n1.5'
 
 echo
@@ -102,9 +103,11 @@ roundtrip() {
     if ! diff -q "$r1" "$r2" >/dev/null 2>&1; then
         echo "✗ $name: 序列化非幂等"; ((FAIL++)); return
     fi
-    # 2) 语义不变：往返后生成的 C 与原始一致
-    "$SINC" "$src" --emit c -o "$c0" >/dev/null 2>&1
-    "$SINC" "$r1"  --emit c -o "$c1" >/dev/null 2>&1
+    # 2) 语义不变：往返后生成的 C 与原始一致。
+    #    越界检查/列表操作在 C 里内嵌了**行号**实参，重序列化后行号平移属预期，
+    #    比对前归一化——注入的行号是唯一的裸整数实参（用户字面量一律带 LL 后缀）。
+    "$SINC" "$src" --emit c 2>/dev/null | sed -E 's/, [0-9]+\)/, 0)/g' > "$c0"
+    "$SINC" "$r1"  --emit c 2>/dev/null | sed -E 's/, [0-9]+\)/, 0)/g' > "$c1"
     if ! diff -q "$c0" "$c1" >/dev/null 2>&1; then
         echo "✗ $name: 往返后 C 代码改变"; ((FAIL++)); return
     fi
@@ -132,6 +135,7 @@ roundtrip str_concat "$ROOT/examples/str_concat.sin"
 roundtrip mathx "$ROOT/examples/mathx.sin"
 roundtrip use_std "$ROOT/examples/use_std.sin"
 roundtrip use_arrayx "$ROOT/examples/use_arrayx.sin"
+roundtrip lists "$ROOT/examples/lists.sin"
 roundtrip generics "$ROOT/examples/generics.sin"
 
 # ---- 模块系统：用户库（磁盘）/ 嵌套 import / extern 去重 / 循环检测 ----
@@ -187,6 +191,37 @@ if "$SINC" "$DIAGSRC" -o /dev/null 2>&1 | grep -q ':3:16: .*未声明的变量: 
 else
     echo "✗ 诊断列号: 未指向正确位置（$("$SINC" "$DIAGSRC" -o /dev/null 2>&1 | head -1)）"; ((FAIL++))
 fi
+
+# ---- 数组越界保护 + 列表运行时错误 ----
+echo
+echo "=== 越界保护：运行时报行号并终止（比 UB 友好） ==="
+OBSRC="$WORK/oob.sin"
+printf '%s\n' 'fn main() -> int {' '    let a: int[3] = [1, 2, 3]' '    let i = 5' '    print(a[i])' '    return 0' '}' > "$OBSRC"
+if "$SINC" "$OBSRC" -o "$WORK/oob.c" 2>/dev/null && "$CC" -std=c11 "$WORK/oob.c" -o "$WORK/oob" -lm 2>/dev/null; then
+    msg="$("$WORK/oob" 2>&1)"; rc=$?
+    if [[ $rc -ne 0 && "$msg" == *"第4行"* && "$msg" == *"越界"* ]]; then
+        echo "✓ 越界: a[5] 报「第4行 下标越界」并退出"; ((PASS++))
+    else echo "✗ 越界: 未拦住（rc=$rc msg=$msg）"; ((FAIL++)); fi
+else echo "✗ 越界: 构建失败"; ((FAIL++)); fi
+POPSRC="$WORK/pope.sin"
+printf '%s\n' 'let xs: int[*]' 'fn main() -> int {' '    print(pop(xs))' '    return 0' '}' > "$POPSRC"
+if "$SINC" "$POPSRC" -o "$WORK/pope.c" 2>/dev/null && "$CC" -std=c11 "$WORK/pope.c" -o "$WORK/pope" -lm 2>/dev/null; then
+    if ! "$WORK/pope" >/dev/null 2>&1 && "$WORK/pope" 2>&1 | grep -q "空列表 pop"; then
+        echo "✓ 列表: 空 pop 报错退出"; ((PASS++))
+    else echo "✗ 列表: 空 pop 未拦住"; ((FAIL++)); fi
+else echo "✗ 列表: 空 pop 用例构建失败"; ((FAIL++)); fi
+# 列表静态约束反例
+neg_list() {
+    local name="$1" want="$2"; shift 2
+    printf '%s\n' "$@" > "$WORK/$name.sin"
+    if "$SINC" "$WORK/$name.sin" -o /dev/null 2>&1 | grep -q "$want"; then
+        echo "✓ $name (正确拒绝)"; ((PASS++))
+    else echo "✗ $name: 未拒绝或错误信息不符"; ((FAIL++)); fi
+}
+neg_list list_local "只能声明为全局" 'fn main() -> int {' '    let xs: int[*]' '    return 0' '}'
+neg_list list_param "不能作参数" 'let xs: int[*]' 'fn f(a: int[*]) {}' 'fn main() -> int { return 0 }'
+neg_list list_assign "不能整体赋值" 'let a: int[*]' 'let b: int[*]' 'fn main() -> int {' '    a = b' '    return 0' '}'
+neg_list list_elem_type "元素类型应为 int" 'let xs: int[*]' 'fn main() -> int {' '    push(xs, 1.5)' '    return 0' '}'
 
 # ---- 注释保真：--emit src 原样写回注释，且幂等 ----
 echo
@@ -333,7 +368,7 @@ echo "=== 积木 → 文本：引擎往返一致（唯一序列化器） ==="
 if command -v node >/dev/null 2>&1 && [[ -f "$ROOT/editor/sinc.js" ]]; then
     b2s_bad=0
     for ex in hello fib types game strings arrays globals_for structs array_params \
-              struct_array struct_nested str_concat mathx use_std use_arrayx generics guardian; do
+              struct_array struct_nested str_concat mathx use_std use_arrayx generics guardian lists; do
         "$SINC" "$ROOT/examples/$ex.sin" --emit blocks > "$WORK/$ex.bj" 2>/dev/null
         "$SINC" "$ROOT/examples/$ex.sin" --emit src   > "$WORK/$ex.want" 2>/dev/null
         node -e "
@@ -350,7 +385,7 @@ if command -v node >/dev/null 2>&1 && [[ -f "$ROOT/editor/sinc.js" ]]; then
         fi
     done
     if [[ "$b2s_bad" == "0" ]]; then
-        echo "✓ blocks→src: 17 个例子逐字节一致（含 import/泛型/切片/嵌套结构体）"; ((PASS++))
+        echo "✓ blocks→src: 18 个例子逐字节一致（含 import/泛型/切片/列表/嵌套结构体）"; ((PASS++))
     else
         echo "✗ blocks→src: $b2s_bad 个不一致"; ((FAIL++))
     fi

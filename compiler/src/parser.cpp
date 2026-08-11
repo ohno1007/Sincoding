@@ -68,6 +68,11 @@ Type Parser::parseType(std::string& structName) {
 int Parser::parseArraySuffix() {
     if (!match(TokKind::LBracket)) return 0;
     if (match(TokKind::RBracket)) return -1;          // T[] —— 切片（长度在运行时随值携带）
+    if (check(TokKind::Star)) {                       // T[*] —— 动态列表（可增删，长度运行时变化）
+        advance();
+        expect(TokKind::RBracket, "']'");
+        return -2;
+    }
     const Token& n = expect(TokKind::Int, "数组长度");
     int len = (int)std::strtoll(n.text.c_str(), nullptr, 10);
     expect(TokKind::RBracket, "']'");

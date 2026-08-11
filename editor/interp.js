@@ -11,6 +11,21 @@
 
   class ReturnSignal { constructor(v) { this.value = v; } }
 
+  // 聚合值语义：数组/结构体在 let / 赋值 / 传参时按值拷贝（与生成的 C 一致）。
+  // 切片（声明 len === -1）是刻意的借用视图，不拷贝。
+  function deepVal(v) {
+    if (Array.isArray(v)) return v.map(deepVal);
+    if (v && typeof v === "object") { const o = {}; for (const k in v) o[k] = deepVal(v[k]); return o; }
+    return v;
+  }
+  // 数组越界：与生成的 C 的运行时检查同语义（报行号，终止运行）
+  function checkIndex(arr, ix, line) {
+    if (!Array.isArray(arr)) return ix;
+    if (ix < 0 || ix >= arr.length)
+      throw new Error("第" + (line || "?") + "行: 数组下标 " + ix + " 越界（长度 " + arr.length + "）");
+    return ix;
+  }
+
   class SinPreview {
     constructor(canvas) {
       this.canvas = canvas;
@@ -238,13 +253,17 @@
       switch (node.block) {
         case "let": {
           let v = node.value !== undefined ? yield* this.eval(node.value, env) : this.defaultVal(node);
+          if (node.len !== -1) v = deepVal(v);   // 切片是借用视图，别的聚合按值拷贝
           env[env.length - 1].set(node.name, v);
           break;
         }
         case "assign": {
-          if (node.field) { const o = this.lookup(env, node.name); if (o) o[node.field] = yield* this.eval(node.value, env); }
-          else if (node.index) { const a = this.lookup(env, node.name); const ix = yield* this.eval(node.index, env); a[ix] = yield* this.eval(node.value, env); }
-          else this.setVar(env, node.name, yield* this.eval(node.value, env));
+          if (node.field) { const o = this.lookup(env, node.name); if (o) o[node.field] = deepVal(yield* this.eval(node.value, env)); }
+          else if (node.index) {
+            const a = this.lookup(env, node.name); const ix = yield* this.eval(node.index, env);
+            a[checkIndex(a, ix, node.line)] = deepVal(yield* this.eval(node.value, env));
+          }
+          else this.setVar(env, node.name, deepVal(yield* this.eval(node.value, env)));
           break;
         }
         case "if":
@@ -275,6 +294,7 @@
     }
 
     defaultVal(node) {
+      if (node.len === -2) return [];        // 动态列表：空起步
       if (node.len > 0) return new Array(node.len).fill(node.type === "float" ? 0 : (node.type === "bool" ? false : (node.type === "string" ? "" : 0)));
       if (node.type === "bool") return false;
       if (node.type === "string") return "";
@@ -290,7 +310,12 @@
         case "var": return this.lookup(env, node.name);
         case "unary": { const v = yield* this.eval(node.operand, env); return node.op === "-" ? -v : !v; }
         case "binary": {
-          const l = yield* this.eval(node.lhs, env), r = yield* this.eval(node.rhs, env);
+          // && / || 必须短路（与 C 一致）：j >= 0 && xs[j] > k 这类写法
+          // 依赖右侧不被求值——否则越界检查会在守卫本该拦住的地方误报
+          const l = yield* this.eval(node.lhs, env);
+          if (node.op === "&&" && !l) return false;
+          if (node.op === "||" && l) return true;
+          const r = yield* this.eval(node.rhs, env);
           return this.binop(node.op, l, r);
         }
         case "call": {
@@ -298,7 +323,7 @@
           for (const a of node.args) args.push(yield* this.eval(a, env));
           return yield* this.callFn(node.callee, args);
         }
-        case "index": { const a = yield* this.eval(node.arr, env); const i = yield* this.eval(node.idx, env); return a[i]; }
+        case "index": { const a = yield* this.eval(node.arr, env); const i = yield* this.eval(node.idx, env); return a[checkIndex(a, i, node.line)]; }
         case "array": {
           const out = [];
           for (const e of node.elems) out.push(yield* this.eval(e, env));
@@ -335,9 +360,12 @@
       const fn = this.fns[name];
       if (!fn) throw new Error("未定义函数 " + name);
       const scope = new Map();
-      (fn.params || []).forEach((p, i) => scope.set(p.name, args[i]));
+      (fn.params || []).forEach((p, i) =>
+        scope.set(p.name, p.len === -1 ? args[i] : deepVal(args[i])));
       this.stack.push(name);                      // 调用栈（调试面板显示）
-      try { yield* this.execList(fn.body, [scope]); }
+      // 环境栈底是共享全局作用域——C 里全局对所有函数可见，预览必须一致
+      // （此前漏挂，函数体里读全局会无声得到 0）
+      try { yield* this.execList(fn.body, [this.globalScope, scope]); }
       catch (e) { if (e instanceof ReturnSignal) return e.value; throw e; }
       finally { this.stack.pop(); }
       return 0;
@@ -468,6 +496,20 @@
       if (s.bubble) { ctx.fillStyle = "#000"; ctx.font = "16px sans-serif"; ctx.fillText(s.bubble, cx + z / 2, cy - z / 2 - 6); }
     },
     key_down(a) { return this.world.keys.has(a[0]); },
+    // ---- 动态列表（全局 T[*]）：与生成的 C 的 List_T 助手同语义 ----
+    push(a) { a[0].push(deepVal(a[1])); },
+    pop(a) { if (!a[0].length) throw new Error("对空列表 pop"); return a[0].pop(); },
+    insert(a) {
+      const l = a[0], i = a[1];
+      if (i < 0 || i > l.length) throw new Error("insert 下标 " + i + " 越界（长度 " + l.length + "）");
+      l.splice(i, 0, deepVal(a[2]));
+    },
+    remove_at(a) {
+      const l = a[0], i = a[1];
+      if (i < 0 || i >= l.length) throw new Error("remove_at 下标 " + i + " 越界（长度 " + l.length + "）");
+      l.splice(i, 1);
+    },
+    clear(a) { a[0].length = 0; },
     key_pressed_space() { return this.pressedNow.has(32); },
     key_pressed_left()  { return this.pressedNow.has(263); },
     key_pressed_right() { return this.pressedNow.has(262); },
