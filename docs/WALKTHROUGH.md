@@ -94,33 +94,42 @@ IDE 具备 Scratch 没有的「真编程」能力：
 
 ### 2.3 编译发布
 
+**工具链不用你自己准备**，一条命令装齐（已装过的自动跳过）：
+
+```bash
+tools/setup_toolchains.sh          # native/web/windows/android/sdk 全装
+tools/setup_toolchains.sh --check  # 只看各目标是否就绪
+```
+
+之后直接构建即可——不需要 `source emsdk_env.sh`，也不需要 `export ANDROID_NDK`，
+构建脚本会自己发现并激活工具链：
+
 ```bash
 # 先构建编译器
 cmake -S compiler -B compiler/build && cmake --build compiler/build
 
-# 原生 Linux（需 raylib）
+# 原生 Linux
 tools/build_native.sh examples/guardian.sin out/guardian
 
-# Web(wasm)（需 emscripten + raylib-web）；末参数是造型资源目录
+# Web(wasm)；末参数是造型资源目录（随 wasm 预载打包）
 tools/build_web.sh examples/guardian.sin out/guardian-web examples/assets/guardian
 
-# Windows .exe（需 MinGW-w64 + raylib-win）
+# Windows .exe
 tools/build_windows.sh examples/guardian.sin out/guardian.exe
 
-# Android arm64 .so（需 NDK + raylib-android）→ 放进 APK 的 jniLibs/<abi>/
-tools/build_android.sh examples/guardian.sin out/libsincoding.so
-# 一步打成可安装签名 APK（另需 Android SDK build-tools）
+# Android：可直接 adb install 的签名 APK（造型随 assets 入包）
 tools/build_apk.sh examples/guardian.sin out/guardian.apk Guardian
+# 只要原生库时：tools/build_android.sh examples/guardian.sin out/libsincoding.so
 ```
 
-**四端交叉编译均已端到端验证**（`tests/run_tests.sh`，缺工具链则跳过）：
+**四端成品均已端到端验证**（`tests/run_tests.sh`，缺工具链则跳过）：
 
 | 目标 | 产物 | 验证方式 |
 |---|---|---|
 | Linux | 原生二进制 | 无头 raylib 渲染 + 计分逻辑 |
 | Web | `.html + .wasm + .data` | Chromium 渲染截图（含造型预载） |
 | Windows | `.exe` | PE32+ MS Windows 可执行 |
-| Android | `.so`（→ APK） | ARM aarch64 + 导出 `ANativeActivity_onCreate` |
+| Android | 签名 `.apk` | `aapt2` 解析 Manifest + arm64 原生库 + `apksigner` 验签 |
 
 编辑器里也可以「一键发布」弹窗勾选平台；**单文件 HTML** 目标完全在浏览器内生成
 （内联解释器 + 程序 + 造型），双击即玩、免任何工具链。

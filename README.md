@@ -3,9 +3,12 @@
 类似 Scratch 的图形化编程工具：用户通过**积木**或**文本**编写程序，
 程序使用自研语言（语法类似 Lua/Python），**转译为 C** 后编译为各平台原生应用。
 
-> 完全自研 · imgui + Qt 编辑器 · raylib 运行时 · 多平台（Windows / Android / Web）
+> 完全自研 · 零依赖 Web IDE（积木 ⇄ 文本 + 悬停类型/查找引用/F2 重命名）
+> · raylib 运行时 · **四端成品**（Linux / Windows / Web / Android 签名 APK）
 
-详细技术设计见 [`docs/DESIGN.md`](docs/DESIGN.md)，语言参考见 [`docs/LANGUAGE.md`](docs/LANGUAGE.md)。
+上手教程见 [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md)，语言参考见 [`docs/LANGUAGE.md`](docs/LANGUAGE.md)，
+方向与架构见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，原始技术设计见 [`docs/DESIGN.md`](docs/DESIGN.md)。
+（编辑器实现从设计初稿的 imgui+Qt 调整为 Web IDE，理由见 ROADMAP；imgui 改用于原生成品的调试面板。）
 
 ---
 
@@ -18,11 +21,11 @@
 | 0 | **最小垂直切片**：语言 → C → raylib → 可运行的"方向键移动精灵"成品 | ✅ 已跑通（无头渲染验证，见下图） |
 | 1 | 语言 → C 转译器（Lexer/Parser/类型检查/代码生成） | ✅ 已完成，斐波那契等用例可编译运行 |
 | 2 | runtime.c 基于 raylib（舞台/精灵/输入/声音） | ✅ 运行时 + 桥接层落地，方块角色已渲染 |
-| 3 | 积木编辑器接 AST（积木 ⇄ 文本双向同步） | 🚧 单页 IDE：无限画布 / 多精灵·多页积木 / 编辑写回 / **积木拖拽重排** / 造型画板 / **舞台（造型即纹理）**|
-| 4 | CMake 多平台（Web → Windows → Android） | ✅ **Web(wasm) / Windows(.exe) / Android(.so) 三平台均打通**（iOS 按设计放弃） |
+| 3 | 积木编辑器接 AST（积木 ⇄ 文本双向同步） | ✅ 单页 IDE：无限画布 / 多精灵·多页积木 / 拖拽重排 / 造型画板 / 舞台 / **mini-LSP：悬停类型·查找引用·F2 重命名** |
+| 4 | CMake 多平台（Web → Windows → Android） | ✅ **四端成品全通**：Linux 原生 / Web(wasm) / Windows(.exe) / Android **签名 APK**（iOS 按设计放弃） |
 | 5 | JSON 桥接外部 ELF（静态 + 动态） | ✅ 静态链接 + 动态 dlopen/dlsym 均打通（含三层类型映射） |
 
-> 设计文档的 6 个阶段（0–5）已全部落地，并各有可复现的验证（`tests/run_tests.sh`，共 48 项）。
+> 设计文档的 6 个阶段（0–5）已全部落地，并各有可复现的验证（`tests/run_tests.sh`，共 69 项）。
 
 核心设计原则：**AST 是唯一真相源**。积木是 AST 的可视化渲染，文本是 AST 的序列化。
 
@@ -123,6 +126,17 @@ python3 -m http.server 8000 --directory web-demo        # 浏览器开 http://lo
 
 ## 快速开始
 
+### 0. 装工具链（一条命令，已装过的自动跳过）
+
+```bash
+tools/setup_toolchains.sh          # native/web/windows/android/sdk 全装
+tools/setup_toolchains.sh --check  # 只看各目标是否就绪
+```
+
+装进仓库内 `.toolchains/`，不污染系统；系统里已装好的会被自动识别、不重复装。
+装完之后**不需要**再 `source emsdk_env.sh` 或 `export ANDROID_NDK`——
+所有 `build_*.sh` 会自动发现并激活工具链。
+
 ### 1. 构建编译器 `sinc`
 
 ```bash
@@ -145,7 +159,7 @@ gcc fib.c -o fib && ./fib
 
 也可以直接打印生成的 C（不带 `-o` 时输出到 stdout），或用 `--tokens` 查看词法结果。
 
-### 3. 编出图形成品（需要 raylib）
+### 3. 编出图形成品
 
 通过 `extern fn` 声明的运行时函数（见 `runtime/prelude.h`），程序可以开窗口、画角色、读按键：
 
@@ -228,7 +242,6 @@ sinc examples/fib.sin --emit c        # AST → C 代码（编译产物）
 ## 编成 Web(wasm) 成品
 
 ```bash
-# 需要 emscripten（emcmake）+ raylib 的 web 静态库（/usr/local/lib/web/libraylib.a）
 tools/build_web.sh examples/game.sin out_web
 # wasm 不支持 file://，用 HTTP 服务器打开：
 python3 -m http.server 8000 --directory out_web   # 浏览器访问 http://localhost:8000
@@ -240,7 +253,6 @@ python3 -m http.server 8000 --directory out_web   # 浏览器访问 http://local
 ## 编成 Windows .exe（MinGW 交叉编译）
 
 ```bash
-# 需要 MinGW-w64 + raylib 的 Windows 静态库（/usr/local/lib/win/libraylib.a）
 tools/build_windows.sh examples/game.sin out/game.exe   # 产出单文件 PE32+ exe
 ```
 
@@ -249,9 +261,7 @@ tools/build_windows.sh examples/game.sin out/game.exe   # 产出单文件 PE32+ 
 ## 打包 Android（一键出可安装 APK）
 
 ```bash
-# 需要 Android NDK + raylib(Android) 静态库 + SDK build-tools(aapt2/zipalign/apksigner) + 平台 android.jar
-ANDROID_NDK=/usr/lib/android-ndk ANDROID_SDK_ROOT=/path/to/android-sdk \
-  tools/build_apk.sh examples/guardian.sin dist/guardian.apk "守护者"
+tools/build_apk.sh examples/guardian.sin dist/guardian.apk "守护者"
 adb install dist/guardian.apk      # 直接装到手机
 ```
 
@@ -263,15 +273,15 @@ adb install dist/guardian.apk      # 直接装到手机
 也可只产原生库再走 Gradle 壳（见 `templates/android/`）：
 
 ```bash
-ANDROID_NDK=/usr/lib/android-ndk \
-  tools/build_android.sh examples/game.sin templates/android/jniLibs/arm64-v8a/libsincoding.so
+tools/build_android.sh examples/game.sin templates/android/jniLibs/arm64-v8a/libsincoding.so
 ```
 
 ## 完整项目示例：共享状态小游戏「家园守护者」
 
-`examples/guardian.sin` 是一个用**项目级共享状态**组织的完整游戏：一个全局结构体
-`GameState{score,lives,level}` + 多条全局并行数组（下落物坐标/种类/句柄）+ 全局玩家坐标，
-被同一份逻辑读写。方向键移动挡板接金币（+分）、躲炸弹（-命），每 5 分升级加速。
+`examples/guardian.sin` 是一个用**正经数据结构**组织的完整游戏：全局 `GameState{score,lives,level}`
++ **`Faller` 结构体数组**（每个下落物的坐标/种类/句柄聚成一个结构体），逻辑用「取出 → 改 → 放回」
+的值语义处理，重置与接住判定抽成**接收/返回结构体的函数**。
+方向键移动挡板接金币（+分）、躲炸弹（-命），每 5 分升级加速。
 
 角色外观用**造型 PNG**（`sprite_load` 把造型当纹理）：金币 `coin.png`、炸弹 `bomb.png`、
 挡板 `paddle.png`（`tools/make_costumes.py` 零依赖生成，见 `examples/assets/guardian/`）。
