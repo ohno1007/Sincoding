@@ -126,8 +126,10 @@
   const textOut = document.getElementById("text-out");
   const textHl = document.querySelector("#text-hl code");
   function fullModel() {
-    // structs / globals 来自项目级共享状态，program 来自当前精灵
-    return { structs: project.structs || [], globals: project.globals || [], program: sprite().program };
+    // imports / structs / globals 都是项目级共享状态，program 来自当前精灵。
+    // imports 必须带上——漏掉会让积木写回时把用户的 import 行整行删掉。
+    return { imports: project.imports || [], structs: project.structs || [],
+             globals: project.globals || [], program: sprite().program };
   }
   function setTextValue(v) { textOut.value = v; syncHighlight(); }
   // 积木 → 文本：交给 wasm 引擎（唯一序列化器）。
@@ -792,6 +794,7 @@
     prog.forEach((f) => { if (oldPos[f.name]) { f._x = oldPos[f.name].x; f._y = oldPos[f.name].y; } });
     placeFns(prog);
     // 结构体/全局写回到项目级共享状态（编辑任一精灵的文本都更新共享状态）
+    project.imports = blk.imports || [];
     project.structs = blk.structs || [];
     project.globals = blk.globals || [];
     sprite().program = prog;
@@ -1493,7 +1496,24 @@
     { id: "pen", name: "画笔", color: "#0FBD8C", items: ["pen_clear", "pen_color", "pen_size", "pen_line", "pen_dot"] },
     { id: "platform", name: "平台", color: "#5CB1D6", items: ["if_mouse", "let_mouse_x", "let_mouse_y", "let_random", "let_screen_w"] },
     { id: "events", name: "事件 / 声音", color: "#FFBF00", items: ["if_key", "if_key_right", "if_key_up", "if_key_down", "broadcast", "if_received", "play_tone", "play_sound"] },
+    { id: "modules", name: "模块 / 库", color: "#CF63CF",
+      items: [{ special: "addImport", label: "导入库…" }] },
   ];
+
+  // 内置标准库清单（供「导入库」快捷选择；也可手输任意模块名）
+  const STD_MODULES = ["std/mathx", "std/arrayx"];
+  function addImport() {
+    const cur = (project.imports || []).join("、") || "（无）";
+    const name = (prompt("导入哪个库？\n内置：" + STD_MODULES.join(" / ") +
+                         "\n（也可填同目录下的 .sin 文件名）\n\n已导入：" + cur,
+                         STD_MODULES[1]) || "").trim();
+    if (!name) return;
+    project.imports = project.imports || [];
+    if (project.imports.includes(name)) { setTextStatus("已经导入过 " + name, "warn"); return; }
+    project.imports.push(name);
+    refreshText();     // 写回文本 → 触发重新解析 → 库积木自动出现在调色板
+    onTextEdited();
+  }
 
   // ---- 导入即得积木：由 import 的库函数**签名**自动生成分类 ----
   // 参数类型决定槽位默认值，返回类型决定是语句块（void）还是 reporter（有返回值）。
@@ -1541,6 +1561,18 @@
   }
   // 自制积木的预览（函数定义帽子块外观）
   function specialPreview(sp) {
+    if (sp.special === "addImport") {          // 导入库：显示当前已导入的模块
+      const blk = el("div", "block");
+      const row = el("div", "hdr");
+      row.append(el("span", "label", "导入"), el("span", "param", "库…"));
+      blk.append(row);
+      (project.imports || []).forEach((m) => {
+        const r = el("div", "hdr");
+        r.append(el("span", "kw", "已导入"), el("span", "param", m));
+        blk.append(r);
+      });
+      return blk;
+    }
     if (sp.special === "addFn") {
       const blk = el("div", "block fn hat");
       const row = el("div", "hdr");
@@ -1628,7 +1660,7 @@
           const up = () => {
             window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
             if (started) return;
-            if (special) { if (it.special === "addFn") addFn(); }
+            if (special) { if (it.special === "addFn") addFn(); else if (it.special === "addImport") addImport(); }
             else if (lib) { if (!isReporter) addStmtNode(mk()); }  // reporter 只能拖入槽位
             else if (!isReporter) addStmt(it);
           };

@@ -271,6 +271,12 @@ if command -v node >/dev/null 2>&1 && \
     else
         echo "✗ IDE mini-LSP: 验证失败（$rout）"; ((FAIL++))
     fi
+    # import 在积木侧不丢失 + 可从调色板可视化添加
+    if iout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_import_blocks.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ import 积木: 编辑积木不丢 import + 调色板可添加（$iout）"; ((PASS++))
+    else
+        echo "✗ import 积木: 验证失败（$iout）"; ((FAIL++))
+    fi
     # 预览 = 成品：import 的库函数在预览里也能真正执行（不只是有积木）
     if pout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_lib_preview.js" "$ROOT/editor/index.html" 2>&1)"; then
         echo "✓ 预览库调用: import 的库函数在预览里执行正确（$pout）"; ((PASS++))
