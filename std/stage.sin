@@ -23,6 +23,7 @@ extern fn sprite_x(s: int) -> float
 extern fn sprite_y(s: int) -> float
 extern fn sprite_draw(s: int)
 extern fn sprite_touching(a: int, b: int) -> bool
+// 朝向按数学约定：0° 朝右、90° 朝上（逆时针）；预览与成品一致
 extern fn sprite_move(s: int, steps: float)
 extern fn sprite_turn(s: int, degrees: float)
 extern fn sprite_point(s: int, degrees: float)

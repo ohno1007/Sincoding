@@ -394,7 +394,8 @@
     if (!c || !window.SinPreview) return;
     preview = new window.SinPreview(c);
     const run = document.getElementById("pv-run"), stop = document.getElementById("pv-stop");
-    if (run) run.addEventListener("click", runPreview);
+    // 绿旗开跑后立刻聚焦画布：方向键/字母键马上生效，不用再点一下画面
+    if (run) run.addEventListener("click", () => { runPreview(); c.focus(); });
     if (stop) stop.addEventListener("click", () => { preview.stop(); setPvStatus("已停止", ""); });
     c.addEventListener("pointerdown", () => c.focus());
     // 执行高亮：解释器每执行一个积木就回调；按节点高亮其 DOM（节流，避免高频闪烁）
@@ -409,6 +410,7 @@
     if (bp) bp.addEventListener("click", () => { if (preview) preview.dbgPause(); });
     if (bs) bs.addEventListener("click", () => { hidePausePanel(); if (preview) preview.dbgStep(); });
     if (br) br.addEventListener("click", () => { hidePausePanel(); setPvStatus("运行中", "ok"); if (preview) preview.dbgResume(); });
+    window._sinPreview = preview;      // 测试探针：按键映射/世界状态可观测
   }
 
   // ---------------- 调试器（M5）：断点 / 单步 / 变量面板 / 调用栈 ----------------
@@ -904,6 +906,14 @@
     if (!modal || !btn) return;
     function loadTemplate(t) {
       modal.hidden = true;
+      // 模板是完整作品：替换**整个项目**（其余精灵一并清掉），而不是只换当前精灵——
+      // 否则旧精灵的脚本还在后台跑，和模板混在一起，预览出鬼画面。撤销可回退整次替换。
+      project.sprites = [{ name: "精灵1", icon: "🎭", program: [], costumes: [] }];
+      project.cur = 0;
+      project.globals = []; project.structs = []; project.imports = [];
+      if (ce) ce.setStore(project.sprites[0].costumes);
+      selected = null;
+      renderSpriteBar();
       setTextValue(t.src);
       onTextEdited();          // 引擎解析 → 积木/共享状态/预览全部联动；撤销可回退
       setPvStatus("已载入示例「" + t.name + "」", "ok");
@@ -1015,7 +1025,9 @@
 
   function finishStmtDrop() {
     if (!drag.fromList) {                 // 来自调色板的新积木：有落点就插入，没有就丢弃
-      if (drag.target) drag.target.list.splice(drag.target.index, 0, drag.node);
+      if (drag.target)
+        drag.target.list.splice(drag.target.index, 0,
+                                fixVars(drag.node, fnOfList(drag.target.list)));
       render(); return;
     }
     if (!drag.target) {                   // 没落点：拖到调色板 = 删除，否则原样复位
@@ -1048,7 +1060,7 @@
       window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
       ghost.remove(); document.body.classList.remove("dragging-block");
       if (drag.slotEl) drag.slotEl.classList.remove("slot-hover");
-      if (drag.slot) drag.slot.replace(drag.node); else render();
+      if (drag.slot) drag.slot.replace(fixVars(drag.node, fnOfExpr(drag.slot.node))); else render();
       drag = null;
     };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
@@ -2066,14 +2078,86 @@
     r_key: () => C("key_down", C("key_left")), r_received: () => C("received", S("go")),
     r_sprite_x: () => C("sprite_x", Vr("s")), r_sprite_y: () => C("sprite_y", Vr("s")),
   };
+  // ---- 拖出积木的默认变量自动接线（占位名 → 作用域内第一个同类变量） ----
+  // 调色板积木引用占位变量（s=精灵、xs=列表、a=数组、x=数值）。落进脚本时若作用域里
+  // 没有同名变量，就映射到第一个同类真实变量——拖出来直接能跑，不再默默引用不存在的
+  // s（预览无声得 0，成品却编译报错，正是「预览≠成品」的一种）。
+  function scopeVarsOf(fn) {
+    const out = [];
+    ((fn && fn.params) || []).forEach((p) => out.push({ name: p.name, type: p.type, len: p.len || 0, sprite: false }));
+    const walk = (list) => (list || []).forEach((st) => {
+      if (st.block === "let")
+        out.push({ name: st.name, type: st.type, len: st.len || 0,
+                   sprite: !!(st.value && st.value.block === "call" &&
+                              (st.value.callee === "sprite_new" || st.value.callee === "sprite_load")) });
+      walk(st.then); walk(st.else); walk(st.body);
+    });
+    walk(fn && fn.body);
+    (project.globals || []).forEach((g) => out.push({ name: g.name, type: g.type, len: g.len || 0, sprite: false }));
+    return out;
+  }
+  function fixVars(node, fn) {
+    if (!fn || !node) return node;
+    const vars = scopeVarsOf(fn);
+    const names = new Set(vars.map((v) => v.name));
+    const first = (pred) => { const v = vars.find(pred); return v ? v.name : null; };
+    const ren = {};                        // 占位名 → 第一个同类变量（已有同名变量则不动）
+    if (!names.has("s"))  ren.s  = first((v) => v.sprite);
+    if (!names.has("xs")) ren.xs = first((v) => v.len === -2);
+    if (!names.has("a"))  ren.a  = first((v) => v.len > 0 || v.len === -1);
+    if (!names.has("x"))  ren.x  = first((v) => v.len === 0 && (v.type === "int" || v.type === "float") && !v.sprite);
+    if (!ren.s && !ren.xs && !ren.a && !ren.x) return node;
+    const map = (n) => (ren[n] ? ren[n] : n);
+    const fixExpr = (e) => {
+      if (!e || typeof e !== "object") return;
+      if (e.block === "var") { e.name = map(e.name); return; }
+      if (e.block === "field") {           // 结构体字段的变量槽是结构体占位，别映射成精灵
+        if (e.obj && e.obj.block !== "var") fixExpr(e.obj);
+        return;
+      }
+      ["lhs", "rhs", "operand", "cond", "arr", "idx", "obj", "value"].forEach((k) => fixExpr(e[k]));
+      (e.args || []).forEach(fixExpr); (e.elems || []).forEach(fixExpr);
+      (e.fields || []).forEach((f) => fixExpr(f.value));
+    };
+    const fixStmt = (s) => {
+      if (!s || typeof s !== "object") return;
+      if (s.block === "assign" && !s.field) s.name = map(s.name);   // x = x + 1 / a[i] = v
+      ["value", "cond", "index", "expr", "start", "end"].forEach((k) => fixExpr(s[k]));
+      (s.then || []).forEach(fixStmt); (s.else || []).forEach(fixStmt); (s.body || []).forEach(fixStmt);
+    };
+    if (node.block) { if (node.block === "binary" || node.block === "call" || node.block === "var" ||
+                          node.block === "index" || node.block === "field" || node.block === "unary") fixExpr(node);
+                      else fixStmt(node); }
+    return node;
+  }
+  // 语句落点（body 数组）→ 所属函数；表达式节点 → 所属函数（拖进槽位时用）
+  function fnOfList(list) {
+    let found = null;
+    const walk = (l, fn) => { if (!l || found) return; if (l === list) { found = fn; return; }
+      l.forEach((st) => { walk(st.then, fn); walk(st.else, fn); walk(st.body, fn); }); };
+    (sprite().program || []).forEach((f) => walk(f.body, f));
+    return found;
+  }
+  function fnOfExpr(target) {
+    const inExpr = (e) => { if (!e || typeof e !== "object") return false; if (e === target) return true;
+      for (const k of ["lhs", "rhs", "operand", "cond", "arr", "idx", "obj", "value"]) if (inExpr(e[k])) return true;
+      for (const a of (e.args || [])) if (inExpr(a)) return true;
+      for (const a of (e.elems || [])) if (inExpr(a)) return true;
+      for (const f of (e.fields || [])) if (inExpr(f.value)) return true;
+      return false; };
+    const inStmt = (s) => { if (!s || typeof s !== "object") return false;
+      for (const k of ["value", "cond", "index", "expr", "start", "end"]) if (inExpr(s[k])) return true;
+      return (s.then || []).some(inStmt) || (s.else || []).some(inStmt) || (s.body || []).some(inStmt); };
+    return (sprite().program || []).find((f) => (f.body || []).some(inStmt)) || null;
+  }
   function addStmt(kind) {
     if (!selected || !selected.body) return;
-    selected.body.push(NEW[kind]()); render();
+    selected.body.push(fixVars(NEW[kind](), selected)); render();
   }
   // 直接加入一个现成节点（库积木按签名生成，没有固定 kind）
   function addStmtNode(node) {
     if (!selected || !selected.body) return;
-    selected.body.push(node); render();
+    selected.body.push(fixVars(node, selected)); render();
   }
   // 新积木的空闲落点：排在当前所有脚本右侧，绝不压在既有函数/卡片上
   // （默认 (40,36) 恰是第一个函数的位置，新卡会被完全盖住、点不到，像没反应）

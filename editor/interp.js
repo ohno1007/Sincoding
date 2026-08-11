@@ -7,7 +7,24 @@
 (function (root) {
   "use strict";
 
-  const KEYMAP = { ArrowLeft: 263, ArrowRight: 262, ArrowUp: 265, ArrowDown: 264, " ": 32 };
+  // 键名 → raylib 键码。方向键/空格/回车显式列出；字母 A-Z(65-90) 与
+  // 数字 0-9(48-57) 的码值与 raylib 一致，按需换算（成品里 key_down(65) 就是 A）
+  const KEYMAP = { ArrowLeft: 263, ArrowRight: 262, ArrowUp: 265, ArrowDown: 264, " ": 32, Enter: 257 };
+  function keyCode(k) {
+    if (KEYMAP[k] !== undefined) return KEYMAP[k];
+    if (typeof k === "string" && k.length === 1) {
+      const u = k.toUpperCase().charCodeAt(0);
+      if ((u >= 65 && u <= 90) || (u >= 48 && u <= 57)) return u;   // 字母 / 数字
+    }
+    return undefined;
+  }
+
+  // %g 对齐：C 的 print/str 对浮点用 %g（6 位有效数字、去尾零）。
+  // JS 的 String(1/3) 会给 16 位，预览必须与成品打印一致。
+  function fmtNum(v) {
+    if (typeof v !== "number" || Number.isInteger(v) || !isFinite(v)) return String(v);
+    return String(parseFloat(v.toPrecision(6)));
+  }
 
   class ReturnSignal { constructor(v) { this.value = v; } }
 
@@ -50,14 +67,14 @@
       this.onPrint = null;
       canvas.tabIndex = 0;
       canvas.addEventListener("keydown", (e) => {
-        const c = KEYMAP[e.key];
+        const c = keyCode(e.key);
         if (c !== undefined) {
           if (!this.keys.has(c)) this.pressedQueue.add(c);   // 只有"从松到按"才算刚按下
           this.keys.add(c); e.preventDefault();
         }
       });
       canvas.addEventListener("keyup", (e) => {
-        const c = KEYMAP[e.key]; if (c !== undefined) this.keys.delete(c);
+        const c = keyCode(e.key); if (c !== undefined) this.keys.delete(c);
       });
       // 边沿检测："本帧刚按下"的键（keydown 入 pressedQueue，帧首搬到 pressedNow）
       this.pressedQueue = new Set();
@@ -316,7 +333,7 @@
           if (node.op === "&&" && !l) return false;
           if (node.op === "||" && l) return true;
           const r = yield* this.eval(node.rhs, env);
-          return this.binop(node.op, l, r);
+          return this.binop(node.op, l, r, node);
         }
         case "call": {
           const args = [];
@@ -339,11 +356,21 @@
       return 0;
     }
 
-    binop(op, l, r) {
+    binop(op, l, r, node) {
       switch (op) {
         case "+": return l + r; case "-": return l - r; case "*": return l * r;
-        case "/": return (Number.isInteger(l) && Number.isInteger(r)) ? Math.trunc(l / r) : l / r;
-        case "%": return l % r;
+        case "/":
+          // 浮点除法（引擎标记 ft）：真除；整数除法：除零报错（与生成的 C 同语义）+ 截断
+          if (node && node.ft) return l / r;
+          if (Number.isInteger(l) && Number.isInteger(r)) {
+            if (r === 0) throw new Error("第" + ((node && node.line) || "?") + "行: 除数为 0");
+            return Math.trunc(l / r);
+          }
+          return l / r;
+        case "%":
+          if (Number.isInteger(l) && Number.isInteger(r) && r === 0)
+            throw new Error("第" + ((node && node.line) || "?") + "行: 除数为 0");
+          return l % r;
         case "==": return l === r; case "!=": return l !== r;
         case "<": return l < r; case "<=": return l <= r; case ">": return l > r; case ">=": return l >= r;
         case "&&": return l && r; case "||": return l || r;
@@ -480,7 +507,16 @@
         const ready = t && (t.tagName === "CANVAS" ? (t.width > 0) : (t.complete && t.naturalWidth > 0));
         if (ready) {
           const tw = (t.naturalWidth || t.width) * k, th = (t.naturalHeight || t.height) * k;
-          ctx.drawImage(t, cx - tw / 2, cy - th / 2, tw, th);
+          const hd = s.heading || 0;
+          if (hd) {
+            // 贴图跟随朝向旋转（与 runtime 一致）：heading 是舞台系逆时针角，
+            // 画布 rotate 是屏幕系顺时针角——取负号
+            ctx.save(); ctx.translate(cx, cy); ctx.rotate(-hd * Math.PI / 180);
+            ctx.drawImage(t, -tw / 2, -th / 2, tw, th);
+            ctx.restore();
+          } else {
+            ctx.drawImage(t, cx - tw / 2, cy - th / 2, tw, th);
+          }
           if (s.bubble) { ctx.fillStyle = "#000"; ctx.font = "16px sans-serif"; ctx.fillText(s.bubble, cx + tw / 2, cy - th / 2 - 6); }
           return;
         }
@@ -578,8 +614,9 @@
     play_tone(a) { this.beep(a[0], a[1]); },
     to_float(a) { return a[0]; },
     to_int(a) { return Math.trunc(a[0]); },
-    // 内建 str(x)：标量转字符串（与生成的 C 语义一致；'+' 拼接在 binop 里天然可用）
-    str(a) { const v = a[0]; return typeof v === "boolean" ? (v ? "true" : "false") : String(v); },
+    // 内建 str(x)：标量转字符串（与生成的 C 语义一致；'+' 拼接在 binop 里天然可用；
+    // 浮点走 %g 六位有效数字，与 sin_str_from_float 对齐）
+    str(a) { const v = a[0]; return typeof v === "boolean" ? (v ? "true" : "false") : fmtNum(v); },
     // 内建 len(x)：数组/切片长度（切片在 JS 里就是同一个数组对象，天然共享）
     len(a) { const v = a[0]; return (v && v.length !== undefined) ? v.length : 0; },
     // libm 数学函数（对应 extern fn sqrt/sin/... 直接绑定 libm，程序需 -lm）
@@ -593,7 +630,19 @@
     fmin(a) { return Math.min(a[0], a[1]); },
     fmax(a) { return Math.max(a[0], a[1]); },
     pow(a) { return Math.pow(a[0], a[1]); },
-    print(a) { const t = String(a[0]); this.world.console.push(t); if (this.onPrint) this.onPrint(t); },
+    // libm 常用补齐（用户 extern fn 声明即可用；成品链接 -lm 的同名函数）
+    round(a) { const v = a[0]; return v < 0 ? -Math.round(-v) : Math.round(v); },  // C 的 round：半数远离零
+    trunc(a) { return Math.trunc(a[0]); },
+    atan2(a) { return Math.atan2(a[0], a[1]); },
+    asin(a) { return Math.asin(a[0]); },
+    acos(a) { return Math.acos(a[0]); },
+    atan(a) { return Math.atan(a[0]); },
+    log(a) { return Math.log(a[0]); },
+    log10(a) { return Math.log10(a[0]); },
+    exp(a) { return Math.exp(a[0]); },
+    fmod(a) { return a[0] % a[1]; },
+    hypot(a) { return Math.hypot(a[0], a[1]); },
+    print(a) { const t = fmtNum(a[0]); this.world.console.push(t); if (this.onPrint) this.onPrint(t); },
   };
 
   root.SinPreview = SinPreview;

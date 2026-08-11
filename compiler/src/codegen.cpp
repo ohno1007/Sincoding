@@ -156,6 +156,21 @@ std::string CodeGen::generate(const Program& prog) {
             "        exit(1);\n"
             "    }\n"
             "    return i;\n"
+            "}\n"
+            "// 整数除/模零检查：C 里是崩溃（SIGFPE），这里改成与预览同语义的中文报错\n"
+            "static long long sin_div(long long a, long long b, int line) {\n"
+            "    if (b == 0) {\n"
+            "        fprintf(stderr, \"\\u8fd0\\u884c\\u65f6\\u9519\\u8bef(\\u7b2c%d\\u884c): \\u9664\\u6570\\u4e3a 0\\n\", line);\n"
+            "        exit(1);\n"
+            "    }\n"
+            "    return a / b;\n"
+            "}\n"
+            "static long long sin_mod(long long a, long long b, int line) {\n"
+            "    if (b == 0) {\n"
+            "        fprintf(stderr, \"\\u8fd0\\u884c\\u65f6\\u9519\\u8bef(\\u7b2c%d\\u884c): \\u9664\\u6570\\u4e3a 0\\n\", line);\n"
+            "        exit(1);\n"
+            "    }\n"
+            "    return a % b;\n"
             "}\n\n";
     if (debug_) {                        // 调试钩子由 runtime 的 debug 模块实现
         out_ << "// --debug：调试钩子（F12 面板用）；发布构建不生成这些调用\n"
@@ -745,6 +760,13 @@ void CodeGen::emitExpr(const Expr& e) {
                 out_ << "(strcmp(";
                 emitExpr(*b.lhs); out_ << ", "; emitExpr(*b.rhs);
                 out_ << ") " << b.op << " 0)";
+                break;
+            }
+            // 整数除/模：走检查助手（除数为 0 报中文行号，而不是 SIGFPE 崩溃）
+            if ((b.op == "/" || b.op == "%") && b.lhs->type == Type::Int) {
+                out_ << (b.op == "/" ? "sin_div(" : "sin_mod(");
+                emitExpr(*b.lhs); out_ << ", "; emitExpr(*b.rhs);
+                out_ << ", " << e.line << ")";
                 break;
             }
             out_ << "(";

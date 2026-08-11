@@ -218,13 +218,15 @@ void rt_sprite_draw(rt_sprite s) {
         return;
     }
 
-    // 以纹理中心为锚点绘制
+    // 以纹理中心为锚点绘制。heading 是舞台系（y 向上）的逆时针角，
+    // raylib 的 rotation 是屏幕系（y 向下）的顺时针角——取负号才能让
+    // 贴图跟着运动方向转（90° 朝上时图也朝上）。
     float w = sp->tex.width * sp->scale;
     float h = sp->tex.height * sp->scale;
     Rectangle src = {0, 0, (float)sp->tex.width, (float)sp->tex.height};
     Rectangle dst = {pos.x, pos.y, w, h};
     Vector2 origin = {w * 0.5f, h * 0.5f};
-    DrawTexturePro(sp->tex, src, dst, origin, sp->heading, WHITE);
+    DrawTexturePro(sp->tex, src, dst, origin, -sp->heading, WHITE);
 
     if (sp->bubble[0] != '\0') {
         DrawText(sp->bubble, (int)(pos.x + w * 0.5f), (int)(pos.y - h * 0.5f - 20),
@@ -234,9 +236,10 @@ void rt_sprite_draw(rt_sprite s) {
 
 void rt_move(rt_sprite s, float steps) {
     if (!sprite_valid(s)) return;
+    // 朝向按数学约定：0° 朝右、90° 朝上（逆时针），与编辑器预览完全一致
     float rad = g_sprites[s].heading * (RT_PI / 180.0f);
     g_sprites[s].x += cosf(rad) * steps;
-    g_sprites[s].y -= sinf(rad) * steps; // 屏幕 y 与舞台 y 相反
+    g_sprites[s].y += sinf(rad) * steps;
 }
 
 void rt_goto(rt_sprite s, float x, float y) {

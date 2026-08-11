@@ -519,6 +519,46 @@ else
     echo "○ 跳过（未检测到 node 或 playwright）"
 fi
 
+# ---- 预览 = 成品：同一份 parity.sin，原生 stdout 与预览控制台逐行对测 ----
+echo
+echo "=== 预览 = 成品：运动方向 / 除法语义 / 打印格式 对测 ==="
+# 除零：原生成品报中文行号并退出，而不是 SIGFPE 崩溃（与预览同语义）
+printf 'fn main() -> int {\n    let n = 0\n    print(10 / n)\n    return 0\n}\n' > "$WORK/divz.sin"
+if "$SINC" "$WORK/divz.sin" -o "$WORK/divz.c" >/dev/null 2>&1 && \
+   "$CC" -std=c11 "$WORK/divz.c" -o "$WORK/divz" -lm 2>/dev/null; then
+    dout="$("$WORK/divz" 2>&1)"; drc=$?
+    if [[ $drc -ne 0 && "$dout" == *"除数为 0"* && "$dout" == *"第3行"* ]]; then
+        echo "✓ divzero-native: 除零报中文行号并退出（$dout）"; ((PASS++))
+    else
+        echo "✗ divzero-native: rc=$drc 输出=$dout"; ((FAIL++))
+    fi
+else
+    echo "✗ divzero-native: 构建失败"; ((FAIL++))
+fi
+if command -v node >/dev/null 2>&1 && \
+   NODE_PATH="$(npm root -g 2>/dev/null)" node -e "require('playwright')" >/dev/null 2>&1; then
+    PAR_EXP=""
+    if sin_have_native && command -v xvfb-run >/dev/null 2>&1; then
+        PARBIN="$WORK/parity"
+        # raylib 的 INFO/WARNING 日志会混进 stdout，滤掉只留 print 输出
+        if "$ROOT/tools/build_native.sh" "$ROOT/tests/parity.sin" "$PARBIN" >/dev/null 2>&1 && \
+           { xvfb-run -a -s "-screen 0 480x360x24" "$PARBIN" 2>/dev/null \
+             | grep -Ev '^(INFO|WARNING|ALSA)' >"$WORK/parity_native.txt"; }; then
+            PAR_EXP="$WORK/parity_native.txt"
+            echo "✓ parity-native: 原生成品跑通（$(tr '\n' '|' <"$PAR_EXP")）"; ((PASS++))
+        else
+            echo "✗ parity-native: 原生构建/运行失败"; ((FAIL++))
+        fi
+    fi
+    if pout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_parity.js" "$ROOT/editor/index.html" "$ROOT/tests/parity.sin" $PAR_EXP 2>&1)"; then
+        echo "✓ 预览=成品: 输出逐行一致 + 除零同语义 + 绿旗聚焦 + 全键映射 + 默认变量接线 + 模板整项目（$pout）"; ((PASS++))
+    else
+        echo "✗ 预览=成品: 验证失败（$pout）"; ((FAIL++))
+    fi
+else
+    echo "○ 跳过（未检测到 node 或 playwright）"
+fi
+
 # ---- 阶段 0：图形垂直切片（需要 raylib + xvfb，缺失则跳过） ----
 have_raylib() { sin_have_native; }
 

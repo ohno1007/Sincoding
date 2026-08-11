@@ -1,0 +1,36 @@
+// parity.sin — 「预览 = 成品」对测程序
+// 同一份源码：原生编译跑一遍、编辑器预览跑一遍，stdout / 控制台必须逐行相同。
+// 覆盖：运动方向约定（0°朝右 90°朝上）、整数/浮点除法、%g 打印格式。
+import "std/stage"
+
+fn main() -> int {
+    stage_init(480, 360)
+    let s = sprite_new(0.0, 0.0, 40.0)
+
+    sprite_point(s, 0.0)
+    sprite_move(s, 10.0)
+    print(to_int(sprite_x(s) * 100.0))
+    print(to_int(sprite_y(s) * 100.0))
+
+    sprite_move_to(s, 0.0, 0.0)
+    sprite_point(s, 90.0)
+    sprite_move(s, 10.0)
+    print(to_int(sprite_x(s) * 100.0))
+    print(to_int(sprite_y(s) * 100.0))
+
+    sprite_move_to(s, 0.0, 0.0)
+    sprite_turn(s, 45.0)
+    sprite_move(s, 10.0)
+    print(to_int(sprite_x(s) * 100.0))
+    print(to_int(sprite_y(s) * 100.0))
+
+    print(7 / 2)
+    print(0 - 7 / 2)
+    print(7 % 3)
+    print(7.0 / 2.0)
+    print(1.0 / 3.0)
+    print(str(2.5) + "|" + str(5))
+
+    stage_close()
+    return 0
+}

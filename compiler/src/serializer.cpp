@@ -378,6 +378,11 @@ struct JsonWriter {
             case ExprKind::Binary: {
                 auto& b = static_cast<const Binary&>(e);
                 str("binary"); out << ","; nl(); key("op"); str(b.op);
+                // 浮点除法标记：预览的 JS 数字分不清 7.0 和 7，靠它决定
+                // 「/」是整除（截断）还是真除（与生成的 C 同语义）
+                if (b.op == "/" && b.lhs->type == Type::Float) {
+                    out << ","; nl(); key("ft"); out << "true";
+                }
                 out << ","; nl(); key("lhs"); expr(*b.lhs);
                 out << ","; nl(); key("rhs"); expr(*b.rhs);
                 break;
