@@ -52,7 +52,7 @@ echo "[1/5] 交叉编译原生库（$ABIS）"
 for ABI in $ABIS; do
     mkdir -p "$TMP/lib/$ABI"
     ANDROID_NDK="$ANDROID_NDK" ANDROID_ABI="$ABI" \
-        RAYLIB_ANDROID_LIB="/usr/local/lib/android/$ABI/libraylib.a" \
+        RAYLIB_ANDROID_LIB="${RAYLIB_ANDROID_LIB_DIR:-/usr/local/lib/android}/$ABI/libraylib.a" \
         "$ROOT/tools/build_android.sh" ${DEBUG_FLAG[@]+"${DEBUG_FLAG[@]}"} \
         "$SRC" "$TMP/lib/$ABI/libsincoding.so" >/dev/null
     # 缩小体积：strip 调试符号
