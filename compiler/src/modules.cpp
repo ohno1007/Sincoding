@@ -137,4 +137,30 @@ bool resolveImports(Program& prog, const std::string& baseDir, std::vector<Diagn
     return r.ok;
 }
 
+bool builtinModuleSource(const std::string& name, std::string& out) {
+    return builtinModule(name, out);
+}
+
+bool injectBuiltinModule(Program& prog, const std::string& name) {
+    std::string src;
+    if (!builtinModule(name, src)) return false;
+    Lexer lexer(src);
+    Parser parser(lexer.tokenize());
+    Program mod = parser.parseProgram();
+
+    std::vector<FnPtr> fns;
+    for (auto& fn : mod.fns) {
+        bool dup = false;
+        for (auto& own : prog.fns)
+            if (own->name == fn->name) { dup = true; break; }   // 用户自己声明过就以他的为准
+        if (dup) continue;
+        fn->module = name;
+        fns.push_back(std::move(fn));
+    }
+    for (auto& st : mod.structs) { st->module = name; prog.structs.insert(prog.structs.begin(), std::move(st)); }
+    prog.fns.insert(prog.fns.begin(),
+                    std::make_move_iterator(fns.begin()), std::make_move_iterator(fns.end()));
+    return true;
+}
+
 } // namespace sincoding

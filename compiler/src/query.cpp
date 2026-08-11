@@ -5,6 +5,8 @@
 // hover / references / rename 都基于这一份出现表。
 #include "query.h"
 #include "serializer.h"
+#include <algorithm>
+#include <cctype>
 #include <string>
 #include <vector>
 
@@ -204,6 +206,234 @@ std::string applyRename(Program& prog, int line, int col, const std::string& new
                      : (cat == 'F') ? "字段：按同名近似替换（可能涉及多个结构体），请检查" : "";
     renameProgram(prog, cat, from, newName, fnIndex);
     return "{\"ok\":true,\"source\":" + jesc(serializeSource(prog)) + ",\"note\":" + jesc(note) + "}";
+}
+
+// ================= 代码补全 =================
+namespace {
+
+struct Cand { std::string text, kind, detail; };
+struct ScopeVar { std::string name, typ; };
+
+// 源码第 line 行（1-based）中 col 之前的文本
+std::string lineHead(const std::string& src, int line, int col) {
+    int cur = 1;
+    size_t i = 0;
+    for (; i < src.size() && cur < line; i++) if (src[i] == '\n') cur++;
+    size_t eol = src.find('\n', i);
+    std::string ln = src.substr(i, (eol == std::string::npos ? src.size() : eol) - i);
+    int take = col - 1;                       // col 是 1-based，光标在该列之前
+    if (take < 0) take = 0;
+    if (take > (int)ln.size()) take = (int)ln.size();
+    return ln.substr(0, take);
+}
+
+bool identChar(char c) { return isalnum((unsigned char)c) || c == '_'; }
+
+// 从字符串尾部摘出标识符（返回它并从 s 尾部删掉）
+std::string takeTrailingIdent(std::string& s) {
+    size_t e = s.size();
+    while (e > 0 && identChar(s[e - 1])) e--;
+    std::string id = s.substr(e);
+    if (!id.empty() && isdigit((unsigned char)id[0])) return "";   // 数字不是标识符
+    s.resize(e);
+    return id;
+}
+
+// 函数签名的可读形式：<T>(a: int, xs: int[]) -> int
+std::string fnSig(const FnDecl& f) {
+    std::string s;
+    if (!f.typeParams.empty()) {
+        s += "<";
+        for (size_t i = 0; i < f.typeParams.size(); i++) { if (i) s += ", "; s += f.typeParams[i]; }
+        s += ">";
+    }
+    s += "(";
+    for (size_t i = 0; i < f.params.size(); i++) {
+        if (i) s += ", ";
+        s += f.params[i].name + ": " + typeStr(f.params[i].type, f.params[i].len, f.params[i].structName);
+    }
+    s += ")";
+    if (f.ret != Type::Void) s += " -> " + typeStr(f.ret, f.retLen, f.retStruct);
+    return s;
+}
+
+// 收集块内、光标行之前声明的变量（近似：不区分嵌套块的生存期，只按行号截断）
+void collectVars(const Block& b, int upto, std::vector<ScopeVar>& out) {
+    for (auto& sp : b.stmts) {
+        const Stmt& s = *sp;
+        if (s.line > upto) continue;
+        switch (s.kind) {
+            case StmtKind::Let: {
+                auto& l = static_cast<const LetStmt&>(s);
+                Type t = l.declared != Type::Unknown ? l.declared : (l.init ? l.init->type : Type::Unknown);
+                int len = l.declaredLen ? l.declaredLen : (l.init ? l.init->arrayLen : 0);
+                std::string sn = !l.structName.empty() ? l.structName : (l.init ? l.init->structName : "");
+                out.push_back({l.name, typeStr(t, len, sn)});
+                break;
+            }
+            case StmtKind::For: {
+                auto& f = static_cast<const ForStmt&>(s);
+                out.push_back({f.var, "int"});
+                collectVars(*f.body, upto, out);
+                break;
+            }
+            case StmtKind::If: {
+                auto& i = static_cast<const IfStmt&>(s);
+                collectVars(*i.thenBlock, upto, out);
+                if (i.elseBlock) collectVars(*i.elseBlock, upto, out);
+                break;
+            }
+            case StmtKind::While: collectVars(*static_cast<const WhileStmt&>(s).body, upto, out); break;
+            case StmtKind::Block: collectVars(static_cast<const Block&>(s), upto, out); break;
+            default: break;
+        }
+    }
+}
+
+// 单态化产生的实例（total__int）不是用户写过的名字，不该出现在补全里
+bool isGenericInstance(const Program& prog, const FnDecl& f) {
+    if (f.module == "<generic>") return true;
+    size_t p = f.name.find("__");
+    if (p == std::string::npos) return false;
+    std::string base = f.name.substr(0, p);
+    for (auto& g : prog.fns) if (!g->typeParams.empty() && g->name == base) return true;
+    return false;
+}
+
+// 光标所在的用户函数下标（-1 = 顶层/全局区）
+int enclosingFn(const Program& prog, int line) {
+    int best = -1, bestLine = 0;
+    for (size_t i = 0; i < prog.fns.size(); i++) {
+        auto& f = *prog.fns[i];
+        if (!f.module.empty() || !f.body) continue;   // 导入/外部函数不含光标
+        if (f.line <= line && f.line >= bestLine) { bestLine = f.line; best = (int)i; }
+    }
+    return best;
+}
+
+const char* KEYWORDS[] = {"let", "fn", "if", "else", "while", "for", "in", "return",
+                          "extern", "struct", "import", "true", "false"};
+const char* PRIMS[] = {"int", "float", "bool", "string", "void"};
+
+std::string candsJson(const std::string& ctx, const std::string& prefix, std::vector<Cand>& cands) {
+    // 前缀过滤（不分大小写）+ 排序：短名优先，同长按字典序
+    std::string pl;
+    for (char c : prefix) pl += (char)tolower((unsigned char)c);
+    std::vector<Cand> hit;
+    for (auto& c : cands) {
+        if (c.text == prefix) continue;                 // 已经打全了，不必提示
+        std::string tl;
+        for (char ch : c.text) tl += (char)tolower((unsigned char)ch);
+        if (tl.compare(0, pl.size(), pl) != 0) continue;
+        bool dup = false;
+        for (auto& h : hit) if (h.text == c.text) { dup = true; break; }
+        if (!dup) hit.push_back(c);
+    }
+    std::stable_sort(hit.begin(), hit.end(), [](const Cand& a, const Cand& b) {
+        if (a.text.size() != b.text.size()) return a.text.size() < b.text.size();
+        return a.text < b.text;
+    });
+    if (hit.size() > 20) hit.resize(20);
+    std::string o = "{\"ctx\":" + jesc(ctx) + ",\"prefix\":" + jesc(prefix) + ",\"items\":[";
+    for (size_t i = 0; i < hit.size(); i++) {
+        if (i) o += ",";
+        o += "{\"text\":" + jesc(hit[i].text) + ",\"kind\":" + jesc(hit[i].kind) +
+             ",\"detail\":" + jesc(hit[i].detail) + "}";
+    }
+    return o + "]}";
+}
+
+} // namespace
+
+std::string queryComplete(const Program& prog, const std::string& src, int line, int col) {
+    std::string head = lineHead(src, line, col);
+    std::string prefix = takeTrailingIdent(head);       // head 现在是前缀之前的部分
+    std::vector<Cand> cands;
+
+    // ---- 语境 1：成员补全（obj. / arr[i].）→ 结构体字段 ----
+    if (!head.empty() && head.back() == '.') {
+        std::string rest = head.substr(0, head.size() - 1);
+        bool indexed = false;
+        if (!rest.empty() && rest.back() == ']') {      // 跳过 [...]，取被索引的名字
+            int depth = 0; size_t j = rest.size();
+            while (j > 0) { char c = rest[--j]; if (c == ']') depth++; else if (c == '[') { if (--depth == 0) break; } }
+            rest.resize(j);
+            indexed = true;
+        }
+        std::string base = takeTrailingIdent(rest);
+        std::string sname;
+        if (!base.empty()) {
+            int fi = enclosingFn(prog, line);
+            for (auto& o : collectOccurrences(prog)) {
+                if (o.cat != 'v' || o.name != base) continue;
+                if (o.fnIndex >= 0 && o.fnIndex != fi) continue;
+                std::string t = o.typ;
+                size_t br = t.find('[');
+                if (br != std::string::npos) { if (!indexed) continue; t = t.substr(0, br); } // 数组只有下标后才是元素
+                else if (indexed) continue;
+                sname = t;
+                break;
+            }
+        }
+        for (auto& st : prog.structs)
+            if (st->name == sname)
+                for (auto& f : st->fields)
+                    cands.push_back({f.name, "field", typeStr(f.type, f.len, f.structName) +
+                                                       (sname.empty() ? "" : " · " + sname)});
+        return candsJson("member", prefix, cands);
+    }
+
+    // ---- 语境 2：类型位置（`:` 或 `->` 之后）→ 基本类型 + 结构体 ----
+    std::string trimmed = head;
+    while (!trimmed.empty() && (trimmed.back() == ' ' || trimmed.back() == '\t')) trimmed.pop_back();
+    bool afterArrow = trimmed.size() >= 2 && trimmed.compare(trimmed.size() - 2, 2, "->") == 0;
+    // `:` 之前若同行出现过 `{`，多半是结构体字面量 Point { x: … }，那是值位置不是类型位置
+    bool afterColon = !trimmed.empty() && trimmed.back() == ':' &&
+                      trimmed.find('{') == std::string::npos;
+    if (afterArrow || afterColon) {
+        for (auto* p : PRIMS) cands.push_back({p, "ty", "基本类型"});
+        for (auto& st : prog.structs)
+            cands.push_back({st->name, "ty", st->module.empty() ? "结构体" : "结构体 · " + st->module});
+        int fi = enclosingFn(prog, line);
+        if (fi >= 0) for (auto& tp : prog.fns[fi]->typeParams) cands.push_back({tp, "ty", "泛型参数"});
+        return candsJson("type", prefix, cands);
+    }
+
+    // ---- 语境 3：普通标识符 → 关键字 + 作用域内变量 + 全部函数 + 结构体 ----
+    for (auto* k : KEYWORDS) cands.push_back({k, "kw", "关键字"});
+    for (auto* p : PRIMS) cands.push_back({p, "ty", "基本类型"});
+
+    int fi = enclosingFn(prog, line);
+    if (fi >= 0) {
+        auto& f = *prog.fns[fi];
+        for (auto& p : f.params) cands.push_back({p.name, "var", typeStr(p.type, p.len, p.structName) + " · 参数"});
+        if (f.body) {
+            std::vector<ScopeVar> vs;
+            collectVars(*f.body, line, vs);
+            for (auto& v : vs) cands.push_back({v.name, "var", v.typ});
+        }
+    }
+    for (auto& g : prog.globals) {
+        if (g->kind != StmtKind::Let) continue;
+        auto& l = static_cast<const LetStmt&>(*g);
+        Type t = l.declared != Type::Unknown ? l.declared : (l.init ? l.init->type : Type::Unknown);
+        int len = l.declaredLen ? l.declaredLen : (l.init ? l.init->arrayLen : 0);
+        std::string sn = !l.structName.empty() ? l.structName : (l.init ? l.init->structName : "");
+        cands.push_back({l.name, "var", typeStr(t, len, sn) + " · 全局"});
+    }
+    for (auto& fp : prog.fns) {
+        auto& f = *fp;
+        if (isGenericInstance(prog, f)) continue;
+        std::string d = fnSig(f);
+        if (!f.module.empty()) d += " · " + f.module;
+        else if (f.isExtern) d += " · 运行时";
+        cands.push_back({f.name, "fn", d});
+    }
+    for (auto& st : prog.structs)
+        cands.push_back({st->name, "ty", st->module.empty() ? "结构体" : "结构体 · " + st->module});
+    cands.push_back({"print", "fn", "(x) 打印 · 运行时"});
+    cands.push_back({"len", "fn", "(xs) -> int 长度 · 内置"});
+    return candsJson("ident", prefix, cands);
 }
 
 } // namespace sincoding

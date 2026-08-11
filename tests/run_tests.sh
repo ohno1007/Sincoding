@@ -213,6 +213,75 @@ if "$SINC" "$REFSRC" --query rename 2 9 y 2>/dev/null | grep -q 'let y' && \
     echo "✓ rename: f 的 x→y，g 的 x 保留（作用域正确）"; ((PASS++))
 else echo "✗ rename: 作用域错误"; ((FAIL++)); fi
 
+# ---- 代码补全：候选由引擎按语境+类型给出（不是前端的正则猜名字）----
+echo
+echo "=== IDE 查询：代码补全（语境 + 真实类型）==="
+ACSRC="$WORK/complete.sin"
+printf '%s\n' \
+  'import "std/arrayx"' \
+  '' \
+  'struct Faller { x: float, y: float, kind: int }' \
+  '' \
+  'fn tick(f: Faller, data: int[4]) -> int {' \
+  '    let total = 0' \
+  '    return d' \
+  '}' > "$ACSRC"
+# 语境 1：普通标识符 —— 参数 data 带真实类型 int[4]
+if "$SINC" "$ACSRC" --query complete 7 13 2>/dev/null | grep -q '"text":"data","kind":"var","detail":"int\[4\] · 参数"'; then
+    echo "✓ complete: 作用域内变量带真实类型（data : int[4]）"; ((PASS++))
+else echo "✗ complete: 变量候选不符（$("$SINC" "$ACSRC" --query complete 7 13 2>/dev/null)）"; ((FAIL++)); fi
+
+# 语境 1b：导入库的函数也在候选里（前端正则永远看不到它们）
+if "$SINC" "$ACSRC" --query complete 7 13 2>/dev/null >/dev/null; then :; fi
+printf '%s\n' \
+  'import "std/arrayx"' \
+  '' \
+  'fn main() -> int {' \
+  '    let xs: int[3] = [1,2,3]' \
+  '    return s' \
+  '}' > "$ACSRC"
+if "$SINC" "$ACSRC" --query complete 5 13 2>/dev/null | grep -q '"text":"sum".*std/arrayx'; then
+    echo "✓ complete: 导入库函数进入候选（sum · std/arrayx）"; ((PASS++))
+else echo "✗ complete: 缺少库函数候选（$("$SINC" "$ACSRC" --query complete 5 13 2>/dev/null)）"; ((FAIL++)); fi
+
+# 语境 2：`obj.` 之后给结构体字段（写到一半、语法不完整也要能补）
+printf '%s\n' \
+  'struct Faller { x: float, y: float, kind: int }' \
+  '' \
+  'fn tick(f: Faller) -> int {' \
+  '    f.' \
+  '    return 0' \
+  '}' > "$ACSRC"
+out="$("$SINC" "$ACSRC" --query complete 4 7 2>/dev/null)"
+if [[ "$out" == *'"ctx":"member"'* && "$out" == *'"text":"kind","kind":"field","detail":"int · Faller"'* ]]; then
+    echo "✓ complete: 成员语境给结构体字段（f. → x/y/kind）"; ((PASS++))
+else echo "✗ complete: 成员补全不符（$out）"; ((FAIL++)); fi
+
+# 语境 3：类型位置（`:` 之后）给类型而非变量
+printf '%s\n' 'struct Faller { x: float }' '' 'fn main() -> int {' '    let q: ' '    return 0' '}' > "$ACSRC"
+out="$("$SINC" "$ACSRC" --query complete 4 12 2>/dev/null)"
+if [[ "$out" == *'"ctx":"type"'* && "$out" == *'"text":"Faller"'* && "$out" != *'"kind":"var"'* ]]; then
+    echo "✓ complete: 类型位置只给类型（含用户结构体 Faller）"; ((PASS++))
+else echo "✗ complete: 类型位置候选不符（$out）"; ((FAIL++)); fi
+
+# ---- 运行时 API 是内置模块：编辑器里调用 sprite_* 不该被报「未定义的函数」----
+echo
+echo "=== 运行时声明单一真相（std/stage）==="
+STGSRC="$WORK/stage.sin"
+printf '%s\n' 'import "std/stage"' '' 'fn main() -> int {' '    let h = sprite_new(0.0, 0.0, 40.0)' \
+  '    if sprite_touching(h, h) { print(1) }' '    return 0' '}' > "$STGSRC"
+if "$SINC" "$STGSRC" -o "$WORK/stage.c" 2>/dev/null && grep -q 'extern bool sprite_touching' "$WORK/stage.c"; then
+    echo "✓ std/stage: import 即得全部运行时声明（含 sprite_touching）"; ((PASS++))
+else echo "✗ std/stage: 运行时声明缺失或编译失败"; ((FAIL++)); fi
+# 声明必须与 runtime/prelude.h 同步：漏一个，导出的 .sin 就编不过
+miss=""
+for f in $(grep -o '^[a-z][a-z ]*\**[a-z_]*(' "$ROOT/runtime/prelude.h" | sed 's/(//' | awk '{print $NF}' | sed 's/^\*//'); do
+    grep -q "^extern fn $f" "$ROOT/std/stage.sin" || miss="$miss $f"
+done
+if [[ -z "$miss" ]]; then
+    echo "✓ std/stage: 与 runtime/prelude.h 的 API 一一对应"; ((PASS++))
+else echo "✗ std/stage: 缺少运行时函数声明:$miss"; ((FAIL++)); fi
+
 # ---- 积木视图渲染（需要 node + playwright，缺失则跳过） ----
 echo
 echo "=== 积木视图渲染（Chromium 截图验证） ==="
@@ -300,6 +369,12 @@ if command -v node >/dev/null 2>&1 && \
         echo "✓ import 积木: 编辑积木不丢 import + 调色板可添加（$iout）"; ((PASS++))
     else
         echo "✗ import 积木: 验证失败（$iout）"; ((FAIL++))
+    fi
+    # 补全走引擎（语境+类型）+ 运行时 API 隐式可见 + 导出声明来自 std/stage
+    if cout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_complete.js" "$ROOT/editor/index.html" 2>&1)"; then
+        echo "✓ 代码补全: 引擎候选（成员/类型/签名）+ 运行时声明单一真相（$cout）"; ((PASS++))
+    else
+        echo "✗ 代码补全: 验证失败（$cout）"; ((FAIL++))
     fi
     # 预览 = 成品：import 的库函数在预览里也能真正执行（不只是有积木）
     if pout="$(NODE_PATH="$(npm root -g)" node "$ROOT/tools/verify_lib_preview.js" "$ROOT/editor/index.html" 2>&1)"; then

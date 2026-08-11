@@ -147,9 +147,21 @@
       const src = modelToSource(fullModel());
       if (src === null) { setTextStatus("编译器加载中…", "warn"); return; }
       setTextValue(src);
+      refreshDiags();   // 改积木同样要看到类型错误，而不是只有编辑文本时才报
     }
     catch (err) { setTextValue("// 序列化错误: " + err.message); }
     schedulePreview();
+  }
+
+  // 只跑诊断、不动积木：文本由模型生成时用它刷新状态栏与问题列表
+  function refreshDiags() {
+    if (!sincMod) return;
+    try {
+      const res = JSON.parse(sincMod.ccall("sin_to_blocks", "string", ["string"], [textOut.value]));
+      const diags = res.diags || [];
+      renderDiags(diags);
+      setTextStatus(diags.length ? (diags.length + " 个问题") : "已同步 ✓", diags.length ? "warn" : "ok");
+    } catch (e) { /* 引擎异常不该阻断编辑 */ }
   }
 
   // ---------------- 语法高亮（透明 textarea 覆盖在高亮层上） ----------------
@@ -895,7 +907,9 @@
   // ---------------- 反向同步：文本 → 积木（wasm 编译器） ----------------
   let sincMod = null;
   if (window.SincModule) {
-    window.SincModule().then((m) => { sincMod = m; window.__sincReady = true; })
+    // 引擎就绪前 modelToSource 只能返回 null（文本视图是引擎序列化的，无 JS 镜像），
+    // 所以首屏渲染时文本框是空的——引擎到位后必须补一次渲染，否则用户不动积木就一直空着。
+    window.SincModule().then((m) => { sincMod = m; window.__sincReady = true; refreshText(); })
       .catch(() => setTextStatus("反向解析不可用（请用 HTTP 打开）", "warn"));
   }
 
@@ -1019,34 +1033,13 @@
     const lh = 20; textOut.scrollTop = Math.max(0, (line - 4)) * lh; syncHighlight();
   }
 
-  // ---------------- 代码补全（单词补全 + 函数签名提示） ----------------
+  // ---------------- 代码补全（引擎给候选，非 JS 重写） ----------------
+  // 候选一律来自 wasm 引擎的 sin_complete：它按 AST 判断语境（成员 / 类型位置 /
+  // 普通标识符）、按作用域给变量并附真实类型，导入库的函数也在其中。
+  // 这里绝不再维护一份 JS 侧的标识符表——那正是被淘汰的镜像。
   const acPop = document.getElementById("ac-pop");
-  const AC_KEYWORDS = ["let", "fn", "if", "else", "while", "for", "in", "return", "extern", "struct", "true", "false"];
-  const AC_TYPES = ["int", "float", "bool", "string", "void"];
   const ac = { open: false, items: [], sel: 0, word: null };
 
-  function dynamicIdents() {
-    const txt = textOut.value, set = new Set();
-    const res = [
-      /\bfn\s+([A-Za-z_]\w*)/g, /\blet\s+([A-Za-z_]\w*)/g, /\bstruct\s+([A-Za-z_]\w*)/g,
-      /\bfor\s+([A-Za-z_]\w*)\s+in/g, /([A-Za-z_]\w*)\s*:/g,
-    ];
-    res.forEach((re) => { let m; while ((m = re.exec(txt))) set.add(m[1]); });
-    return [...set];
-  }
-  function completionPool() {
-    const out = [];
-    AC_KEYWORDS.forEach((w) => out.push({ text: w, kind: "kw", detail: "关键字" }));
-    AC_TYPES.forEach((w) => out.push({ text: w, kind: "ty", detail: "类型" }));
-    RUNTIME_EXTERN_DECLS.forEach(([name, decl]) => out.push({
-      text: name, kind: "fn",
-      detail: (CALL_LABELS[name] ? CALL_LABELS[name] + " · " : "") + decl.replace(/^extern fn\s+/, ""),
-    }));
-    out.push({ text: "print", kind: "fn", detail: "打印" });
-    dynamicIdents().forEach((id) => out.push({ text: id, kind: "id", detail: "本项目标识符" }));
-    const seen = new Set();
-    return out.filter((e) => (seen.has(e.text) ? false : (seen.add(e.text), true)));
-  }
   function wordAtCaret() {
     const pos = textOut.selectionStart;
     const before = textOut.value.slice(0, pos);
@@ -1076,7 +1069,8 @@
     acPop.innerHTML = "";
     ac.items.forEach((e, i) => {
       const row = el("div", "ac-item" + (i === ac.sel ? " sel" : ""));
-      row.append(el("span", "ac-k ac-" + e.kind, ({ kw: "关", ty: "型", fn: "f", id: "x" })[e.kind] || "·"));
+      row.append(el("span", "ac-k ac-" + e.kind,
+        ({ kw: "关", ty: "型", fn: "f", var: "x", field: "·", id: "x" })[e.kind] || "·"));
       row.append(el("span", "ac-t", e.text));
       if (e.detail) row.append(el("span", "ac-d", e.detail));
       row.addEventListener("mousedown", (ev) => { ev.preventDefault(); acceptAC(i); });
@@ -1084,15 +1078,16 @@
     });
   }
   function showAC() {
-    if (document.activeElement !== textOut) return hideAC();
+    if (document.activeElement !== textOut || !sincMod) return hideAC();
+    const pos = textOut.selectionStart;
     const w = wordAtCaret();
-    if (!w || w.word.length < 1) return hideAC();
-    const ql = w.word.toLowerCase();
-    const items = completionPool()
-      .filter((e) => e.text !== w.word && e.text.toLowerCase().startsWith(ql))
-      .sort((a, b) => a.text.length - b.text.length).slice(0, 12);
+    // 刚敲下 `.` 时前缀为空，也要弹出成员候选（结构体字段）
+    if (!w && textOut.value.slice(0, pos).slice(-1) !== ".") return hideAC();
+    const res = ideCall("sin_complete");            // 引擎按语境给候选
+    const items = (res && res.items) || [];
     if (!items.length) return hideAC();
-    ac.open = true; ac.items = items; ac.sel = 0; ac.word = w;
+    ac.open = true; ac.items = items.slice(0, 12); ac.sel = 0;
+    ac.word = w || { word: "", start: pos, end: pos };
     renderAC(); positionAC(); acPop.hidden = false;
   }
   function hideAC() { ac.open = false; acPop.hidden = true; }
@@ -1119,55 +1114,19 @@
   window._sinAC = { show: showAC, state: ac, accept: acceptAC }; // 测试探针
 
   // ---------------- 一键导出 .sin（自动补运行时声明，使其可独立编译） ----------------
-  const RUNTIME_EXTERN_DECLS = [
-    ["stage_init", "extern fn stage_init(w: int, h: int)"],
-    ["stage_running", "extern fn stage_running() -> bool"],
-    ["frame_begin", "extern fn frame_begin()"],
-    ["frame_end", "extern fn frame_end()"],
-    ["stage_close", "extern fn stage_close()"],
-    ["sprite_new", "extern fn sprite_new(x: float, y: float, size: float) -> int"],
-    ["sprite_load", "extern fn sprite_load(path: string) -> int"],
-    ["sprite_move_to", "extern fn sprite_move_to(s: int, x: float, y: float)"],
-    ["sprite_x", "extern fn sprite_x(s: int) -> float"],
-    ["sprite_y", "extern fn sprite_y(s: int) -> float"],
-    ["sprite_draw", "extern fn sprite_draw(s: int)"],
-    ["key_down", "extern fn key_down(key: int) -> bool"],
-    ["key_left", "extern fn key_left() -> int"],
-    ["key_right", "extern fn key_right() -> int"],
-    ["key_up", "extern fn key_up() -> int"],
-    ["key_down_arrow", "extern fn key_down_arrow() -> int"],
-    ["say", "extern fn say(s: int, text: string)"],
-    ["draw_text", "extern fn draw_text(text: string, x: float, y: float, size: int)"],
-    ["draw_number", "extern fn draw_number(n: int, x: float, y: float, size: int)"],
-    ["sound_load", "extern fn sound_load(path: string) -> int"],
-    ["play_sound", "extern fn play_sound(snd: int)"],
-    ["play_tone", "extern fn play_tone(freq: int, ms: int)"],
-    ["broadcast", "extern fn broadcast(message: string)"],
-    ["received", "extern fn received(message: string) -> bool"],
-    ["to_float", "extern fn to_float(n: int) -> float"],
-    ["to_int", "extern fn to_int(f: float) -> int"],
-    ["key_space", "extern fn key_space() -> int"],
-    ["mouse_x", "extern fn mouse_x() -> float"],
-    ["mouse_y", "extern fn mouse_y() -> float"],
-    ["mouse_down", "extern fn mouse_down() -> bool"],
-    ["sprite_move", "extern fn sprite_move(s: int, steps: float)"],
-    ["sprite_turn", "extern fn sprite_turn(s: int, degrees: float)"],
-    ["sprite_point", "extern fn sprite_point(s: int, degrees: float)"],
-    ["sprite_scale", "extern fn sprite_scale(s: int, k: float)"],
-    ["random_int", "extern fn random_int(lo: int, hi: int) -> int"],
-    ["screen_width", "extern fn screen_width() -> int"],
-    ["screen_height", "extern fn screen_height() -> int"],
-    ["frame_index", "extern fn frame_index() -> int"],
-    ["pen_clear", "extern fn pen_clear()"],
-    ["pen_color", "extern fn pen_color(r: int, g: int, b: int)"],
-    ["pen_size", "extern fn pen_size(w: float)"],
-    ["pen_line", "extern fn pen_line(x1: float, y1: float, x2: float, y2: float)"],
-    ["pen_dot", "extern fn pen_dot(x: float, y: float)"],
-  ];
+  // 运行时 API 的声明来自**引擎内置的 std/stage.sin**（与 runtime/prelude.h 对应），
+  // 前端不再另抄一份——抄的那份曾漏掉 sprite_touching，导出的程序就编不过。
+  function runtimeExternLines() {
+    if (!sincMod) return [];
+    let src = "";
+    try { src = sincMod.ccall("sin_runtime_decls", "string", [], []); } catch (e) { return []; }
+    return src.split("\n").filter((l) => /^extern fn\s/.test(l));
+  }
   function exportSource() {
     const model = fullModel();
     const have = new Set((model.program || []).map((f) => f.name));
-    const externs = RUNTIME_EXTERN_DECLS.filter(([name]) => !have.has(name)).map(([, t]) => t);
+    const externs = runtimeExternLines()
+      .filter((l) => !have.has((l.match(/^extern fn\s+([A-Za-z_]\w*)/) || [])[1]));
     const head = externs.length ? "// 运行时声明（导出自动补全，使程序可独立编译）\n" + externs.join("\n") + "\n\n" : "";
     const src = modelToSource(model);
     if (src === null) throw new Error("编译器尚未加载完成，请稍候再导出");

@@ -21,4 +21,14 @@ namespace sincoding {
 // 返回是否全部解析成功；失败信息追加到 diags。
 bool resolveImports(Program& prog, const std::string& baseDir, std::vector<Diagnostic>& diags);
 
+// 把某个内置模块的声明**隐式**并入 prog（不写进 prog.imports，因此不影响序列化往返）。
+// 图形化编辑器用它加载 std/stage（运行时 API）：积木调用 sprite_new 之类不必先写
+// extern 声明，也就不会被报成「未定义的函数」，补全同样能看到真实签名。
+// 与主程序重名的 extern 原型自动跳过。返回是否找到该模块。
+bool injectBuiltinModule(Program& prog, const std::string& name);
+
+// 取内置模块的源码（编辑器导出 .sin 时用它补运行时声明，避免前端另抄一份）。
+// 找不到返回 false。
+bool builtinModuleSource(const std::string& name, std::string& out);
+
 } // namespace sincoding

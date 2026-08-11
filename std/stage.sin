@@ -1,0 +1,69 @@
+// std/stage — 运行时 API 的语言侧声明（舞台 / 精灵 / 输入 / 画笔 / 声音）
+//
+// 这是「运行时能力」在 Sincoding 语言里的唯一声明处，与 runtime/prelude.h 一一对应。
+// 图形化编辑器**隐式**加载本模块，因此在编辑器里直接调用 sprite_new 等函数
+// 不会被报成「未定义的函数」，补全里也能看到它们的真实签名；
+// 导出 .sin 时这些声明会被自动补在文件头部，使程序可独立编译。
+//
+// 手写 .sin 文件时可以 `import "std/stage"` 一次性拿到全部声明，
+// 也可以像 examples/*.sin 那样只写自己用到的那几行 extern fn（两种写法等价）。
+
+// —— 舞台 / 主循环 ——
+extern fn stage_init(w: int, h: int)
+extern fn stage_running() -> bool
+extern fn frame_begin()
+extern fn frame_end()
+extern fn stage_close()
+
+// —— 精灵 ——
+extern fn sprite_new(x: float, y: float, size: float) -> int
+extern fn sprite_load(path: string) -> int
+extern fn sprite_move_to(s: int, x: float, y: float)
+extern fn sprite_x(s: int) -> float
+extern fn sprite_y(s: int) -> float
+extern fn sprite_draw(s: int)
+extern fn sprite_touching(a: int, b: int) -> bool
+extern fn sprite_move(s: int, steps: float)
+extern fn sprite_turn(s: int, degrees: float)
+extern fn sprite_point(s: int, degrees: float)
+extern fn sprite_scale(s: int, k: float)
+
+// —— 文字 / 气泡 ——
+extern fn say(s: int, text: string)
+extern fn draw_text(text: string, x: float, y: float, size: int)
+extern fn draw_number(n: int, x: float, y: float, size: int)
+
+// —— 输入 ——
+extern fn key_down(key: int) -> bool
+extern fn key_left() -> int
+extern fn key_right() -> int
+extern fn key_up() -> int
+extern fn key_down_arrow() -> int
+extern fn key_space() -> int
+extern fn mouse_x() -> float
+extern fn mouse_y() -> float
+extern fn mouse_down() -> bool
+
+// —— 画笔（跨帧保留的绘制层）——
+extern fn pen_clear()
+extern fn pen_color(r: int, g: int, b: int)
+extern fn pen_size(w: float)
+extern fn pen_line(x1: float, y1: float, x2: float, y2: float)
+extern fn pen_dot(x: float, y: float)
+
+// —— 声音 ——
+extern fn sound_load(path: string) -> int
+extern fn play_sound(snd: int)
+extern fn play_tone(freq: int, ms: int)
+
+// —— 广播 / 事件 ——
+extern fn broadcast(message: string)
+extern fn received(message: string) -> bool
+
+// —— 平台 / 工具 ——
+extern fn random_int(lo: int, hi: int) -> int
+extern fn screen_width() -> int
+extern fn screen_height() -> int
+extern fn frame_index() -> int
+extern fn to_float(n: int) -> float
+extern fn to_int(f: float) -> int

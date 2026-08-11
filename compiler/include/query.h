@@ -20,4 +20,10 @@ std::string queryReferences(const Program& prog, int line, int col);
 // 会修改传入的 prog（调用方每次查询都重新 parse，故无副作用顾虑）。
 std::string applyRename(Program& prog, int line, int col, const std::string& newName);
 
+// 代码补全：按光标处的语境（成员 / 类型位置 / 普通标识符）给候选，
+// 候选带真实类型（作用域内的变量、含导入库在内的全部函数、结构体字段）：
+//   {"ctx":"member","prefix":"x","items":[{"text":"x","kind":"field","detail":"float"}]}
+// 需要源文本判断语境（`.` / `:` / `->`），AST 提供类型与作用域。
+std::string queryComplete(const Program& prog, const std::string& src, int line, int col);
+
 } // namespace sincoding

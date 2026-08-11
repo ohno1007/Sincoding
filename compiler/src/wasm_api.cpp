@@ -58,6 +58,7 @@ const char* sin_to_blocks(const char* src) {
     Program prog = parser.parseProgram();
     std::vector<Diagnostic> modDiags;
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
+    injectBuiltinModule(prog, "std/stage");   // 运行时 API 隐式可见（见 std/stage.sin）
     std::vector<Diagnostic> checkDiags;
     checkWithGenerics(prog, checkDiags);   // 尽量填充类型 + 单态化泛型
 
@@ -82,6 +83,7 @@ const char* sin_hover(const char* src, int line, int col) {
     Program prog = parser.parseProgram();
     std::vector<Diagnostic> modDiags;
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
+    injectBuiltinModule(prog, "std/stage");   // 运行时 API 隐式可见（见 std/stage.sin）
     std::vector<Diagnostic> cd; checkWithGenerics(prog, cd);
     result = queryHover(prog, line, col);
     return result.c_str();
@@ -96,8 +98,24 @@ const char* sin_references(const char* src, int line, int col) {
     Program prog = parser.parseProgram();
     std::vector<Diagnostic> modDiags;
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
+    injectBuiltinModule(prog, "std/stage");   // 运行时 API 隐式可见（见 std/stage.sin）
     std::vector<Diagnostic> cd; checkWithGenerics(prog, cd);
     result = queryReferences(prog, line, col);
+    return result.c_str();
+}
+
+// IDE 代码补全：返回 (line,col) 处的候选 JSON（语境 + 真实类型，含导入库符号）。
+const char* sin_complete(const char* src, int line, int col) {
+    static std::string result;
+    std::string source = src ? src : "";
+    Lexer lexer(source);
+    Parser parser(lexer.tokenize());
+    Program prog = parser.parseProgram();
+    std::vector<Diagnostic> modDiags;
+    resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
+    injectBuiltinModule(prog, "std/stage");   // 运行时 API 隐式可见（见 std/stage.sin）
+    std::vector<Diagnostic> cd; checkWithGenerics(prog, cd);
+    result = queryComplete(prog, source, line, col);
     return result.c_str();
 }
 
@@ -110,8 +128,18 @@ const char* sin_rename(const char* src, int line, int col, const char* newName) 
     Program prog = parser.parseProgram();
     std::vector<Diagnostic> modDiags;
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
+    injectBuiltinModule(prog, "std/stage");   // 运行时 API 隐式可见（见 std/stage.sin）
     std::vector<Diagnostic> cd; checkWithGenerics(prog, cd);
     result = applyRename(prog, line, col, newName ? newName : "");
+    return result.c_str();
+}
+
+// 运行时 API 的语言侧声明源码（std/stage.sin 原文）。
+// 编辑器导出 .sin 时把它补在文件头部，使程序可独立编译——
+// 声明只此一份，前端不再另抄一张表。
+const char* sin_runtime_decls(void) {
+    static std::string result;
+    if (result.empty() && !builtinModuleSource("std/stage", result)) result = "";
     return result.c_str();
 }
 

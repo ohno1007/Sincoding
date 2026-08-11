@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
         else if (a == "--emit" && i + 1 < argc) emit = argv[++i];
         else if (a == "--tokens") dumpTokens = true;
         else if (a == "--debug") debugBuild = true;
-        else if (a == "--query" && i + 3 < argc) {  // --query <hover|refs|rename> <line> <col> [newName]
+        else if (a == "--query" && i + 3 < argc) {  // --query <hover|refs|complete|rename> <line> <col> [newName]
             queryKind = argv[++i];
             qLine = std::atoi(argv[++i]);
             qCol = std::atoi(argv[++i]);
@@ -84,19 +84,22 @@ int main(int argc, char** argv) {
             std::cout << t.line << ":" << t.col << "\t" << tokKindName(t.kind)
                       << "\t'" << t.text << "'\n";
     }
-    if (!lexer.ok()) { printDiags(input, lexer.errors()); return 1; }
+    // IDE 查询（尤其补全）总是在「写到一半」的源码上发生，语法错误不能中止查询，
+    // 否则命令行与 wasm（一向容错）行为不一致。
+    bool tolerant = !queryKind.empty();
+    if (!lexer.ok() && !tolerant) { printDiags(input, lexer.errors()); return 1; }
 
     // 2) 语法
     Parser parser(std::move(tokens));
     Program prog = parser.parseProgram();
-    if (!parser.ok()) { printDiags(input, parser.errors()); return 1; }
+    if (!parser.ok() && !tolerant) { printDiags(input, parser.errors()); return 1; }
 
     // 2.5) 解析 import：把模块声明合并进来（内置标准库 + 同目录 + SINCODING_PATH）
     {
         auto slash = input.find_last_of('/');
         std::string baseDir = (slash == std::string::npos) ? "." : input.substr(0, slash);
         std::vector<Diagnostic> modDiags;
-        if (!resolveImports(prog, baseDir, modDiags)) { printDiags(input, modDiags); return 1; }
+        if (!resolveImports(prog, baseDir, modDiags) && !tolerant) { printDiags(input, modDiags); return 1; }
     }
 
     // 3) 类型检查（含泛型单态化：把泛型调用实例化成具体函数）
@@ -107,6 +110,7 @@ int main(int argc, char** argv) {
     if (!queryKind.empty()) {
         if (queryKind == "hover") std::cout << queryHover(prog, qLine, qCol) << "\n";
         else if (queryKind == "refs") std::cout << queryReferences(prog, qLine, qCol) << "\n";
+        else if (queryKind == "complete") std::cout << queryComplete(prog, src, qLine, qCol) << "\n";
         else if (queryKind == "rename") std::cout << applyRename(prog, qLine, qCol, qNewName) << "\n";
         else { std::cerr << "未知查询类型: " << queryKind << "\n"; return 2; }
         return 0;
