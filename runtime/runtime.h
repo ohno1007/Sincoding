@@ -48,6 +48,7 @@ void rt_show(rt_sprite s);
 void rt_hide(rt_sprite s);
 void rt_bounce(rt_sprite s);               // 碰到舞台边缘就反弹
 bool rt_touching_mouse(rt_sprite s);       // 精灵是否碰到鼠标指针
+void rt_costume(rt_sprite s, const char* path);   // 切换造型（同名纹理缓存）
 double rt_timer(void);                     // 舞台启动起的秒数
 void rt_timer_reset(void);        // 对应 IsKeyDown
 void rt_wait(float secs);                  // 阻塞等待（Scratch 的「等待 x 秒」）

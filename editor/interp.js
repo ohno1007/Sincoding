@@ -640,6 +640,11 @@
     sprite_turn(a) { const s = this.world.sprites[a[0]]; if (s) s.heading = (s.heading || 0) + a[1]; },
     sprite_point(a) { const s = this.world.sprites[a[0]]; if (s) s.heading = a[1]; },
     sprite_scale(a) { const s = this.world.sprites[a[0]]; if (s) s.scale = a[1]; },
+    // 切换造型：换贴图不动位置/朝向（与 rt_costume 同语义；painted 造型同名优先）
+    sprite_costume(a) {
+      const s = this.world.sprites[a[0]]; if (!s) return;
+      s.kind = "image"; s.tex = this.resolveTex(a[1]); s.path = a[1];
+    },
     // 平台 / 工具
     random_int(a) { let lo = a[0], hi = a[1]; if (lo > hi) { const t = lo; lo = hi; hi = t; } return Math.floor(Math.random() * (hi - lo + 1)) + lo; },
     screen_width() { return this.world.W; }, screen_height() { return this.world.H; },
@@ -655,8 +660,24 @@
     draw_number(a) { const [cx, cy] = this.s2c(a[1], a[2]); this.ctx.fillStyle = "#222"; this.ctx.font = a[3] + "px monospace"; this.ctx.fillText(String(a[0]), cx, cy); },
     broadcast(a) { this.world.nextBroadcasts.add(a[0]); },
     received(a) { return this.world.broadcasts.has(a[0]); },
-    sound_load() { return ++this.world.soundCount; },
-    play_sound() { this.beep(660, 100); },
+    // 声音：预览播放真实文件（与成品 LoadSound/PlaySound 同源）；文件取不到再退回哔声
+    sound_load(a) {
+      const id = ++this.world.soundCount;
+      if (!this.world.soundPaths) this.world.soundPaths = {};
+      if (a && a[0]) this.world.soundPaths[id] = a[0];
+      return id;
+    },
+    play_sound(a) {
+      const p = this.world.soundPaths && this.world.soundPaths[a && a[0]];
+      if (p) {
+        try {
+          const audio = new Audio(this.assetBase + p);
+          audio.play().catch(() => this.beep(660, 100));
+          return;
+        } catch (e) { /* 落回哔声 */ }
+      }
+      this.beep(660, 100);
+    },
     play_tone(a) { this.beep(a[0], a[1]); },
     to_float(a) { return a[0]; },
     to_int(a) { return Math.trunc(a[0]); },

@@ -51,6 +51,7 @@ double mouse_y(void);
 bool mouse_down(void);
 
 // 运动（精灵，Scratch 风格）
+void sprite_costume(long long s, const char* path);  // 切换造型（换贴图，位置朝向不变）
 void sprite_move(long long s, double steps);   // 沿当前朝向前进
 void sprite_turn(long long s, double degrees);
 void sprite_point(long long s, double degrees);

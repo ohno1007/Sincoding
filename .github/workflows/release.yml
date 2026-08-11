@@ -1,0 +1,29 @@
+# Releases：打 v* 标签自动出三平台桌面 IDE 单文件成品并挂到 GitHub Release。
+# 桌面壳是 Go 纯静态交叉编译（内嵌 editor/ 与 wasm 引擎），双击即用无需安装。
+#   git tag v0.1.0 && git push origin v0.1.0
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - name: 构建三平台桌面 IDE
+        run: |
+          tools/build_desktop_ide.sh windows dist/Sincoding-IDE-windows.exe
+          tools/build_desktop_ide.sh linux   dist/Sincoding-IDE-linux
+          tools/build_desktop_ide.sh darwin  dist/Sincoding-IDE-darwin
+      - name: 挂到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Sincoding-IDE-windows.exe
+            dist/Sincoding-IDE-linux
+            dist/Sincoding-IDE-darwin

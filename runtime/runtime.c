@@ -182,6 +182,37 @@ rt_sprite rt_sprite_load(const char* image_path) {
     return id;
 }
 
+static bool sprite_valid(rt_sprite s);   // 定义在下方
+
+// 造型纹理缓存：同名造型只加载一次（切换造型可以每帧调用）
+#define RT_MAX_COSTUMES 64
+static struct { char name[128]; Texture2D tex; } g_costumes[RT_MAX_COSTUMES];
+static int g_costume_count = 0;
+
+static Texture2D costume_tex(const char* path) {
+    for (int i = 0; i < g_costume_count; i++)
+        if (strncmp(g_costumes[i].name, path, sizeof(g_costumes[i].name)) == 0)
+            return g_costumes[i].tex;
+    Texture2D t = LoadTexture(path);
+    if (g_costume_count < RT_MAX_COSTUMES) {
+        strncpy(g_costumes[g_costume_count].name, path, sizeof(g_costumes[0].name) - 1);
+        g_costumes[g_costume_count].name[sizeof(g_costumes[0].name) - 1] = '\0';
+        g_costumes[g_costume_count].tex = t;
+        g_costume_count++;
+    }
+    return t;
+}
+
+void rt_costume(rt_sprite s, const char* path) {
+    if (!sprite_valid(s)) return;
+    RtSprite* sp = &g_sprites[s];
+    Texture2D t = costume_tex(path);
+    if (t.id == 0) return;              // 加载失败：保持原造型
+    sp->kind = RT_SPR_TEXTURE;
+    sp->tex = t;
+    sp->loaded = true;
+}
+
 rt_sprite rt_sprite_rect(float x, float y, float size) {
     if (g_sprite_count >= RT_MAX_SPRITES) return -1;
     int id = g_sprite_count++;

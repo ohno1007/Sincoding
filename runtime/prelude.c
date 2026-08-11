@@ -91,6 +91,7 @@ double mouse_x(void) { return (double)rt_mouse_x(); }
 double mouse_y(void) { return (double)rt_mouse_y(); }
 bool mouse_down(void) { return rt_mouse_down(0); }
 
+void sprite_costume(long long s, const char* path) { rt_costume((rt_sprite)s, path); }
 void sprite_move(long long s, double steps)   { rt_move((rt_sprite)s, (float)steps); }
 void sprite_turn(long long s, double degrees) { rt_turn((rt_sprite)s, (float)degrees); }
 void sprite_point(long long s, double degrees){ rt_point((rt_sprite)s, (float)degrees); }

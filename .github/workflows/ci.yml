@@ -1,0 +1,21 @@
+# CI：每次推送都构建编译器并跑测试套件。
+# 套件对缺失的工具链（raylib/emsdk/playwright/NDK…）会自动跳过对应段，
+# 所以在裸 ubuntu 上跑的是 CLI/转译/回环等核心断言。
+name: CI
+on:
+  push:
+    branches: ['**']
+  pull_request:
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 构建编译器
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc g++ cmake python3
+          cmake -S compiler -B compiler/build
+          cmake --build compiler/build -j
+      - name: 测试（缺的工具链自动跳过对应段）
+        run: bash tests/run_tests.sh

@@ -2061,6 +2061,7 @@
     sprite_y: () => ({ block: "let", name: "py", type: "float", len: 0, value: C("sprite_y", Vr("s")) }),
     // 外观
     sprite_load: () => ({ block: "let", name: "s", type: "int", len: 0, value: C("sprite_load", S("ball.png")) }),
+    sprite_costume: () => Ex(C("sprite_costume", Vr("s"), S("ball.png"))),
     sprite_draw: () => Ex(C("sprite_draw", Vr("s"))),
     sprite_show: () => Ex(C("sprite_show", Vr("s"))),
     sprite_hide: () => Ex(C("sprite_hide", Vr("s"))),
@@ -2276,7 +2277,7 @@
     { id: "control", name: "控制", color: "#FFAB19", items: ["if", "if_else", "while", "for", "repeat", "wait", "break", "continue", "return", "print"] },
     { id: "stage", name: "舞台", color: "#FFAB19", items: ["stage_init", "game_loop", "frame_begin", "frame_end", "stage_close"] },
     { id: "motion", name: "运动", color: "#4C97FF", items: ["sprite_new", "sprite_move_to", "sprite_move", "sprite_turn", "sprite_point", "sprite_scale", "sprite_bounce", "sprite_show", "sprite_hide", "sprite_x", "sprite_y"] },
-    { id: "looks", name: "外观", color: "#9966FF", items: ["sprite_load", "sprite_draw", "say", "draw_text", "draw_number"] },
+    { id: "looks", name: "外观", color: "#9966FF", items: ["sprite_load", "sprite_costume", "sprite_draw", "say", "draw_text", "draw_number"] },
     { id: "strings", name: "文字 (拖入槽)", color: "#59C059", reporter: true,
       items: ["r_str_len", "r_str_at", "r_str_sub", "r_str_find", "r_str_contains",
               "r_str_to_int", "r_str_to_float"] },

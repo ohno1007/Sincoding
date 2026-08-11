@@ -28,6 +28,7 @@ extern fn sprite_move(s: int, steps: float)
 extern fn sprite_turn(s: int, degrees: float)
 extern fn sprite_point(s: int, degrees: float)
 extern fn sprite_scale(s: int, k: float)
+extern fn sprite_costume(s: int, path: string)
 
 // —— 文字 / 气泡 ——
 extern fn say(s: int, text: string)
