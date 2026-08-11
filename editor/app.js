@@ -2,7 +2,7 @@
 //
 // 模型（积木树）就是前端的 AST，是唯一真相源。每个精灵拥有自己的一页积木
 // （program）与一组造型（costumes）。切换精灵 = 切换积木页 + 造型集。
-//   编辑积木 → 改模型 → BlockModel.modelToSource → 文本视图
+//   编辑积木 → 改模型 → 引擎 sin_blocks_to_src → 文本视图（序列化只有 C++ 一份实现）
 (function () {
   "use strict";
 
@@ -130,9 +130,22 @@
     return { structs: project.structs || [], globals: project.globals || [], program: sprite().program };
   }
   function setTextValue(v) { textOut.value = v; syncHighlight(); }
+  // 积木 → 文本：交给 wasm 引擎（唯一序列化器）。
+  // 此前由 blockmodel.js 镜像 C++ 实现，双份实现已漂移出真实 bug（import/泛型/数组长度丢失），
+  // 现已退役——宁可提示"引擎未就绪"，也不产出错误的文本。
+  function modelToSource(model) {
+    if (!sincMod) return null;
+    const r = JSON.parse(sincMod.ccall("sin_blocks_to_src", "string", ["string"], [JSON.stringify(model)]));
+    if (!r.ok) throw new Error(r.err || "序列化失败");
+    return r.source;
+  }
   function refreshText() {
     if (document.activeElement === textOut) return; // 用户正在编辑文本，别打断
-    try { setTextValue(window.BlockModel.modelToSource(fullModel())); }
+    try {
+      const src = modelToSource(fullModel());
+      if (src === null) { setTextStatus("编译器加载中…", "warn"); return; }
+      setTextValue(src);
+    }
     catch (err) { setTextValue("// 序列化错误: " + err.message); }
     schedulePreview();
   }
@@ -1019,7 +1032,9 @@
     const have = new Set((model.program || []).map((f) => f.name));
     const externs = RUNTIME_EXTERN_DECLS.filter(([name]) => !have.has(name)).map(([, t]) => t);
     const head = externs.length ? "// 运行时声明（导出自动补全，使程序可独立编译）\n" + externs.join("\n") + "\n\n" : "";
-    return head + window.BlockModel.modelToSource(model);
+    const src = modelToSource(model);
+    if (src === null) throw new Error("编译器尚未加载完成，请稍候再导出");
+    return head + src;
   }
   function exportSin() {
     const src = exportSource();

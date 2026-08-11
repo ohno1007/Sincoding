@@ -10,10 +10,12 @@ window.SIN_BLOCKS = {
       "params": [
         {
           "name": "n",
-          "type": "int"
+          "type": "int",
+          "len": 0
         }
       ],
       "ret": "int",
+      "retLen": 0,
       "body": [
         {
           "block": "if",
@@ -90,10 +92,12 @@ window.SIN_BLOCKS = {
       "params": [
         {
           "name": "n",
-          "type": "int"
+          "type": "int",
+          "len": 0
         }
       ],
       "ret": "int",
+      "retLen": 0,
       "body": [
         {
           "block": "let",
@@ -206,6 +210,7 @@ window.SIN_BLOCKS = {
       "name": "main",
       "params": [],
       "ret": "int",
+      "retLen": 0,
       "body": [
         {
           "block": "let",

@@ -30,6 +30,7 @@ add_executable(sinc
   src/query.cpp
   src/modules.cpp
   src/generics.cpp
+  src/blockreader.cpp
 )
 add_dependencies(sinc sin_std_header)
 target_include_directories(sinc PRIVATE include ${CMAKE_CURRENT_BINARY_DIR}/generated)

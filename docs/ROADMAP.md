@@ -31,10 +31,16 @@
 - 根因：类型表示是**扁平的**——`ast.h` 里 `enum class Type` + `arrayLen` + `structName`
   三个字段拼在 `Expr` 上，表达不了 `Point[8]`、`Enemy{pos: Point}` 这类**递归类型**。
 
-**当前架构的最大隐患：**
+**当前架构的最大隐患：**（✅ 已消除，见下）
 
-- `blockmodel.js` 的 `modelToSource` **镜像** C++ `serializeSource`（双实现，靠测试对齐）。
-  语言每加一个特性都要写两遍序列化，长期必然漂移。
+- ~~`blockmodel.js` 的 `modelToSource` **镜像** C++ `serializeSource`（双实现，靠测试对齐）。
+  语言每加一个特性都要写两遍序列化，长期必然漂移。~~
+- **事后验证：这个隐患确实兑现了。** 本轮加完切片/泛型/import 后实测，镜像在 6 个新特性
+  例子里错了 5 个——`import` 行被静默丢弃、泛型 `<T>` 与 `T[]` 丢失、数组参数 `int[3]`
+  退化成 `int`。即用户在积木里编辑这类程序时，写回的文本是**错的**。
+- **已修**：新增 `blockreader.cpp`（积木 JSON → AST）+ wasm 导出 `sin_blocks_to_src`，
+  编辑器改为把积木交回引擎、用**唯一的** `serializeSource` 写回；`blockmodel.js` 已删除。
+  测试从「8 例镜像比对」换成「17 例引擎往返逐字节一致」（含 import/泛型/切片/嵌套结构体）。
 
 ---
 
@@ -81,8 +87,8 @@
 ### 三条架构不变量（所有改动必须遵守）
 
 1. **AST 唯一真相**：积木是渲染，文本是序列化，二者只经 AST 互转。
-2. **引擎单例**：语言知识（语法/类型/序列化/查询）只存在于 C++ 引擎；
-   JS 侧的 `blockmodel.js` 镜像是技术债，按 M3 计划逐步退役。
+2. **引擎单例**：语言知识（语法/类型/序列化/查询）只存在于 C++ 引擎。
+   ✅ JS 侧的 `blockmodel.js` 镜像已退役删除，序列化只剩 C++ 一份实现。
 3. **预览 = 成品**：interp.js 每加一个运行时函数，runtime.c 必须同步，反之亦然；
    由 `tools/verify_palette_blocks.js` 类测试强制。
 

@@ -4,10 +4,6 @@
 const fs = require("fs");
 const path = require("path");
 
-const root = {};
-const code = fs.readFileSync(path.resolve(__dirname, "../editor/blockmodel.js"), "utf8");
-new Function("root", code).call(root, root);
-const BlockModel = root.BlockModel;
 
 const I = (v) => ({ block: "int", value: v });
 const F = (v) => ({ block: "float", value: v });
@@ -87,7 +83,11 @@ const externs = [
   "extern fn pen_clear()", "extern fn pen_color(r: int, g: int, b: int)", "extern fn pen_size(w: float)",
   "extern fn pen_line(x1: float, y1: float, x2: float, y2: float)", "extern fn pen_dot(x: float, y: float)",
 ];
-const src = externs.join("\n") + "\n\n" + BlockModel.modelToSource(model);
+// 积木 → 文本交给 wasm 引擎（唯一序列化器；JS 镜像已退役）
 const out = process.argv[2] || "/tmp/palette_blocks.sin";
-fs.writeFileSync(out, src);
-console.log("wrote", out);
+require(path.resolve(__dirname, "../editor/sinc.js"))().then((m) => {
+  const r = JSON.parse(m.ccall("sin_blocks_to_src", "string", ["string"], [JSON.stringify(model)]));
+  if (!r.ok) { console.error("序列化失败:", r.err); process.exit(1); }
+  fs.writeFileSync(out, externs.join("\n") + "\n\n" + r.source);
+  console.log("wrote", out);
+});

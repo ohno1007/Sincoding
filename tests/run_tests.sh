@@ -221,26 +221,35 @@ else
     echo "○ 跳过（未检测到 node 或 playwright）"
 fi
 
-# ---- 前端序列化器与引擎一致（需要 node） ----
+# ---- 引擎 blocks → src 往返（JS 镜像已退役，序列化只有 C++ 一份实现）----
 echo
-echo "=== 前端 JS 序列化器 == C++ 引擎（写回一致性） ==="
-if command -v node >/dev/null 2>&1; then
-    for ex in hello fib types game strings arrays globals_for structs; do
+echo "=== 积木 → 文本：引擎往返一致（唯一序列化器） ==="
+if command -v node >/dev/null 2>&1 && [[ -f "$ROOT/editor/sinc.js" ]]; then
+    b2s_bad=0
+    for ex in hello fib types game strings arrays globals_for structs array_params \
+              struct_array struct_nested str_concat mathx use_std use_arrayx generics guardian; do
         "$SINC" "$ROOT/examples/$ex.sin" --emit blocks > "$WORK/$ex.bj" 2>/dev/null
-        "$SINC" "$ROOT/examples/$ex.sin" --emit src   > "$WORK/$ex.cpp.src" 2>/dev/null
+        "$SINC" "$ROOT/examples/$ex.sin" --emit src   > "$WORK/$ex.want" 2>/dev/null
         node -e "
-          const m=require('$ROOT/editor/blockmodel.js');
-          const d=require('fs').readFileSync('$WORK/$ex.bj','utf8');
-          process.stdout.write(m.modelToSource(JSON.parse(d)));
-        " > "$WORK/$ex.js.src" 2>/dev/null
-        if diff -q "$WORK/$ex.cpp.src" "$WORK/$ex.js.src" >/dev/null 2>&1; then
-            echo "✓ $ex: JS modelToSource == sinc --emit src"; ((PASS++))
-        else
-            echo "✗ $ex: JS 与引擎序列化不一致"; ((FAIL++))
+          const fs=require('fs');
+          require('$ROOT/editor/sinc.js')().then(m=>{
+            const r=JSON.parse(m.ccall('sin_blocks_to_src','string',['string'],
+                     [fs.readFileSync('$WORK/$ex.bj','utf8')]));
+            if(!r.ok){process.exit(1);}
+            fs.writeFileSync('$WORK/$ex.got', r.source);
+          }).catch(()=>process.exit(1));
+        " >/dev/null 2>&1
+        if ! diff -q "$WORK/$ex.want" "$WORK/$ex.got" >/dev/null 2>&1; then
+            echo "  ✗ $ex: blocks → src 与 --emit src 不一致"; b2s_bad=$((b2s_bad+1))
         fi
     done
+    if [[ "$b2s_bad" == "0" ]]; then
+        echo "✓ blocks→src: 17 个例子逐字节一致（含 import/泛型/切片/嵌套结构体）"; ((PASS++))
+    else
+        echo "✗ blocks→src: $b2s_bad 个不一致"; ((FAIL++))
+    fi
 else
-    echo "○ 跳过（未检测到 node）"
+    echo "○ 跳过（未检测到 node 或 sinc.js）"
 fi
 
 # ---- 积木 IDE 交互（需要 node + playwright） ----

@@ -3,6 +3,7 @@
 // 仅用于 wasm 构建（不参与原生 CMake 构建）。导出 sin_to_blocks：
 // 源码 → 词法/语法/类型检查（尽力而为，容错）→ 积木模型 JSON + 诊断。
 // 让编辑器用「规范引擎」做文本 → 积木 的反向同步。
+#include "blockreader.h"
 #include "generics.h"
 #include "lexer.h"
 #include "modules.h"
@@ -111,6 +112,17 @@ const char* sin_rename(const char* src, int line, int col, const char* newName) 
     resolveImports(prog, "", modDiags);   // 浏览器内：只用内置标准库
     std::vector<Diagnostic> cd; checkWithGenerics(prog, cd);
     result = applyRename(prog, line, col, newName ? newName : "");
+    return result.c_str();
+}
+
+// 积木 → 文本：编辑器改完积木后由**引擎**写回源码（唯一序列化器，替代 JS 镜像）。
+// 返回 {"ok":true,"source":"..."} 或 {"ok":false,"err":"..."}。
+const char* sin_blocks_to_src(const char* blocksJson) {
+    static std::string result;
+    bool ok = false; std::string err;
+    Program prog = blocksToProgram(blocksJson ? blocksJson : "", ok, err);
+    if (!ok) { result = "{\"ok\":false,\"err\":" + jsonEscape(err) + "}"; return result.c_str(); }
+    result = "{\"ok\":true,\"source\":" + jsonEscape(serializeSource(prog)) + "}";
     return result.c_str();
 }
 

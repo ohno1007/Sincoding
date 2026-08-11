@@ -479,6 +479,14 @@ struct JsonWriter {
         out << "{"; depth++;
         nl(); key("block"); str(f.isExtern ? "extern_fn" : "fn");
         out << ","; nl(); key("name"); str(f.name);
+        if (!f.typeParams.empty()) {                    // 泛型类型参数 <T, U>
+            out << ","; nl(); key("typeParams"); out << "[";
+            for (size_t i = 0; i < f.typeParams.size(); i++) {
+                if (i) out << ", ";
+                str(f.typeParams[i]);
+            }
+            out << "]";
+        }
         out << ","; nl(); key("params"); out << "[";
         if (!f.params.empty()) {
             depth++;
@@ -489,6 +497,7 @@ struct JsonWriter {
                 out << ","; nl(); key("type");
                 str(f.params[i].type == Type::Struct ? f.params[i].structName
                                                       : typeName(f.params[i].type));
+                out << ","; nl(); key("len"); out << f.params[i].len;   // T[N] / T[]
                 depth--; nl(); out << "}";
             }
             depth--; nl();
@@ -496,6 +505,7 @@ struct JsonWriter {
         out << "]";
         out << ","; nl(); key("ret");
         str(f.ret == Type::Struct ? f.retStruct : typeName(f.ret));
+        out << ","; nl(); key("retLen"); out << f.retLen;               // 返回 T[N]
         if (!f.isExtern) {
             out << ","; nl(); key("body"); stmtList(f.body->stmts);
         }
