@@ -13,6 +13,7 @@ OS="${1:-windows}"
 DEFAULT_OUT="$ROOT/dist/Sincoding-IDE-$OS"
 [[ "$OS" == "windows" ]] && DEFAULT_OUT="$DEFAULT_OUT.exe"
 OUT="${2:-$DEFAULT_OUT}"
+[[ "$OUT" = /* ]] || OUT="$PWD/$OUT"   # go build 在 desktop/ 里跑，相对路径先钉死到调用方目录
 
 command -v go >/dev/null 2>&1 || { echo "需要 Go 工具链（go 不在 PATH）" >&2; exit 1; }
 
