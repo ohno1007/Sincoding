@@ -184,7 +184,9 @@ body.code-mode #file-rail { display:flex; flex-direction:column; width:210px; fl
   cursor:pointer; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .fr-file:hover { background:#f2f4f8; }
 .fr-file.active { background:#e7f0ff; color:#1a6be0; font-weight:600; }
-.fr-ic { width:18px; text-align:center; flex:0 0 auto; }
+.fr-ic { width:16px; flex:0 0 auto; display:inline-flex; align-items:center; color:#9aa3b5; }
+.fr-file.active .fr-ic { color:#1a6be0; }
+#tp-mode { display:inline-flex; align-items:center; gap:5px; }
 #text-pane .hd { padding:10px 14px; font-size:11.5px; color:#6b7488;
   border-bottom:1px solid var(--line); display:flex; align-items:center; gap:7px; }
 #text-pane .hd code { color:#B76100; }

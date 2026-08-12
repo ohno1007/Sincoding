@@ -237,9 +237,14 @@
     if (!codeMode) return;
     fileRail.innerHTML = "";
     fileRail.append(el("div", "fr-title", "项目文件"));
+    const icon = (name) => {                 // 线性 SVG 图标（与全站图标同一套，不用 emoji）
+      const s = el("span", "fr-ic");
+      s.innerHTML = window.SinIcons ? window.SinIcons.svg(name, 14) : "";
+      return s;
+    };
     project.sprites.forEach((sp, i) => {
       const row = el("div", "fr-file" + (codeFile.kind === "sprite" && project.cur === i ? " active" : ""));
-      row.append(el("span", "fr-ic", sp.icon || "🎭"), el("span", null, sp.name + ".sin"));
+      row.append(icon("file"), el("span", null, sp.name + ".sin"));
       row.addEventListener("click", () => {
         codeFile = { kind: "sprite" };
         selectSprite(i); refreshText(); buildFileRail();
@@ -249,7 +254,7 @@
     if ((project.userLibs || []).length) fileRail.append(el("div", "fr-title", "库模块"));
     (project.userLibs || []).forEach((m) => {
       const row = el("div", "fr-file" + (codeFile.kind === "lib" && codeFile.name === m.name ? " active" : ""));
-      row.append(el("span", "fr-ic", "📦"), el("span", null, m.name + ".sin"));
+      row.append(icon("package"), el("span", null, m.name + ".sin"));
       row.addEventListener("click", () => {
         codeFile = { kind: "lib", name: m.name };
         setTextValue(m.src || "");
@@ -265,14 +270,16 @@
     if (on) { setCodePane(true); buildFileRail(); }
     else if (codeFile.kind === "lib") { codeFile = { kind: "sprite" }; refreshText(); }
     const b = document.getElementById("tp-mode");
-    if (b) b.textContent = on ? "🧩 积木模式" : "📁 代码模式";
+    if (b) b.innerHTML = (window.SinIcons ? window.SinIcons.svg(on ? "puzzle" : "code", 13) : "") +
+                         "<span>" + (on ? "积木模式" : "代码模式") + "</span>";
     try { localStorage.setItem("sin.codeMode", on ? "1" : "0"); } catch (e) {}
   }
   (() => {
     const bar = document.getElementById("tp-bar"), sel = document.getElementById("tp-editor");
     if (!bar) return;
-    const b = el("button", null, "📁 代码模式");
+    const b = el("button");
     b.id = "tp-mode"; b.title = "切换主流代码编程布局：左侧文件区 + 大代码区（再点切回积木）";
+    b.innerHTML = (window.SinIcons ? window.SinIcons.svg("code", 13) : "") + "<span>代码模式</span>";
     bar.insertBefore(b, sel);
     b.addEventListener("click", () => setCodeMode(!codeMode));
     try { if (localStorage.getItem("sin.codeMode") === "1") setCodeMode(true); } catch (e) {}
