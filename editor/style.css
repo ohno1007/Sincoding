@@ -106,38 +106,38 @@ header .tabs button.active { background:#fff; color:var(--c-motion); font-weight
 #blocks-top { flex:1 1 auto; display:flex; min-height:0; }
 
 /* 精灵栏（Scratch 精灵面板的横条版：卡片 + 蓝色浮动加号） */
-#sprite-bar { flex:0 0 auto; height:112px; background:#fff; border-top:1px solid var(--line);
-  display:flex; align-items:center; gap:12px; padding:9px 12px; overflow-x:auto; }
-/* 精灵属性行（Scratch 的名称/x/y 仪表盘）：名称一行，x/y 一行 */
-#sprite-props { flex:0 0 auto; display:grid; grid-template-columns:auto auto; gap:7px 10px;
-  font-size:12px; color:var(--ink); padding-right:14px; border-right:1px solid var(--line);
+/* 底部精灵条：紧凑单行（原来 112px 高占掉太多编辑空间） */
+#sprite-bar { flex:0 0 auto; height:60px; background:#fff; border-top:1px solid var(--line);
+  display:flex; align-items:center; gap:10px; padding:6px 10px; overflow-x:auto; }
+/* 精灵属性（名称/x/y）收成一行 */
+#sprite-props { flex:0 0 auto; display:flex; gap:8px;
+  font-size:12px; color:var(--ink); padding-right:12px; border-right:1px solid var(--line);
   align-items:center; }
-#sprite-props label { display:flex; align-items:center; gap:6px; font-weight:600; }
-#sprite-props label:first-child { grid-column:1 / 3; }
-#sprite-props input { font:inherit; font-weight:500; border:1px solid var(--line); border-radius:999px;
-  padding:3px 10px; color:var(--ink); background:#fff; outline:none; }
+#sprite-props label { display:flex; align-items:center; gap:5px; font-weight:600; }
+#sprite-props input { font:inherit; font-size:12px; font-weight:500; border:1px solid var(--line);
+  border-radius:999px; padding:2px 9px; color:var(--ink); background:#fff; outline:none; }
 #sprite-props input:focus { border-color:var(--c-motion); box-shadow:0 0 0 2px rgba(76,151,255,.25); }
-#sprite-props #sp-name { width:132px; }
-#sprite-props #sp-x, #sprite-props #sp-y { width:58px; }
-#sprite-props #sp-costumes { grid-column:1 / 3; font-size:11px; color:#8a92a5; font-weight:600; }
-#sprite-list { display:flex; gap:8px; }
-.sprite-card { width:84px; height:92px; flex:0 0 auto; border:2px solid var(--line); border-radius:8px;
+#sprite-props #sp-name { width:104px; }
+#sprite-props #sp-x, #sprite-props #sp-y { width:48px; }
+#sprite-props #sp-costumes { display:none; }   /* 造型数不占位（造型页里自明） */
+#sprite-list { display:flex; gap:6px; }
+.sprite-card { width:62px; height:46px; flex:0 0 auto; border:2px solid var(--line); border-radius:7px;
   background:#fff; cursor:pointer; position:relative; display:flex; flex-direction:column;
   align-items:center; justify-content:flex-start; overflow:hidden; transition:.1s; }
 .sprite-card:hover { border-color:#B9D0F0; }
 .sprite-card.sel { border-color:var(--c-motion); background:#E9F0FC;
   box-shadow:0 0 0 1px var(--c-motion); }
-.sprite-card .thumb { width:100%; height:50px; background:transparent center/contain no-repeat;
-  display:flex; align-items:center; justify-content:center; font-size:24px; color:#c2cbe0; }
-.sprite-card .nm { font-size:11px; font-weight:600; color:var(--ink); padding:3px 4px 0; width:100%;
+.sprite-card .thumb { width:100%; height:26px; background:transparent center/contain no-repeat;
+  display:flex; align-items:center; justify-content:center; font-size:15px; color:#c2cbe0; }
+.sprite-card .nm { font-size:10px; font-weight:600; color:var(--ink); padding:1px 4px 0; width:100%;
   text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.sprite-card.sel .nm { color:#fff; background:var(--c-motion); border-radius:0; padding:2px 4px;
+.sprite-card.sel .nm { color:#fff; background:var(--c-motion); border-radius:0; padding:1px 4px;
   position:absolute; left:0; right:0; bottom:0; }
-.sprite-card .del { position:absolute; top:-1px; right:-1px; width:18px; height:18px; border:0;
-  border-radius:0 6px 0 8px; background:var(--c-motion); color:#fff; font-size:11px; line-height:1;
+.sprite-card .del { position:absolute; top:-1px; right:-1px; width:15px; height:15px; border:0;
+  border-radius:0 5px 0 7px; background:var(--c-motion); color:#fff; font-size:10px; line-height:1;
   cursor:pointer; display:none; }
 .sprite-card:hover .del { display:block; }
-#add-sprite { width:44px; height:44px; flex:0 0 auto; border-radius:50%; border:0; cursor:pointer;
+#add-sprite { width:32px; height:32px; flex:0 0 auto; border-radius:50%; border:0; cursor:pointer;
   background:var(--c-motion); color:#fff; display:flex; align-items:center; justify-content:center;
   box-shadow:0 1px 3px rgba(0,0,0,.2); }
 #add-sprite:hover { filter:brightness(1.08); }
