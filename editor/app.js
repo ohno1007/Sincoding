@@ -161,6 +161,7 @@
     return r.source;
   }
   function refreshText() {
+    if (codeFile && codeFile.kind === "lib") return; // 正在编辑库文件：别用精灵源码覆盖
     if (document.activeElement === textOut) return; // 用户正在编辑文本，别打断
     if (cm && cm.hasFocus()) return;                // CodeMirror 模式下同理
     try {
@@ -225,6 +226,58 @@
   if (tpClose) tpClose.addEventListener("click", () => setCodePane(false));
   if (tpOpenBtn) tpOpenBtn.addEventListener("click", () => setCodePane(true));
   try { if (localStorage.getItem("sin.codePane") === "0") setCodePane(false); } catch (e) {}
+
+  // ---- 代码模式：主流 IDE 布局——左侧文件区（每精灵一个 .sin + 库模块），中间大代码区 ----
+  // 当前打开的「文件」：sprite = 当前精灵的程序（走原有文本管线）；lib = 用户库模块源码
+  var codeMode = false;                  // var：refreshText 等更早定义的函数也要能安全探测
+  var codeFile = { kind: "sprite" };
+  const fileRail = el("div"); fileRail.id = "file-rail";
+  document.getElementById("main").insertBefore(fileRail, document.getElementById("work"));
+  function buildFileRail() {
+    if (!codeMode) return;
+    fileRail.innerHTML = "";
+    fileRail.append(el("div", "fr-title", "项目文件"));
+    project.sprites.forEach((sp, i) => {
+      const row = el("div", "fr-file" + (codeFile.kind === "sprite" && project.cur === i ? " active" : ""));
+      row.append(el("span", "fr-ic", sp.icon || "🎭"), el("span", null, sp.name + ".sin"));
+      row.addEventListener("click", () => {
+        codeFile = { kind: "sprite" };
+        selectSprite(i); refreshText(); buildFileRail();
+      });
+      fileRail.append(row);
+    });
+    if ((project.userLibs || []).length) fileRail.append(el("div", "fr-title", "库模块"));
+    (project.userLibs || []).forEach((m) => {
+      const row = el("div", "fr-file" + (codeFile.kind === "lib" && codeFile.name === m.name ? " active" : ""));
+      row.append(el("span", "fr-ic", "📦"), el("span", null, m.name + ".sin"));
+      row.addEventListener("click", () => {
+        codeFile = { kind: "lib", name: m.name };
+        setTextValue(m.src || "");
+        setTextStatus("库文件（改动实时生效）", "ok");
+        buildFileRail();
+      });
+      fileRail.append(row);
+    });
+  }
+  function setCodeMode(on) {
+    codeMode = on;
+    document.body.classList.toggle("code-mode", on);
+    if (on) { setCodePane(true); buildFileRail(); }
+    else if (codeFile.kind === "lib") { codeFile = { kind: "sprite" }; refreshText(); }
+    const b = document.getElementById("tp-mode");
+    if (b) b.textContent = on ? "🧩 积木模式" : "📁 代码模式";
+    try { localStorage.setItem("sin.codeMode", on ? "1" : "0"); } catch (e) {}
+  }
+  (() => {
+    const bar = document.getElementById("tp-bar"), sel = document.getElementById("tp-editor");
+    if (!bar) return;
+    const b = el("button", null, "📁 代码模式");
+    b.id = "tp-mode"; b.title = "切换主流代码编程布局：左侧文件区 + 大代码区（再点切回积木）";
+    bar.insertBefore(b, sel);
+    b.addEventListener("click", () => setCodeMode(!codeMode));
+    try { if (localStorage.getItem("sin.codeMode") === "1") setCodeMode(true); } catch (e) {}
+  })();
+  window._sinCodeMode = { set: setCodeMode, files: () => [...fileRail.querySelectorAll(".fr-file")].map((x) => x.textContent) };  // 测试探针
 
   // 懒加载 vendor 脚本/样式（选了 CodeMirror 才加载，默认零开销）
   function loadOnce(tag, attrs) {
@@ -780,7 +833,7 @@
         if (t.tagName === "SELECT" || t.tagName === "INPUT" || t.tagName === "TEXTAREA" ||
             (t.classList && t.classList.contains("field"))) return;   // 编辑字段/下拉照常
         if (e.altKey || e.ctrlKey || e.button !== 0) return;
-        e.stopPropagation();                       // 别让外层语句积木同时开拖
+        e.stopPropagation(); e.preventDefault();   // 别让外层同时开拖 / 别让浏览器画蓝色选区
         dragAfterThreshold(e, (ev) =>
           startExprDrag({ node, srcEl: out, e: ev, fromSlot: out._slot, fromEl: out }));
       });
@@ -859,20 +912,23 @@
     node._el = blk;   // 供「执行高亮」按节点定位 DOM
     // 拖拽重排：按住语句积木拖动，可在各 stack（函数体 / 控制块嘴巴）间移动；拖到调色板=删除
     blk.addEventListener("pointerdown", (e) => {
-      if (e.target.classList.contains("field")) return;
+      const tg = e.target;
+      if (tg.classList.contains("field") || tg.tagName === "SELECT" ||
+          tg.tagName === "INPUT" || tg.tagName === "TEXTAREA") return;
       // Alt+点击 = 设/清断点。必须拦住冒泡：否则外层每个控制积木的同款监听器
       // 也会各设一个断点（嵌套越深误设越多）
       if (e.altKey) { e.stopPropagation(); toggleBreakpoint(node, blk); return; }
       // Ctrl+拖拽 = 复制积木（连同嵌套子积木），像从调色板拖出一个新块
       if (e.ctrlKey && list) {
-        e.stopPropagation();
+        e.stopPropagation(); e.preventDefault();
         dragAfterThreshold(e, (ev) =>
           startStmtDrag({ node: cloneModel(node), fromList: null, blockEl: null, srcEl: blk, e: ev }));
         return;
       }
-      // 位移阈值后才真正开拖：点一下不再闪幽灵。停止冒泡，免得外层控制积木同时武装
+      // 位移阈值后才真正开拖：点一下不再闪幽灵。停止冒泡，免得外层控制积木同时武装；
+      // preventDefault 阻止浏览器把拖动手势当成文本选择（蓝色选区的根源）
       if (list) {
-        e.stopPropagation();
+        e.stopPropagation(); e.preventDefault();
         dragAfterThreshold(e, (ev) => startStmtDrag({ node, fromList: list, blockEl: blk, e: ev }));
       }
     });
@@ -1059,7 +1115,9 @@
     const sx = e.clientX, sy = e.clientY;
     const mv = (ev) => {
       if (Math.hypot(ev.clientX - sx, ev.clientY - sy) <= 4) return;
-      cleanup(); begin(ev);
+      cleanup();
+      try { window.getSelection().removeAllRanges(); } catch (err) { /* 清掉已存在的选区 */ }
+      begin(ev);
     };
     const up = () => cleanup();
     const cleanup = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
@@ -1168,17 +1226,39 @@
     drag.target = { list: best.list, index: idx };
   }
 
+  // 松手在画布空白处：像 Scratch 的散落脚本——包成一个新「片段」函数放在那里
+  // （AST 仍是唯一真相：片段就是个还没接进事件的普通函数，随时改名/挂事件）
+  function dropAsFragment(chain, ev) {
+    const wrap = document.getElementById("canvas-wrap");
+    const r = wrap.getBoundingClientRect();
+    if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return false;
+    let n = 1;
+    while (sprite().program.some((f) => f.name === "part" + n)) n++;
+    sprite().program.push({
+      block: "fn", name: "part" + n, params: [], ret: "void", body: chain,
+      _x: (ev.clientX - r.left - view.x) / view.k,
+      _y: (ev.clientY - r.top - view.y) / view.k,
+    });
+    return true;
+  }
+
   function finishStmtDrop() {
-    if (!drag.fromList) {                 // 来自调色板的新积木：有落点就插入，没有就丢弃
+    if (!drag.fromList) {                 // 来自调色板的新积木：有落点就插入；空白处=新片段
       if (drag.target)
         drag.target.list.splice(drag.target.index, 0,
                                 fixVars(drag.chain[0], fnOfList(drag.target.list)));
+      else if (!isOverPalette(drag.lastEv))
+        dropAsFragment([fixVars(drag.chain[0], null) || drag.chain[0]], drag.lastEv);
       render(); return;
     }
     const chain = drag.chain;
     const fromIdx = drag.fromList.indexOf(chain[0]);
-    if (!drag.target) {                   // 没落点：拖到调色板 = 删除整链，否则原样复位
-      if (isOverPalette(drag.lastEv) && fromIdx >= 0) drag.fromList.splice(fromIdx, chain.length);
+    if (!drag.target) {                   // 没落点：拖到调色板 = 删除整链；画布空白 = 摘成片段
+      if (isOverPalette(drag.lastEv)) {
+        if (fromIdx >= 0) drag.fromList.splice(fromIdx, chain.length);
+      } else if (fromIdx >= 0 && dropAsFragment(chain, drag.lastEv)) {
+        drag.fromList.splice(fromIdx, chain.length);
+      }
       render(); return;
     }
     if (fromIdx < 0) { render(); return; }
@@ -1511,6 +1591,20 @@
   let parseBad = false;    // 文本当前有语法错误（积木/保存停留在 last-good）
   function onTextEdited() {
     if (!sincMod) { setTextStatus("编译器加载中…", "warn"); return; }
+    // 代码模式打开的是库模块文件：改动写回 userLibs 并即时同步引擎（不动精灵程序/画布）
+    if (codeFile && codeFile.kind === "lib") {
+      const m = (project.userLibs || []).find((x) => x.name === codeFile.name);
+      if (m) { m.src = textOut.value; syncLibsToEngine(); }
+      let diags = [];
+      try {
+        const out = sincMod.ccall("sin_to_blocks", "string", ["string"], [textOut.value]);
+        diags = JSON.parse(out).diags || [];
+      } catch (e) { /* 诊断尽力而为 */ }
+      renderDiags(diags);
+      setTextStatus(diags.length ? (diags.length + " 个问题") : "库文件已同步 ✓", diags.length ? "warn" : "ok");
+      schedulePreview();
+      return;
+    }
     let res;
     try {
       const out = sincMod.ccall("sin_to_blocks", "string", ["string"], [textOut.value]);
@@ -2092,6 +2186,7 @@
 
   function renderSpriteBar() {
     refreshSpriteProps();
+    buildFileRail();          // 代码模式的文件区与精灵列表同步（增删改名都跟着变）
     const list = document.getElementById("sprite-list");
     list.innerHTML = "";
     project.sprites.forEach((sp, i) => {
@@ -2129,7 +2224,10 @@
     // 回车会把旧值写进新精灵（改错名/挪错位）
     const act = document.activeElement;
     if (act && act.closest && act.closest("#sprite-props")) act.blur();
-    if (ce) ce.setStore(project.sprites[i].costumes); // 切换造型集（会先存回旧的）
+    if (ce) {
+      sprite()._costumeSel = ce.current;             // 记住旧精灵正在编辑哪张造型
+      ce.setStore(project.sprites[i].costumes, project.sprites[i]._costumeSel); // 切换并还原选中
+    }
     project.cur = i;
     selected = sprite().program[0] || null;
     renderSpriteBar();

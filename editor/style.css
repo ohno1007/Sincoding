@@ -154,6 +154,8 @@ header .tabs button.active { background:#fff; color:var(--c-motion); font-weight
 #canvas { position:absolute; left:0; top:0; transform-origin:0 0;
   user-select:none; -webkit-user-select:none; }   /* 拖积木不选中文本（拖动时的蓝色选区） */
 #canvas input, #canvas textarea { user-select:text; -webkit-user-select:text; }
+/* 拖拽进行中：全页禁选，跨面板拖动也不再拉出蓝色选区 */
+body.dragging-block, body.dragging-block * { user-select:none !important; -webkit-user-select:none !important; }
 #zoom-hint { position:absolute; right:60px; bottom:14px; background:rgba(87,94,117,.75);
   color:#fff; font-size:11px; padding:5px 10px; border-radius:7px; pointer-events:none;
   display:flex; align-items:center; gap:6px;
@@ -168,6 +170,21 @@ header .tabs button.active { background:#fff; color:var(--c-motion); font-weight
 
 #text-pane { width:348px; flex:0 0 auto; background:#fff; color:#24292F;
   border-left:1px solid var(--line); display:flex; flex-direction:column; }
+
+/* ---- 代码模式：左侧文件区 + 大代码区（主流 IDE 布局），积木区整体让位 ---- */
+#file-rail { display:none; }
+body.code-mode #palette { display:none; }
+body.code-mode #canvas-wrap { display:none; }
+body.code-mode #tp-close { display:none; }        /* 代码区就是主区，不给关 */
+body.code-mode #text-pane { width:auto; flex:1 1 auto; border-left:none; }
+body.code-mode #file-rail { display:flex; flex-direction:column; width:210px; flex:0 0 210px;
+  background:#fff; border-right:1px solid var(--line); padding:10px 8px; gap:2px; overflow:auto; }
+.fr-title { font-size:12px; color:#8a93a5; padding:6px 8px 4px; }
+.fr-file { display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px;
+  cursor:pointer; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fr-file:hover { background:#f2f4f8; }
+.fr-file.active { background:#e7f0ff; color:#1a6be0; font-weight:600; }
+.fr-ic { width:18px; text-align:center; flex:0 0 auto; }
 #text-pane .hd { padding:10px 14px; font-size:11.5px; color:#6b7488;
   border-bottom:1px solid var(--line); display:flex; align-items:center; gap:7px; }
 #text-pane .hd code { color:#B76100; }
