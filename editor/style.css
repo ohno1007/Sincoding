@@ -121,14 +121,16 @@ header .tabs button.active { background:#fff; color:var(--c-motion); font-weight
 #sprite-props #sp-x, #sprite-props #sp-y { width:48px; }
 #sprite-props #sp-costumes { display:none; }   /* 造型数不占位（造型页里自明） */
 #sprite-list { display:flex; gap:6px; }
-.sprite-card { width:62px; height:46px; flex:0 0 auto; border:2px solid var(--line); border-radius:7px;
+.sprite-card { width:62px; height:48px; flex:0 0 auto; border:2px solid var(--line); border-radius:7px;
   background:#fff; cursor:pointer; position:relative; display:flex; flex-direction:column;
   align-items:center; justify-content:flex-start; overflow:hidden; transition:.1s; }
 .sprite-card:hover { border-color:#B9D0F0; }
 .sprite-card.sel { border-color:var(--c-motion); background:#E9F0FC;
   box-shadow:0 0 0 1px var(--c-motion); }
-.sprite-card .thumb { width:100%; height:26px; background:transparent center/contain no-repeat;
-  display:flex; align-items:center; justify-content:center; font-size:15px; color:#c2cbe0; }
+/* 缩略图定高不可压缩——被名字/造型名两行挤压时首先消失的就是它 */
+.sprite-card .thumb { width:100%; flex:0 0 28px; height:28px; background:transparent center/contain no-repeat;
+  display:flex; align-items:center; justify-content:center; font-size:16px; color:#c2cbe0; }
+.sprite-card .cos-nm { display:none; }   /* 紧凑条不显示造型名（造型页里自明） */
 .sprite-card .nm { font-size:10px; font-weight:600; color:var(--ink); padding:1px 4px 0; width:100%;
   text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sprite-card.sel .nm { color:#fff; background:var(--c-motion); border-radius:0; padding:1px 4px;
