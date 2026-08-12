@@ -854,10 +854,15 @@
       // Ctrl+拖拽 = 复制积木（连同嵌套子积木），像从调色板拖出一个新块
       if (e.ctrlKey && list) {
         e.stopPropagation();
-        startStmtDrag({ node: cloneModel(node), fromList: null, blockEl: null, srcEl: blk, e });
+        dragAfterThreshold(e, (ev) =>
+          startStmtDrag({ node: cloneModel(node), fromList: null, blockEl: null, srcEl: blk, e: ev }));
         return;
       }
-      if (list) startStmtDrag({ node, fromList: list, blockEl: blk, e });
+      // 位移阈值后才真正开拖：点一下不再闪幽灵。停止冒泡，免得外层控制积木同时武装
+      if (list) {
+        e.stopPropagation();
+        dragAfterThreshold(e, (ev) => startStmtDrag({ node, fromList: list, blockEl: blk, e: ev }));
+      }
     });
     if (breakpoints.has(node)) blk.classList.add("bp");          // 重绘后保持断点标记
     // 右键删除积木
@@ -997,50 +1002,103 @@
     const r = document.getElementById("palette").getBoundingClientRect();
     return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
   }
-  function makeGhost(srcEl, e) {
-    const r = srcEl.getBoundingClientRect();
-    const ghost = srcEl.cloneNode(true);
-    // cloneNode 不复制 <select>/<input> 的运行时状态（选中项是 property 不是 attribute）：
-    // 不同步的话，拖「赋 a = b」手里会显示成「赋 n = n」（全部回落到第一个 option）
-    const srcSel = srcEl.querySelectorAll("select"), dstSel = ghost.querySelectorAll("select");
+  // cloneNode 不复制 <select>/<input> 的运行时状态（选中项是 property 不是 attribute）：
+  // 不同步的话，拖「赋 a = b」手里会显示成「赋 n = n」（全部回落到第一个 option）
+  function cloneWithState(srcEl) {
+    const c = srcEl.cloneNode(true);
+    const srcSel = srcEl.querySelectorAll("select"), dstSel = c.querySelectorAll("select");
     srcSel.forEach((s, i) => { if (dstSel[i]) dstSel[i].selectedIndex = s.selectedIndex; });
-    const srcIn = srcEl.querySelectorAll("input, textarea"), dstIn = ghost.querySelectorAll("input, textarea");
+    const srcIn = srcEl.querySelectorAll("input, textarea"), dstIn = c.querySelectorAll("input, textarea");
     srcIn.forEach((s, i) => { if (dstIn[i]) dstIn[i].value = s.value; });
-    const offx = e.clientX - r.left, offy = e.clientY - r.top;
+    return c;
+  }
+  // 幽灵：接受单个元素或整链元素数组（Scratch 拖走一块 = 带走它下面整串）。
+  // 移动只改 transform（合成器通道，不触发布局/重绘）——拖拽顺滑的关键之一。
+  function makeGhost(srcEls, e) {
+    const els = Array.isArray(srcEls) ? srcEls : [srcEls];
+    const r0 = els[0].getBoundingClientRect();
+    const ghost = document.createElement("div");
+    els.forEach((s) => {
+      const c = cloneWithState(s);
+      c.style.margin = "0 0 4px 0";
+      c.style.width = s.getBoundingClientRect().width + "px";
+      ghost.appendChild(c);
+    });
+    const offx = e.clientX - r0.left, offy = e.clientY - r0.top;
     // Scratch 手感：不旋转，轻微放大 + 投影。缩放原点必须是抓取点，
     // 否则以左上角为原点放大时，内容会从手指下向右下漂走
     Object.assign(ghost.style, {
-      position: "fixed", left: r.left + "px", top: r.top + "px", width: r.width + "px",
-      pointerEvents: "none", opacity: ".95", zIndex: 9999,
-      transform: "scale(1.04)", transformOrigin: offx + "px " + offy + "px",
-      filter: "drop-shadow(0 6px 14px rgba(0,0,0,.35))", margin: 0,
+      position: "fixed", left: "0px", top: "0px",
+      pointerEvents: "none", opacity: ".95", zIndex: 9999, margin: 0,
+      willChange: "transform",
+      transform: "translate(" + r0.left + "px," + r0.top + "px) scale(1.04)",
+      transformOrigin: offx + "px " + offy + "px",
+      filter: "drop-shadow(0 6px 14px rgba(0,0,0,.35))",
     });
     document.body.appendChild(ghost);
-    return { ghost, offx, offy };
+    const moveTo = (ev) => {
+      ghost.style.transform =
+        "translate(" + (ev.clientX - offx) + "px," + (ev.clientY - offy) + "px) scale(1.04)";
+    };
+    return { ghost, offx, offy, moveTo };
+  }
+  // 位移阈值：按下不算拖，动过 4px 才开始——点一下积木不再闪出幽灵/变暗
+  function dragAfterThreshold(e, begin) {
+    const sx = e.clientX, sy = e.clientY;
+    const mv = (ev) => {
+      if (Math.hypot(ev.clientX - sx, ev.clientY - sy) <= 4) return;
+      cleanup(); begin(ev);
+    };
+    const up = () => cleanup();
+    const cleanup = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
   }
   function markDeleteZone(ev) {
     const pal = document.getElementById("palette");
     pal.classList.toggle("delete-zone", !drag.target && !drag.slot && isOverPalette(ev));
   }
 
-  // 语句积木拖拽：fromList=null 表示来自调色板的新积木；拖到调色板上松手 = 删除
+  // 语句积木拖拽：fromList=null 表示来自调色板的新积木；拖到调色板上松手 = 删除。
+  // Scratch 语义：画布内抓住哪块，就带走它和同栈里它下面的所有积木（整链）；
+  // 控制积木（循环/如果）天然带着嘴里的内容走（同一棵子树）。
   function startStmtDrag({ node, fromList, blockEl, srcEl, e }) {
     e.stopPropagation();
-    const { ghost, offx, offy } = makeGhost(srcEl || blockEl, e);
-    if (blockEl) blockEl.style.opacity = ".25";
+    let chain = [node], chainEls = blockEl ? [blockEl] : [];
+    if (fromList) {
+      const i0 = fromList.indexOf(node);
+      if (i0 >= 0) chain = fromList.slice(i0);
+      if (blockEl) {                       // 链上每块对应的 DOM（同 .stack 里的后续兄弟）
+        chainEls = [];
+        for (let elx = blockEl; elx; elx = elx.nextElementSibling)
+          if (elx.classList && elx.classList.contains("block")) chainEls.push(elx);
+        chainEls = chainEls.slice(0, chain.length);
+      }
+    }
+    const { ghost, moveTo } = makeGhost(srcEl ? [srcEl] : chainEls, e);
+    chainEls.forEach((b) => { b.style.opacity = ".25"; });
     const indicator = el("div", "drop-indicator");
     // Scratch 落点提示是「块影」而非细线：高度取被拖积木头部行的高度
-    const srcH = (srcEl || blockEl) ? Math.min(34, (srcEl || blockEl).getBoundingClientRect().height) : 26;
+    const head = srcEl || chainEls[0];
+    const srcH = head ? Math.min(34, head.getBoundingClientRect().height) : 26;
     indicator.style.height = Math.max(18, Math.round(srcH)) + "px";
     document.body.classList.add("dragging-block");
-    drag = { kind: "stmt", node, fromList, blockEl, ghost, indicator, target: null, offx, offy, lastEv: e };
+    drag = { kind: "stmt", node, chain, chainEls, fromList, ghost, indicator,
+             target: null, map: null, lastSt: null, lastIdx: -1, hoverMouth: null,
+             raf: 0, lastEv: e };
+    // rAF 节流：pointermove 可能 100Hz+，每帧最多处理一次（幽灵 transform + 落点判定）
     const move = (ev) => {
       drag.lastEv = ev;
-      ghost.style.left = (ev.clientX - offx) + "px"; ghost.style.top = (ev.clientY - offy) + "px";
-      updateDropTarget(ev); markDeleteZone(ev);
+      if (drag.raf) return;
+      drag.raf = requestAnimationFrame(() => {
+        if (!drag) return;
+        drag.raf = 0;
+        moveTo(drag.lastEv); updateDropTarget(drag.lastEv); markDeleteZone(drag.lastEv);
+      });
     };
     const up = () => {
       window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      // 节流帧还没跑就松手（快速拖放/合成事件）：同步补算一次落点，别丢
+      if (drag.raf) { cancelAnimationFrame(drag.raf); drag.raf = 0; updateDropTarget(drag.lastEv); }
       ghost.remove(); if (indicator.parentNode) indicator.remove();
       document.body.classList.remove("dragging-block");
       document.getElementById("palette").classList.remove("delete-zone");
@@ -1049,66 +1107,93 @@
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   }
 
-  function updateDropTarget(ev) {
-    // 指示器已从细线改成块影（有高度）：测量前必须先摘出文档流，
-    // 否则积木被它顶下一个块高，中点判定测的是漂移后的位置，换位滞后一格
-    if (drag.indicator.parentNode) drag.indicator.remove();
-    const stacks = [...canvas.querySelectorAll(".stack")];
-    let best = null;
-    for (const st of stacks) {
-      if (drag.blockEl && drag.blockEl.contains(st)) continue;   // 不能放进自身子树
+  // 拖拽开始时一次性量好全部落点（拖拽期间模型不变，指示器插拔也不重测——
+  // 用「插入前」的稳定几何做判定，既没有布局抖动，也没有指示器把判定顶飞的回摆）
+  function buildDropMap() {
+    const map = [];
+    for (const st of canvas.querySelectorAll(".stack")) {
+      if (drag.chainEls.some((b) => b.contains(st))) continue;   // 不能放进被拖的子树
       const r = st.getBoundingClientRect();
-      if (ev.clientX >= r.left - 14 && ev.clientX <= r.right + 14 &&
-          ev.clientY >= r.top - 22 && ev.clientY <= r.bottom + 22) { best = st; break; }
+      const kids = [...st.children].filter((c) => c.classList.contains("block"));
+      map.push({ st, list: st._list, rect: r,
+                 mids: kids.map((k) => { const kr = k.getBoundingClientRect(); return kr.top + kr.height / 2; }),
+                 kids });
     }
-    [...canvas.querySelectorAll(".mouth.drop-in")].forEach((m) => m.classList.remove("drop-in"));
-    if (!best) { drag.target = null; return; }
-    if (best.parentNode && best.parentNode.classList.contains("mouth")) best.parentNode.classList.add("drop-in");
-    const kids = [...best.children].filter((c) => c.classList.contains("block"));
-    let idx = kids.length;
-    for (let i = 0; i < kids.length; i++) {
-      const r = kids[i].getBoundingClientRect();
-      if (ev.clientY < r.top + r.height / 2) { idx = i; break; }
+    return map;
+  }
+
+  function updateDropTarget(ev) {
+    if (!drag.map) drag.map = buildDropMap();
+    // 最内层优先：严格落在框内的候选取「文档序最后」（嵌套越深越靠后），
+    // 都不严格命中再看外扩容差——修掉「外层函数体永远抢走循环嘴巴」的老毛病
+    let strict = null, loose = null;
+    for (const m of drag.map) {
+      const r = m.rect;
+      if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) strict = m;
+      else if (ev.clientX >= r.left - 14 && ev.clientX <= r.right + 14 &&
+               ev.clientY >= r.top - 22 && ev.clientY <= r.bottom + 22) loose = m;
     }
-    best.insertBefore(drag.indicator, kids[idx] || null);
-    drag.target = { list: best._list, index: idx };
+    const best = strict || loose;
+    if (!best) {
+      if (drag.hoverMouth) { drag.hoverMouth.classList.remove("drop-in"); drag.hoverMouth = null; }
+      if (drag.indicator.parentNode) drag.indicator.remove();
+      drag.target = null; drag.lastSt = null; drag.lastIdx = -1;
+      return;
+    }
+    let idx = best.mids.length;
+    for (let i = 0; i < best.mids.length; i++) if (ev.clientY < best.mids[i]) { idx = i; break; }
+    if (best.st === drag.lastSt && idx === drag.lastIdx) return;   // 落点没变：零 DOM 操作
+    drag.lastSt = best.st; drag.lastIdx = idx;
+    const mouth = best.st.parentNode && best.st.parentNode.classList.contains("mouth") ? best.st.parentNode : null;
+    if (drag.hoverMouth !== mouth) {
+      if (drag.hoverMouth) drag.hoverMouth.classList.remove("drop-in");
+      drag.hoverMouth = mouth;
+      if (mouth) mouth.classList.add("drop-in");
+    }
+    best.st.insertBefore(drag.indicator, best.kids[idx] || null);
+    drag.target = { list: best.list, index: idx };
   }
 
   function finishStmtDrop() {
     if (!drag.fromList) {                 // 来自调色板的新积木：有落点就插入，没有就丢弃
       if (drag.target)
         drag.target.list.splice(drag.target.index, 0,
-                                fixVars(drag.node, fnOfList(drag.target.list)));
+                                fixVars(drag.chain[0], fnOfList(drag.target.list)));
       render(); return;
     }
-    if (!drag.target) {                   // 没落点：拖到调色板 = 删除，否则原样复位
-      if (isOverPalette(drag.lastEv)) {
-        const i = drag.fromList.indexOf(drag.node); if (i >= 0) drag.fromList.splice(i, 1);
-      }
+    const chain = drag.chain;
+    const fromIdx = drag.fromList.indexOf(chain[0]);
+    if (!drag.target) {                   // 没落点：拖到调色板 = 删除整链，否则原样复位
+      if (isOverPalette(drag.lastEv) && fromIdx >= 0) drag.fromList.splice(fromIdx, chain.length);
       render(); return;
     }
-    const fromIdx = drag.fromList.indexOf(drag.node);
     if (fromIdx < 0) { render(); return; }
-    drag.fromList.splice(fromIdx, 1);
+    drag.fromList.splice(fromIdx, chain.length);
     let idx = drag.target.index;
-    if (drag.target.list === drag.fromList && fromIdx < idx) idx--;
-    drag.target.list.splice(idx, 0, drag.node);
+    if (drag.target.list === drag.fromList)   // 同列表：扣掉已摘出的、位于落点前面的链块数
+      idx -= Math.min(Math.max(idx - fromIdx, 0), chain.length);
+    drag.target.list.splice(idx, 0, ...chain);
     render();
   }
 
   // 表达式积木拖拽：从调色板把「运算/侦测」reporter 拖进某个表达式槽位（嵌套）
   function startExprDrag({ node, srcEl, e }) {
     e.stopPropagation();
-    const { ghost, offx, offy } = makeGhost(srcEl, e);
+    const { ghost, moveTo } = makeGhost(srcEl, e);
     document.body.classList.add("dragging-block");
-    drag = { kind: "expr", node, ghost, offx, offy, slot: null, slotEl: null, lastEv: e };
+    drag = { kind: "expr", node, ghost, slot: null, slotEl: null, raf: 0, lastEv: e };
     const move = (ev) => {
       drag.lastEv = ev;
-      ghost.style.left = (ev.clientX - offx) + "px"; ghost.style.top = (ev.clientY - offy) + "px";
-      updateExprTarget(ev);
+      if (drag.raf) return;
+      drag.raf = requestAnimationFrame(() => {
+        if (!drag) return;
+        drag.raf = 0;
+        moveTo(drag.lastEv); updateExprTarget(drag.lastEv);
+      });
     };
     const up = () => {
       window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      if (drag.raf) { cancelAnimationFrame(drag.raf); drag.raf = 0; updateExprTarget(drag.lastEv); }
       ghost.remove(); document.body.classList.remove("dragging-block");
       if (drag.slotEl) drag.slotEl.classList.remove("slot-hover");
       if (drag.slot) drag.slot.replace(fixVars(drag.node, fnOfExpr(drag.slot.node))); else render();
