@@ -772,6 +772,18 @@
       out.addEventListener("contextmenu", (e) => {   // 右键把槽位重置为默认数字（撤销嵌套）
         e.preventDefault(); e.stopPropagation(); replace({ block: "int", value: 0 });
       });
+      // Scratch 手感：槽里的运算/取值积木可以直接拖走——拖进别的槽位=换家，
+      // 拖到调色板=摘掉（槽位复位为 0）。字面量（数字/文字直接改）不拖。
+      const draggableExpr = !["int", "float", "string", "bool"].includes(node.block);
+      if (draggableExpr) out.addEventListener("pointerdown", (e) => {
+        const t = e.target;
+        if (t.tagName === "SELECT" || t.tagName === "INPUT" || t.tagName === "TEXTAREA" ||
+            (t.classList && t.classList.contains("field"))) return;   // 编辑字段/下拉照常
+        if (e.altKey || e.ctrlKey || e.button !== 0) return;
+        e.stopPropagation();                       // 别让外层语句积木同时开拖
+        dragAfterThreshold(e, (ev) =>
+          startExprDrag({ node, srcEl: out, e: ev, fromSlot: out._slot, fromEl: out }));
+      });
     }
     return out;
   }
@@ -1099,6 +1111,8 @@
       window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
       // 节流帧还没跑就松手（快速拖放/合成事件）：同步补算一次落点，别丢
       if (drag.raf) { cancelAnimationFrame(drag.raf); drag.raf = 0; updateDropTarget(drag.lastEv); }
+      // 复原变暗：渲染缓存可能原样复用这张卡的 DOM，残留 opacity 会一直是半透明
+      chainEls.forEach((b) => { b.style.opacity = ""; });
       ghost.remove(); if (indicator.parentNode) indicator.remove();
       document.body.classList.remove("dragging-block");
       document.getElementById("palette").classList.remove("delete-zone");
@@ -1177,11 +1191,13 @@
   }
 
   // 表达式积木拖拽：从调色板把「运算/侦测」reporter 拖进某个表达式槽位（嵌套）
-  function startExprDrag({ node, srcEl, e }) {
+  function startExprDrag({ node, srcEl, e, fromSlot, fromEl }) {
     e.stopPropagation();
     const { ghost, moveTo } = makeGhost(srcEl, e);
+    if (fromEl) fromEl.style.opacity = ".3";
     document.body.classList.add("dragging-block");
-    drag = { kind: "expr", node, ghost, slot: null, slotEl: null, raf: 0, lastEv: e };
+    drag = { kind: "expr", node, ghost, slot: null, slotEl: null,
+             fromSlot: fromSlot || null, fromEl: fromEl || null, raf: 0, lastEv: e };
     const move = (ev) => {
       drag.lastEv = ev;
       if (drag.raf) return;
@@ -1189,14 +1205,23 @@
         if (!drag) return;
         drag.raf = 0;
         moveTo(drag.lastEv); updateExprTarget(drag.lastEv);
+        if (drag.fromSlot) markDeleteZone(drag.lastEv);   // 画布拖出的才有「拖调色板摘掉」
       });
     };
     const up = () => {
       window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
       if (drag.raf) { cancelAnimationFrame(drag.raf); drag.raf = 0; updateExprTarget(drag.lastEv); }
+      if (fromEl) fromEl.style.opacity = "";     // 渲染缓存可能复用这张卡，必须复原
       ghost.remove(); document.body.classList.remove("dragging-block");
+      document.getElementById("palette").classList.remove("delete-zone");
       if (drag.slotEl) drag.slotEl.classList.remove("slot-hover");
-      if (drag.slot) drag.slot.replace(fixVars(drag.node, fnOfExpr(drag.slot.node))); else render();
+      if (drag.slot && drag.slot !== drag.fromSlot) {
+        // 先把源槽复位再放进目标槽（目标是源的祖先时两步合成的结果也正确）
+        if (drag.fromSlot) drag.fromSlot.replace({ block: "int", value: 0 });
+        drag.slot.replace(fixVars(drag.node, fnOfExpr(drag.slot.node)));
+      } else if (!drag.slot && drag.fromSlot && isOverPalette(drag.lastEv)) {
+        drag.fromSlot.replace({ block: "int", value: 0 });   // 拖到调色板 = 摘掉
+      } else render();
       drag = null;
     };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
@@ -1204,7 +1229,9 @@
   function updateExprTarget(ev) {
     if (drag.slotEl) { drag.slotEl.classList.remove("slot-hover"); drag.slotEl = null; drag.slot = null; }
     const hit = document.elementFromPoint(ev.clientX, ev.clientY);
-    const slotEl = hit && hit.closest && hit.closest(".expr-slot");
+    let slotEl = hit && hit.closest && hit.closest(".expr-slot");
+    // 不能放回自己/自己肚子里的槽位（那是被拖走的子树）
+    if (slotEl && drag.fromEl && (slotEl === drag.fromEl || drag.fromEl.contains(slotEl))) slotEl = null;
     if (slotEl && canvas.contains(slotEl)) { slotEl.classList.add("slot-hover"); drag.slotEl = slotEl; drag.slot = slotEl._slot; }
   }
 
@@ -2623,8 +2650,11 @@
     const h = palHoverEl();
     h.innerHTML = ""; h.appendChild(blk.cloneNode(true));
     h.firstChild.style.transform = "";   // 弹出层展示原尺寸（预览可能被缩放收窄过）
+    // 弹层放到调色板右侧（原来直接盖在列表上，像积木叠压错位）
     const r = wys.getBoundingClientRect();
-    h.style.left = r.left + "px"; h.style.top = r.top + "px";
+    const pal = document.getElementById("palette").getBoundingClientRect();
+    h.style.left = (pal.right + 8) + "px";
+    h.style.top = Math.max(8, Math.min(r.top, window.innerHeight - 90)) + "px";
     h.hidden = false;
   }
   function hidePalHover() { const h = document.getElementById("pal-hover"); if (h) h.hidden = true; }

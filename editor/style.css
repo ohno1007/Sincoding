@@ -80,6 +80,10 @@ header .tabs button.active { background:#fff; color:var(--c-motion); font-weight
 /* 调色板里积木不换行：超出宽度直接截断，靠 hover 弹出看完整 */
 .pal-wys .hdr { flex-wrap:nowrap; }
 .pal-wys .block, .pal-hover .block { white-space:nowrap; }
+/* reporter（表达式）预览同样一行到底：中文标签/字符串字面量不许竖排折行 */
+.pal-wys .expr-wrap { display:inline-block; max-width:100%; overflow:hidden; }
+.pal-wys .expr-wrap, .pal-wys .expr-wrap *,
+.pal-hover .expr-wrap, .pal-hover .expr-wrap * { white-space:nowrap; word-break:keep-all; }
 .pal-wys .mouth { display:none; }        /* 预览不展开嘴巴，保持紧凑一行 */
 .pal-wys .block.ctrl::after, .pal-wys .block.ctrl::before { display:none; }   /* 也不展开 C 形下臂/榫舌 */
 .pal-wys .block.ctrl > .hdr { border-radius:6px; }
@@ -147,7 +151,9 @@ header .tabs button.active { background:#fff; color:var(--c-motion); font-weight
   background-image:radial-gradient(#DDE3EA 1.2px, transparent 1.2px);
   background-size:24px 24px; }
 #canvas-wrap.panning { cursor:grabbing; }
-#canvas { position:absolute; left:0; top:0; transform-origin:0 0; }
+#canvas { position:absolute; left:0; top:0; transform-origin:0 0;
+  user-select:none; -webkit-user-select:none; }   /* 拖积木不选中文本（拖动时的蓝色选区） */
+#canvas input, #canvas textarea { user-select:text; -webkit-user-select:text; }
 #zoom-hint { position:absolute; right:60px; bottom:14px; background:rgba(87,94,117,.75);
   color:#fff; font-size:11px; padding:5px 10px; border-radius:7px; pointer-events:none;
   display:flex; align-items:center; gap:6px;
