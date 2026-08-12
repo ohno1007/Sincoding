@@ -1093,12 +1093,20 @@
     const els = Array.isArray(srcEls) ? srcEls : [srcEls];
     const r0 = els[0].getBoundingClientRect();
     const ghost = document.createElement("div");
-    els.forEach((s) => {
+    // 长链只克隆前几块（几百块的整栈克隆 + 投影滤镜会把拖动拖成幻灯片）
+    const MAXG = 6;
+    els.slice(0, MAXG).forEach((s) => {
       const c = cloneWithState(s);
       c.style.margin = "0 0 4px 0";
       c.style.width = s.getBoundingClientRect().width + "px";
       ghost.appendChild(c);
     });
+    if (els.length > MAXG) {
+      const more = document.createElement("div");
+      more.textContent = "… 还有 " + (els.length - MAXG) + " 块";
+      more.style.cssText = "font-size:12px;color:#fff;background:rgba(0,0,0,.45);padding:3px 10px;border-radius:999px;width:max-content;";
+      ghost.appendChild(more);
+    }
     const offx = e.clientX - r0.left, offy = e.clientY - r0.top;
     // Scratch 手感：不旋转，轻微放大 + 投影。缩放原点必须是抓取点，
     // 否则以左上角为原点放大时，内容会从手指下向右下漂走
@@ -1172,18 +1180,24 @@
         moveTo(drag.lastEv); updateDropTarget(drag.lastEv); markDeleteZone(drag.lastEv);
       });
     };
-    const up = () => {
+    const finish = (cancelled) => {
       window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel); window.removeEventListener("blur", cancel);
       // 节流帧还没跑就松手（快速拖放/合成事件）：同步补算一次落点，别丢
-      if (drag.raf) { cancelAnimationFrame(drag.raf); drag.raf = 0; updateDropTarget(drag.lastEv); }
+      if (drag.raf) { cancelAnimationFrame(drag.raf); drag.raf = 0; if (!cancelled) updateDropTarget(drag.lastEv); }
       // 复原变暗：渲染缓存可能原样复用这张卡的 DOM，残留 opacity 会一直是半透明
       chainEls.forEach((b) => { b.style.opacity = ""; });
       ghost.remove(); if (indicator.parentNode) indicator.remove();
       document.body.classList.remove("dragging-block");
       document.getElementById("palette").classList.remove("delete-zone");
+      drag.cancelled = cancelled;
       finishStmtDrop(); drag = null;
     };
+    const up = () => finish(false);
+    // 系统打断（触点取消 / 窗口失焦）：干净收场，不留幽灵不误落——「拖着拖着卡住」的兜底
+    const cancel = () => finish(true);
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel); window.addEventListener("blur", cancel);
   }
 
   // 拖拽开始时一次性量好全部落点（拖拽期间模型不变，指示器插拔也不重测——
@@ -1236,6 +1250,7 @@
   // 松手在画布空白处：像 Scratch 的散落脚本——包成一个新「片段」函数放在那里
   // （AST 仍是唯一真相：片段就是个还没接进事件的普通函数，随时改名/挂事件）
   function dropAsFragment(chain, ev) {
+    if (!ev) return false;
     const wrap = document.getElementById("canvas-wrap");
     const r = wrap.getBoundingClientRect();
     if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return false;
@@ -1250,6 +1265,7 @@
   }
 
   function finishStmtDrop() {
+    if (drag.cancelled) { render(); return; }   // 被系统打断的拖拽：原样复位，不落不删
     if (!drag.fromList) {                 // 来自调色板的新积木：有落点就插入；空白处=新片段
       if (drag.target)
         drag.target.list.splice(drag.target.index, 0,
@@ -1295,23 +1311,27 @@
         if (drag.fromSlot) markDeleteZone(drag.lastEv);   // 画布拖出的才有「拖调色板摘掉」
       });
     };
-    const up = () => {
+    const finish = (cancelled) => {
       window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
-      if (drag.raf) { cancelAnimationFrame(drag.raf); drag.raf = 0; updateExprTarget(drag.lastEv); }
+      window.removeEventListener("pointercancel", cancel); window.removeEventListener("blur", cancel);
+      if (drag.raf) { cancelAnimationFrame(drag.raf); drag.raf = 0; if (!cancelled) updateExprTarget(drag.lastEv); }
       if (fromEl) fromEl.style.opacity = "";     // 渲染缓存可能复用这张卡，必须复原
       ghost.remove(); document.body.classList.remove("dragging-block");
       document.getElementById("palette").classList.remove("delete-zone");
       if (drag.slotEl) drag.slotEl.classList.remove("slot-hover");
-      if (drag.slot && drag.slot !== drag.fromSlot) {
+      if (!cancelled && drag.slot && drag.slot !== drag.fromSlot) {
         // 先把源槽复位再放进目标槽（目标是源的祖先时两步合成的结果也正确）
         if (drag.fromSlot) drag.fromSlot.replace({ block: "int", value: 0 });
         drag.slot.replace(fixVars(drag.node, fnOfExpr(drag.slot.node)));
-      } else if (!drag.slot && drag.fromSlot && isOverPalette(drag.lastEv)) {
+      } else if (!cancelled && !drag.slot && drag.fromSlot && isOverPalette(drag.lastEv)) {
         drag.fromSlot.replace({ block: "int", value: 0 });   // 拖到调色板 = 摘掉
       } else render();
       drag = null;
     };
+    const up = () => finish(false);
+    const cancel = () => finish(true);
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel); window.addEventListener("blur", cancel);
   }
   function updateExprTarget(ev) {
     if (drag.slotEl) { drag.slotEl.classList.remove("slot-hover"); drag.slotEl = null; drag.slot = null; }
@@ -1351,11 +1371,15 @@
     // 只显示事件短语，不显示"定义 名字"。名字仍是唯一真相——序列化不受影响。
     const isEvent = fn.block === "fn" && EVENT_LABELS[fn.name] &&
                     (!fn.params || !fn.params.length) && (fn.ret === "void" || !fn.ret);
+    // 「备用积木」片段：拖到空白区自动生成的 partN 函数——渲染成中性的暂存帽，
+    // 不摆出「定义 …」的架势（用户只是把积木搁在一边，不是在写函数）
+    const isFrag = !isEvent && fn.block === "fn" && /^part\d+$/.test(fn.name) &&
+                   (!fn.params || !fn.params.length) && (fn.ret === "void" || !fn.ret);
     const blk = el("div", "block hat " +
-      (fn.block === "extern_fn" ? "extern_fn" : (isEvent ? "fn event-hat" : "fn")));
+      (fn.block === "extern_fn" ? "extern_fn" : (isEvent ? "fn event-hat" : (isFrag ? "fn frag-hat" : "fn"))));
     const hdr = el("div", "hdr");
-    if (isEvent) {
-      hdr.append(el("span", "label", EVENT_LABELS[fn.name]));
+    if (isEvent || isFrag) {
+      hdr.append(el("span", "label", isEvent ? EVENT_LABELS[fn.name] : "备用积木"));
       blk.append(hdr);
       if (fn.body) { const m = el("div", "mouth"); m.append(renderStmtList(fn.body, collectScope(fn))); blk.append(m); }
       const script0 = script; script0.append(blk);

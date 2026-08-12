@@ -177,6 +177,12 @@ body.code-mode #palette { display:none; }
 body.code-mode #canvas-wrap { display:none; }
 body.code-mode #tp-close { display:none; }        /* 代码区就是主区，不给关 */
 body.code-mode #text-pane { width:auto; flex:1 1 auto; border-left:none; }
+/* 代码模式的预览：右下角画中画悬浮窗，不再横占整个底部 */
+body.code-mode #preview-dock { position:fixed; right:14px; bottom:74px; width:420px;
+  border:1px solid var(--line); border-radius:12px; background:#fff; z-index:40;
+  box-shadow:0 10px 34px rgba(20,30,60,.18); overflow:hidden; }
+body.code-mode #preview-canvas { width:100%; height:auto; display:block; }
+body.code-mode #dock-body { max-height:352px; }
 body.code-mode #file-rail { display:flex; flex-direction:column; width:210px; flex:0 0 210px;
   background:#fff; border-right:1px solid var(--line); padding:10px 8px; gap:2px; overflow:auto; }
 .fr-title { font-size:12px; color:#8a93a5; padding:6px 8px 4px; }
@@ -185,6 +191,8 @@ body.code-mode #file-rail { display:flex; flex-direction:column; width:210px; fl
 .fr-file:hover { background:#f2f4f8; }
 .fr-file.active { background:#e7f0ff; color:#1a6be0; font-weight:600; }
 .fr-ic { width:16px; flex:0 0 auto; display:inline-flex; align-items:center; color:#9aa3b5; }
+/* 备用积木片段：中性暂存帽（不是"定义函数"的视觉重量） */
+.block.frag-hat > .hdr { background:#8d97ab; border:1.5px dashed rgba(255,255,255,.6); }
 .fr-file.active .fr-ic { color:#1a6be0; }
 #tp-mode { display:inline-flex; align-items:center; gap:5px; }
 #text-pane .hd { padding:10px 14px; font-size:11.5px; color:#6b7488;
